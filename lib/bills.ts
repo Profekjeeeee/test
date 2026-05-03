@@ -1,4 +1,4 @@
-import type { Bill } from "@/types";
+export type { Bill } from "@/types";
 
 const BILLS_KEY = "dental_bills";
 
