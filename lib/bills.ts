@@ -1,10 +1,6 @@
 import type { Bill } from "@/types";
-export type { Bill };
 
-export type { Bill } from "@/types";
-id: string;
-number: string;
-};
+export type { Bill };
 
 const BILLS_KEY = "dental_bills";
 
