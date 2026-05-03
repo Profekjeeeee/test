@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#b9c7e0",
+                    "primary-container": "#131b2e",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "tertiary-fixed": "#d5e3fd",
+                    "surface-bright": "#f7f9fb",
+                    "secondary-fixed": "#89f5e7",
+                    "surface-dim": "#d8dadc",
+                    "primary": "#000000",
+                    "on-surface-variant": "#45464d",
+                    "primary-fixed-dim": "#bec6e0",
+                    "outline-variant": "#c6c6cd",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed-dim": "#6bd8cb",
+                    "surface": "#f7f9fb",
+                    "surface-container-highest": "#e0e3e5",
+                    "on-tertiary-container": "#76859b",
+                    "surface-container": "#eceef0",
+                    "surface-container-low": "#f2f4f6",
+                    "surface-container-high": "#e6e8ea",
+                    "surface-tint": "#565e74",
+                    "on-primary-fixed": "#131b2e",
+                    "primary-fixed": "#dae2fd",
+                    "background": "#f7f9fb",
+                    "outline": "#76777d",
+                    "inverse-surface": "#2d3133",
+                    "on-background": "#191c1e",
+                    "tertiary-container": "#0d1c2f",
+                    "on-secondary-fixed": "#00201d",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "on-surface": "#191c1e",
+                    "error": "#ba1a1a",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-fixed-variant": "#3a485c",
+                    "inverse-primary": "#bec6e0",
+                    "secondary-container": "#86f2e4",
+                    "on-error": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "tertiary": "#000000",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-secondary-container": "#006f66",
+                    "on-tertiary-fixed": "#0d1c2f",
+                    "error-container": "#ffdad6",
+                    "secondary": "#006a61",
+                    "on-primary-container": "#7c839b",
+                    "on-secondary-fixed-variant": "#005049",
+                    "surface-variant": "#e0e3e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "touch-target-min": "44px",
+                    "margin-page": "24px",
+                    "gutter": "16px",
+                    "unit": "4px",
+                    "stack-gap": "12px"
+            },
+            "fontFamily": {
+                    "tooth-id": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "h2": ["Manrope"],
+                    "label-caps": ["Inter"],
+                    "h1": ["Manrope"]
+            },
+            "fontSize": {
+                    "tooth-id": ["10px", {"lineHeight": "12px", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h2": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "h1": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f7f9fb;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-lg">
+<!-- TopAppBar -->
+<header class="bg-white dark:bg-slate-950 flex items-center justify-between px-6 h-16 w-full max-w-screen-md mx-auto docked full-width top-0 z-50 sticky border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-slate-900 dark:text-slate-50">arrow_back</button>
+<h1 class="font-manrope font-semibold text-lg tracking-tight text-slate-900 dark:text-slate-50">Счета</h1>
+</div>
+<button class="material-symbols-outlined text-slate-900 dark:text-slate-50">search</button>
+</header>
+<main class="max-w-screen-md mx-auto px-margin-page py-gutter pb-32">
+<!-- Summary Card -->
+<section class="mb-8 p-6 bg-primary-container text-white rounded-xl overflow-hidden relative">
+<div class="relative z-10">
+<p class="font-label-caps text-on-primary-container mb-1 uppercase">Текущий баланс к оплате</p>
+<h2 class="font-h1 text-[32px] font-bold mb-4">12 450 ₽</h2>
+<button class="w-full bg-secondary-container text-on-secondary-container py-3 px-6 rounded font-h2 text-body-lg font-semibold active:scale-[0.98] transition-transform">
+                    Оплатить онлайн
+                </button>
+</div>
+<!-- Abstract background shape -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-secondary/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+</section>
+<!-- List Header -->
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-h2 text-on-surface">История счетов</h3>
+<button class="text-secondary font-label-caps uppercase flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">filter_list</span> Фильтр
+            </button>
+</div>
+<!-- Invoices List -->
+<div class="space-y-4">
+<!-- Invoice Row 1: Pending -->
+<div class="bg-white border border-outline-variant p-4 rounded-lg flex items-center gap-4 hover:bg-surface-container-low transition-colors group">
+<div class="w-12 h-12 rounded bg-error-container/30 flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-weight="fill">receipt_long</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-tooth-id text-outline">№ 2023-8842</span>
+<span class="font-body-sm text-error font-semibold flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-error"></span> Ожидает
+                        </span>
+</div>
+<p class="font-h2 text-body-lg text-primary mb-0.5">Профессиональная гигиена</p>
+<p class="font-body-sm text-on-surface-variant">14 Октября 2023</p>
+</div>
+<div class="text-right">
+<p class="font-h2 text-primary">8 200 ₽</p>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+</div>
+<!-- Invoice Row 2: Pending -->
+<div class="bg-white border border-outline-variant p-4 rounded-lg flex items-center gap-4 hover:bg-surface-container-low transition-colors group">
+<div class="w-12 h-12 rounded bg-error-container/30 flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-weight="fill">receipt_long</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-tooth-id text-outline">№ 2023-8839</span>
+<span class="font-body-sm text-error font-semibold flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-error"></span> Ожидает
+                        </span>
+</div>
+<p class="font-h2 text-body-lg text-primary mb-0.5">Рентген-диагностика (КТ)</p>
+<p class="font-body-sm text-on-surface-variant">12 Октября 2023</p>
+</div>
+<div class="text-right">
+<p class="font-h2 text-primary">4 250 ₽</p>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+</div>
+<!-- Visual Divider for Paid -->
+<div class="py-2">
+<span class="font-label-caps text-outline uppercase">Оплаченные</span>
+</div>
+<!-- Invoice Row 3: Paid -->
+<div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-lg flex items-center gap-4 hover:bg-surface-container-low transition-colors group opacity-80">
+<div class="w-12 h-12 rounded bg-secondary-container/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">check_circle</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-tooth-id text-outline">№ 2023-8711</span>
+<span class="font-body-sm text-secondary font-semibold">Оплачено</span>
+</div>
+<p class="font-h2 text-body-lg text-primary mb-0.5">Консультация ортодонта</p>
+<p class="font-body-sm text-on-surface-variant">28 Сентября 2023</p>
+</div>
+<div class="text-right">
+<p class="font-h2 text-primary">3 500 ₽</p>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+</div>
+<!-- Invoice Row 4: Paid -->
+<div class="bg-surface-container-lowest border border-outline-variant p-4 rounded-lg flex items-center gap-4 hover:bg-surface-container-low transition-colors group opacity-80">
+<div class="w-12 h-12 rounded bg-secondary-container/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">check_circle</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<span class="font-tooth-id text-outline">№ 2023-8650</span>
+<span class="font-body-sm text-secondary font-semibold">Оплачено</span>
+</div>
+<p class="font-h2 text-body-lg text-primary mb-0.5">Лечение кариеса (1.4)</p>
+<p class="font-body-sm text-on-surface-variant">15 Сентября 2023</p>
+</div>
+<div class="text-right">
+<p class="font-h2 text-primary">12 800 ₽</p>
+<span class="material-symbols-outlined text-outline group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- Promotional Banner -->
+<div class="mt-8 rounded-xl overflow-hidden bg-white border border-outline-variant flex flex-col md:flex-row">
+<div class="relative h-48 md:h-auto md:w-1/3">
+<img class="w-full h-full object-cover" data-alt="A high-end, minimalist dental clinic interior with soft, diffuse lighting and white architectural lines. The scene is pristine and professional, reflecting a luxury healthcare environment with subtle teal accents and a sense of calm efficiency. High-key lighting creates a bright, modern light-mode aesthetic suitable for a premium medical app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuANENbGtQkifl73HABUVVZZFfYcCh_KxBEWiAI8IK41vYAsRCgYfLXnpZrMIShT-WKLjrvnBDeiNoD1q6VNMqpwok1YKA7Vt29s3hLoo4S0wpi8ST_KVUAj1bfyO2zkD9_lgQfzebiofDLDYZL4dvj7EYoXwR5xBs_4guJblgulqAGPd1MWtiCLiNg1vFsCKhKJFK5KP7emOlOipj3nat8q6cgOs6KfWg4h8mowMbreK-xHyPLi7MneQ_VnbIahZGYfOkcML0DiJpI"/>
+</div>
+<div class="p-6 flex-1">
+<h4 class="font-h2 text-primary mb-2">Налоговый вычет</h4>
+<p class="font-body-sm text-on-surface-variant mb-4">Мы подготовим все необходимые документы для получения налогового вычета 13% за ваше лечение.</p>
+<button class="text-secondary font-semibold border-b border-secondary pb-0.5 inline-flex items-center gap-2">
+                    Заказать справку <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+</button>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 right-0 w-full flex justify-around items-center h-16 px-2 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 z-50">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider">Главная</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider">Записи</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full" href="#">
+<span class="material-symbols-outlined">dentistry</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider">Формула</span>
+</a>
+<a class="flex flex-col items-center justify-center text-teal-600 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-900/20 rounded-none w-full h-full" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+<span class="font-manrope font-bold text-[10px] uppercase tracking-wider">Счета</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full" href="#">
+<span class="material-symbols-outlined">more_horiz</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider">Ещё</span>
+</a>
+</nav>
+</body></html>

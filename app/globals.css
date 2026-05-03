@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+/* Принудительно отключаем тёмную тему: variant `dark:` срабатывает
+   только при наличии класса .dark на html, а мы его никогда не ставим.
+   Без этого Tailwind v4 по умолчанию активирует dark: через
+   @media (prefers-color-scheme: dark) → подхватывает системную тему ОС. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Manrope", "Inter", sans-serif;
+  --color-primary: #00665E;
+  --color-primary-dark: #004D46;
+  --color-primary-light: #E6F2F1;
+  --color-surface: #F7F9FB;
+  --color-error: #BA1A1A;
+  --color-tooth-healthy: #FFFFFF;
+  --color-tooth-treated: #3B82F6;
+  --color-tooth-caries: #EF4444;
+  --color-tooth-removed: #9CA3AF;
+  --color-tooth-crown: #F59E0B;
+  --color-tooth-implant: #8B5CF6;
+  --radius-card: 12px;
+  --radius-card-lg: 16px;
+}
+
+@layer base {
+  html {
+    font-family: "Manrope", "Inter", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    color-scheme: light;
+    background-color: #F7F9FB;
+  }
+
+  body {
+    @apply bg-surface text-[#0F172A] antialiased;
+    max-width: 390px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+}
+
+/* Жёсткий страховочный сброс на случай если браузер
+   или внешние стили попытаются применить тёмный фон. */
+html, body {
+  background-color: #F7F9FB !important;
+  color: #0F172A !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html, body {
+    background-color: #F7F9FB !important;
+    color: #0F172A !important;
+    color-scheme: light !important;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 72px);
+  }
+  .screen-padding {
+    @apply px-6 pt-4;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

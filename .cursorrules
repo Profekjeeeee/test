@@ -1,0 +1,26 @@
+## Technical Stack
+- Framework: Next.js (App Router)
+- Styling: Tailwind CSS
+- Language: TypeScript
+- State: LocalStorage for persistent mock data (appointments, user profile, billing)
+
+## Design Tokens (Clinical Precision Style)
+- Font: Manrope (Sans-serif)
+- Colors: 
+  - Primary: #00665E (Deep Green)
+  - Background: #F8FAFB (Light Blue/Grey tint)
+  - Tooth Status: Healthy (White), Treated (Blue), Caries (Red), Removed (Grey)
+- Border Radius: 12px - 16px for cards and containers
+- Shadows: Minimal or none (use thin borders #E2E8F0 instead)
+
+## Development Rules
+- Use 'use client' directive only when interactivity is needed.
+- Maintain a single source of truth in LocalStorage for appointment data.
+- All Russian text should be handled correctly with proper date formatting (e.g., "Пятница, 2 мая").
+- Buttons must have a visible active/pressed state (scale-95).
+- Follow the modular structure in the /screens directory.
+
+## Naming Conventions
+- Components: PascalCase (e.g., AppointmentCard.tsx)
+- Types/Interfaces: PascalCase with 'I' prefix or clear descriptive names (e.g., IAppointment).
+- Routes: Lowercase with underscores (matching the existing /screens folders).

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+
+<html lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#b9c7e0",
+                    "primary-container": "#131b2e",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "tertiary-fixed": "#d5e3fd",
+                    "surface-bright": "#f7f9fb",
+                    "secondary-fixed": "#89f5e7",
+                    "surface-dim": "#d8dadc",
+                    "primary": "#000000",
+                    "on-surface-variant": "#45464d",
+                    "primary-fixed-dim": "#bec6e0",
+                    "outline-variant": "#c6c6cd",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed-dim": "#6bd8cb",
+                    "surface": "#f7f9fb",
+                    "surface-container-highest": "#e0e3e5",
+                    "on-tertiary-container": "#76859b",
+                    "surface-container": "#eceef0",
+                    "surface-container-low": "#f2f4f6",
+                    "surface-container-high": "#e6e8ea",
+                    "surface-tint": "#565e74",
+                    "on-primary-fixed": "#131b2e",
+                    "primary-fixed": "#dae2fd",
+                    "background": "#f7f9fb",
+                    "outline": "#76777d",
+                    "inverse-surface": "#2d3133",
+                    "on-background": "#191c1e",
+                    "tertiary-container": "#0d1c2f",
+                    "on-secondary-fixed": "#00201d",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "on-surface": "#191c1e",
+                    "error": "#ba1a1a",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-fixed-variant": "#3a485c",
+                    "inverse-primary": "#bec6e0",
+                    "secondary-container": "#86f2e4",
+                    "on-error": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "tertiary": "#000000",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-secondary-container": "#006f66",
+                    "on-tertiary-fixed": "#0d1c2f",
+                    "error-container": "#ffdad6",
+                    "secondary": "#006a61",
+                    "on-primary-container": "#7c839b",
+                    "on-secondary-fixed-variant": "#005049",
+                    "surface-variant": "#e0e3e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "touch-target-min": "44px",
+                    "margin-page": "24px",
+                    "gutter": "16px",
+                    "unit": "4px",
+                    "stack-gap": "12px"
+            },
+            "fontFamily": {
+                    "tooth-id": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "h2": ["Manrope"],
+                    "label-caps": ["Inter"],
+                    "h1": ["Manrope"]
+            },
+            "fontSize": {
+                    "tooth-id": ["10px", {"lineHeight": "12px", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "h2": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "h1": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #f7f9fb;
+            -webkit-font-smoothing: antialiased;
+        }
+        .step-active { width: 40px; }
+        .step-inactive { width: 8px; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-lg text-on-surface">
+<!-- Top Navigation Bar -->
+<header class="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 font-manrope font-semibold text-lg tracking-tight docked full-width top-0 z-50 sticky">
+<div class="flex items-center justify-between px-6 h-16 w-full max-w-screen-md mx-auto">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-slate-900" data-icon="arrow_back">arrow_back</span>
+<span class="text-slate-900">Запись на прием</span>
+</div>
+<span class="text-xl font-bold text-slate-900 dark:text-slate-50">Стоматология</span>
+</div>
+</header>
+<main class="max-w-screen-md mx-auto px-6 pt-6 pb-32">
+<!-- Step Indicator -->
+<div class="mb-8">
+<div class="flex justify-between items-end mb-4">
+<div>
+<p class="font-label-caps text-on-surface-variant uppercase mb-1">Шаг 1 из 3</p>
+<h1 class="font-h1 text-on-surface">Выбор услуги</h1>
+</div>
+<div class="flex gap-2 mb-2">
+<div class="h-1 step-active bg-secondary rounded-full transition-all duration-300"></div>
+<div class="h-1 step-inactive bg-outline-variant rounded-full transition-all duration-300"></div>
+<div class="h-1 step-inactive bg-outline-variant rounded-full transition-all duration-300"></div>
+</div>
+</div>
+</div>
+<!-- Search Bar -->
+<div class="relative mb-8 group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full h-12 pl-12 pr-4 bg-white border border-outline-variant rounded-lg focus:outline-none focus:border-secondary transition-colors text-body-lg" placeholder="Поиск услуги (например, чистка)" type="text"/>
+</div>
+<!-- Services Grouped List -->
+<div class="space-y-8">
+<!-- Group: Hygiene -->
+<section>
+<h2 class="font-h2 text-on-surface mb-4 px-1">Гигиена</h2>
+<div class="bg-white border border-outline-variant rounded-xl overflow-hidden divide-y divide-outline-variant">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container transition-colors cursor-pointer group">
+<div class="flex-1">
+<h3 class="font-semibold text-body-lg text-on-surface">Комплексная чистка AirFlow</h3>
+<p class="text-body-sm text-on-surface-variant mt-1">Удаление налета и зубного камня</p>
+</div>
+<div class="text-right flex items-center gap-4">
+<span class="font-bold text-body-lg text-on-surface">5 500 ₽</span>
+<div class="w-6 h-6 rounded-full border border-outline flex items-center justify-center group-active:bg-secondary group-active:border-secondary">
+<span class="material-symbols-outlined text-[16px] text-white opacity-0 group-active:opacity-100" data-icon="check" data-weight="fill">check</span>
+</div>
+</div>
+</div>
+<div class="p-4 flex items-center justify-between hover:bg-surface-container transition-colors cursor-pointer group">
+<div class="flex-1">
+<h3 class="font-semibold text-body-lg text-on-surface">Ультразвуковая чистка</h3>
+<p class="text-body-sm text-on-surface-variant mt-1">Очищение поддесневых отложений</p>
+</div>
+<div class="text-right flex items-center gap-4">
+<span class="font-bold text-body-lg text-on-surface">3 200 ₽</span>
+<div class="w-6 h-6 rounded-full border border-outline flex items-center justify-center"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Group: Therapy -->
+<section>
+<h2 class="font-h2 text-on-surface mb-4 px-1">Терапия</h2>
+<div class="bg-white border border-outline-variant rounded-xl overflow-hidden divide-y divide-outline-variant">
+<div class="p-4 flex items-center justify-between bg-secondary-container/20 border-l-4 border-l-secondary transition-colors cursor-pointer group">
+<div class="flex-1">
+<h3 class="font-semibold text-body-lg text-on-surface">Лечение кариеса (средний)</h3>
+<p class="text-body-sm text-on-surface-variant mt-1">Включает анестезию и пломбу</p>
+</div>
+<div class="text-right flex items-center gap-4">
+<span class="font-bold text-body-lg text-on-surface">6 800 ₽</span>
+<div class="w-6 h-6 rounded-full border-none bg-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px] text-white" data-icon="check" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+</div>
+<div class="p-4 flex items-center justify-between hover:bg-surface-container transition-colors cursor-pointer group">
+<div class="flex-1">
+<h3 class="font-semibold text-body-lg text-on-surface">Лечение пульпита</h3>
+<p class="text-body-sm text-on-surface-variant mt-1">Двухканальное, под микроскопом</p>
+</div>
+<div class="text-right flex items-center gap-4">
+<span class="font-bold text-body-lg text-on-surface">14 500 ₽</span>
+<div class="w-6 h-6 rounded-full border border-outline flex items-center justify-center"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Group: Surgery -->
+<section>
+<h2 class="font-h2 text-on-surface mb-4 px-1">Хирургия</h2>
+<div class="bg-white border border-outline-variant rounded-xl overflow-hidden divide-y divide-outline-variant">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container transition-colors cursor-pointer group">
+<div class="flex-1">
+<h3 class="font-semibold text-body-lg text-on-surface">Удаление зуба мудрости</h3>
+<p class="text-body-sm text-on-surface-variant mt-1">Сложное удаление с наложением швов</p>
+</div>
+<div class="text-right flex items-center gap-4">
+<span class="font-bold text-body-lg text-on-surface">8 900 ₽</span>
+<div class="w-6 h-6 rounded-full border border-outline flex items-center justify-center"></div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Confirm Preview Card (Collapsed/Mini-view) -->
+<div class="mt-12 bg-white border border-outline-variant rounded-xl p-6 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-6xl" data-icon="event_note">event_note</span>
+</div>
+<h3 class="font-h2 text-on-surface mb-4">Предварительный выбор</h3>
+<div class="space-y-4">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional portrait of a male dentist wearing a crisp white medical coat and a gentle smile. He is positioned against a clean, minimalist clinical background with soft, diffused lighting that creates a welcoming and trustworthy atmosphere. The image uses a high-key lighting style to emphasize clinical precision and hygiene, maintaining a sophisticated medical aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuABqiQCK3p0LHPOBtS8ksDN399S55Ig_qC5IbImDY7CSuYP-cFEWKpDjJqiS_ndJ5iZC766Nk6f09guM5I-xiSVyiAiqT5JU8CYQOQuqq3x8maypvnTMPeri2grqbGdmWqTURglMUwWw4DPJpL3PG75qZiBA7ald46Xx497Y3KfecR_Hvm7AuNRPfmBHqbDuoAnMwRFGVbVcGa3IPAPKJjOYPRf0grLEfGfehOUxP-kSEYngziuzfgmq53CPBGKf04c7cz_ZrLcOhI"/>
+</div>
+<div>
+<p class="font-semibold text-body-lg text-on-surface">Д-р Александр Волков</p>
+<p class="text-body-sm text-on-surface-variant">Терапевт, стаж 12 лет</p>
+</div>
+</div>
+<div class="flex items-center gap-4 py-3 border-y border-outline-variant/30">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px]" data-icon="calendar_month">calendar_month</span>
+<span class="text-body-sm font-medium">12 Октября, Ср</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px]" data-icon="schedule">schedule</span>
+<span class="text-body-sm font-medium">14:30</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Bottom Action -->
+<div class="fixed bottom-16 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-outline-variant p-4 z-40">
+<div class="max-w-screen-md mx-auto flex items-center justify-between gap-4">
+<div>
+<p class="text-body-sm text-on-surface-variant">Итого к оплате</p>
+<p class="font-bold text-h2 text-on-surface">6 800 ₽</p>
+</div>
+<button class="bg-primary text-on-primary h-12 px-8 rounded-lg font-semibold flex items-center gap-2 active:scale-95 transition-transform">
+<span>Выбрать врача</span>
+<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 fixed bottom-0 left-0 right-0 w-full flex justify-around items-center h-16 px-2 z-50">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full transition-transform duration-200 ease-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Главная</span>
+</a>
+<a class="flex flex-col items-center justify-center text-teal-600 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-900/20 rounded-none w-full h-full" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today" data-weight="fill" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+<span class="font-manrope font-bold text-[10px] uppercase tracking-wider mt-1">Записи</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full transition-transform duration-200 ease-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="dentistry">dentistry</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Формула</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full transition-transform duration-200 ease-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Счета</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full transition-transform duration-200 ease-out active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="more_horiz">more_horiz</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Ещё</span>
+</a>
+</nav>
+</body></html>

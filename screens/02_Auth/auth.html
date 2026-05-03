@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+
+<html lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#b9c7e0",
+                        "primary-container": "#131b2e",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "tertiary-fixed": "#d5e3fd",
+                        "surface-bright": "#f7f9fb",
+                        "secondary-fixed": "#89f5e7",
+                        "surface-dim": "#d8dadc",
+                        "primary": "#000000",
+                        "on-surface-variant": "#45464d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "outline-variant": "#c6c6cd",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed-dim": "#6bd8cb",
+                        "surface": "#f7f9fb",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-tertiary-container": "#76859b",
+                        "surface-container": "#eceef0",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-tint": "#565e74",
+                        "on-primary-fixed": "#131b2e",
+                        "primary-fixed": "#dae2fd",
+                        "background": "#f7f9fb",
+                        "outline": "#76777d",
+                        "inverse-surface": "#2d3133",
+                        "on-background": "#191c1e",
+                        "tertiary-container": "#0d1c2f",
+                        "on-secondary-fixed": "#00201d",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#191c1e",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#3a485c",
+                        "inverse-primary": "#bec6e0",
+                        "secondary-container": "#86f2e4",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "tertiary": "#000000",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-secondary-container": "#006f66",
+                        "on-tertiary-fixed": "#0d1c2f",
+                        "error-container": "#ffdad6",
+                        "secondary": "#006a61",
+                        "on-primary-container": "#7c839b",
+                        "on-secondary-fixed-variant": "#005049",
+                        "surface-variant": "#e0e3e5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "touch-target-min": "44px",
+                        "margin-page": "24px",
+                        "gutter": "16px",
+                        "unit": "4px",
+                        "stack-gap": "12px"
+                    },
+                    "fontFamily": {
+                        "tooth-id": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "h2": ["Manrope"],
+                        "label-caps": ["Inter"],
+                        "h1": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "tooth-id": ["10px", {"lineHeight": "12px", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "h2": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "h1": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .clinical-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col font-body-lg">
+<header class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-manrope font-semibold text-lg tracking-tight border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 flex items-center justify-between px-6 h-16 w-full max-w-screen-md mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">dentistry</span>
+<span class="text-xl font-bold text-slate-900 dark:text-slate-50">Стоматология</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors duration-150">
+<span class="material-symbols-outlined">close</span>
+</button>
+</header>
+<main class="flex-grow flex flex-col items-center justify-center px-margin-page py-12 max-w-screen-md mx-auto w-full bg-white">
+<div class="w-full max-w-sm space-y-10">
+<div class="text-center space-y-3">
+<h1 class="font-h1 text-h1 text-on-surface">Личный кабинет</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-[280px] mx-auto">Введите номер телефона, чтобы войти в свою медицинскую карту</p>
+</div>
+<div class="space-y-8">
+<div class="space-y-4">
+<label class="block font-label-caps text-label-caps text-outline uppercase tracking-wider">Номер телефона</label>
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline text-[20px]">call</span>
+</div>
+<input class="w-full h-14 pl-12 pr-4 bg-surface-container-lowest border border-outline-variant focus:border-secondary focus:ring-0 transition-all font-body-lg text-lg rounded-none outline-none placeholder:text-outline-variant" placeholder="+7 (___) ___ - __ - __" type="tel"/>
+</div>
+<button class="w-full h-14 bg-secondary text-on-secondary font-manrope font-semibold text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform duration-200 ease-out">
+                        Получить код
+                        <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</div>
+<div class="space-y-6 pt-4">
+<div class="flex flex-col items-center space-y-4">
+<label class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Код из СМС</label>
+<div class="flex gap-4 justify-center">
+<input class="w-14 h-16 text-center border border-outline-variant focus:border-secondary focus:ring-0 font-manrope font-bold text-2xl bg-surface-container-lowest rounded-none" maxlength="1" type="text"/>
+<input class="w-14 h-16 text-center border border-outline-variant focus:border-secondary focus:ring-0 font-manrope font-bold text-2xl bg-surface-container-lowest rounded-none" maxlength="1" type="text"/>
+<input class="w-14 h-16 text-center border border-outline-variant focus:border-secondary focus:ring-0 font-manrope font-bold text-2xl bg-surface-container-lowest rounded-none" maxlength="1" type="text"/>
+<input class="w-14 h-16 text-center border border-outline-variant focus:border-secondary focus:ring-0 font-manrope font-bold text-2xl bg-surface-container-lowest rounded-none" maxlength="1" type="text"/>
+</div>
+<p class="font-body-sm text-body-sm text-outline">Повторить через <span class="text-secondary font-semibold">00:59</span></p>
+</div>
+<button class="w-full h-14 bg-surface-container-highest text-on-surface-variant font-manrope font-semibold text-lg rounded-none opacity-50 cursor-not-allowed" disabled="">
+                        Войти
+                    </button>
+</div>
+</div>
+<div class="pt-8 text-center">
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                    Нажимая кнопку «Войти», вы соглашаетесь с <a class="text-secondary underline underline-offset-4 decoration-secondary/30" href="#">политикой конфиденциальности</a>
+</p>
+</div>
+</div>
+<div class="mt-20 w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="p-6 bg-surface-container-low border border-outline-variant flex items-start gap-4">
+<div class="w-12 h-12 bg-white flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-secondary">security</span>
+</div>
+<div>
+<h3 class="font-h2 text-body-lg font-semibold mb-1">Защита данных</h3>
+<p class="font-body-sm text-on-surface-variant">Все медицинские данные шифруются по стандарту AES-256</p>
+</div>
+</div>
+<div class="p-6 bg-surface-container-low border border-outline-variant flex items-start gap-4">
+<div class="w-12 h-12 bg-white flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-secondary">support_agent</span>
+</div>
+<div>
+<h3 class="font-h2 text-body-lg font-semibold mb-1">Служба заботы</h3>
+<p class="font-body-sm text-on-surface-variant">Если у вас возникли трудности, мы всегда на связи</p>
+</div>
+</div>
+</div>
+</main>
+<footer class="mt-auto py-8 bg-surface-container-lowest border-t border-outline-variant w-full max-w-screen-md mx-auto px-margin-page flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="flex items-center gap-2">
+<img class="w-8 h-8 object-cover rounded-full border border-outline-variant" data-alt="A clean, clinical interior of a high-end dental office with minimalist white furniture and soft teal accents. The lighting is bright and airy, reflecting a modern light-mode aesthetic that prioritizes hygiene and professional calm. A professional medical specialist logo is subtly integrated into the serene background atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_yaheEDofQe77U_9tWmo3ZVqp3-ejQ-GraLprfRZOY0XxFcg25AOY7tcwDl39IWNCmSWIIO25YIlLRxCv611IjLM4IsUIvv2m21lOdJpDtDs6Dmwepc-IG5HMrVZTqhCJhk5oWPJhR8-AYaKz1sUKV_3lB_QF1vDquccVgPDAA9DvC-BeZUnTD44zb2SUYtHxqXRng9h9WyTrrHkaOT_C4rjWmmygfOaeyWgyP5rrzY3MsIeRetGjkavpdA_MJDFL-9ja6ALLOW4"/>
+<span class="font-manrope font-bold text-on-surface text-sm uppercase tracking-tighter">Premium Dental Clinic</span>
+</div>
+<div class="flex gap-6">
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-secondary transition-colors" href="#">Помощь</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-secondary transition-colors" href="#">Контакты</a>
+</div>
+</footer>
+</body></html>

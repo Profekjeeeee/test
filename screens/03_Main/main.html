@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#b9c7e0",
+                        "primary-container": "#131b2e",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "tertiary-fixed": "#d5e3fd",
+                        "surface-bright": "#f7f9fb",
+                        "secondary-fixed": "#89f5e7",
+                        "surface-dim": "#d8dadc",
+                        "primary": "#000000",
+                        "on-surface-variant": "#45464d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "outline-variant": "#c6c6cd",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed-dim": "#6bd8cb",
+                        "surface": "#f7f9fb",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-tertiary-container": "#76859b",
+                        "surface-container": "#eceef0",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-tint": "#565e74",
+                        "on-primary-fixed": "#131b2e",
+                        "primary-fixed": "#dae2fd",
+                        "background": "#f7f9fb",
+                        "outline": "#76777d",
+                        "inverse-surface": "#2d3133",
+                        "on-background": "#191c1e",
+                        "tertiary-container": "#0d1c2f",
+                        "on-secondary-fixed": "#00201d",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#191c1e",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#3a485c",
+                        "inverse-primary": "#bec6e0",
+                        "secondary-container": "#86f2e4",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "tertiary": "#000000",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-secondary-container": "#006f66",
+                        "on-tertiary-fixed": "#0d1c2f",
+                        "error-container": "#ffdad6",
+                        "secondary": "#006a61",
+                        "on-primary-container": "#7c839b",
+                        "on-secondary-fixed-variant": "#005049",
+                        "surface-variant": "#e0e3e5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "touch-target-min": "44px",
+                        "margin-page": "24px",
+                        "gutter": "16px",
+                        "unit": "4px",
+                        "stack-gap": "12px"
+                    },
+                    "fontFamily": {
+                        "tooth-id": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "h2": ["Manrope"],
+                        "label-caps": ["Inter"],
+                        "h1": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "tooth-id": ["10px", {"lineHeight": "12px", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "h2": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "h1": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .clinical-shadow {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-lg antialiased pb-24">
+<!-- TopAppBar -->
+<header class="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 fixed top-0 z-50 w-full">
+<div class="flex items-center justify-between px-6 h-16 w-full max-w-screen-md mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-900 dark:text-slate-50" data-icon="arrow_back">arrow_back</span>
+<h1 class="font-manrope font-semibold text-lg tracking-tight text-slate-900 dark:text-slate-50">Стоматология</h1>
+</div>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
+<img alt="Profile" data-alt="A professional dental clinic receptionist with a friendly smile, dressed in a clean white medical uniform. The background shows a minimalist, high-end clinic lobby with soft teal lighting and marble textures. The overall mood is clinical, professional, and welcoming, reflecting a premium medical environment with bright, even illumination." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDM8axEYjaClNW4vkn8CWmG9AWoA7jpyMlmQckHhgJNIEes7TdUJGpvomYj_VpLjj1YpsCfxmLE0QhG2FkgoFElm2t8sf4qjpDJw62ZfHAUFYHQViMiXc9ZuIBPFa2nT5yPXKJkFmpAEtty33DtQv8kM6XN51LWIzt4wzrrxK-YuYAwiLCsMEed4NFhR7gBMPToGgG0eBtMgcVf6rTnn2USbqX_AbFuEPje4EvLLP6-2U4gDXo5Ij7F2gGCDGv64Awy40mTsUlIg_0"/>
+</div>
+</div>
+</header>
+<main class="mt-20 px-margin-page max-w-screen-md mx-auto space-y-8">
+<!-- Welcome Section -->
+<section class="mt-8">
+<p class="font-label-caps text-on-surface-variant mb-1">ДОБРО ПОЖАЛОВАТЬ</p>
+<h2 class="font-h1 text-h1 text-on-surface">Александр Константинович</h2>
+</section>
+<!-- Feature Cards (Asymmetric Bento-like Grid) -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<!-- Upcoming Appointment -->
+<div class="md:col-span-2 bg-white border border-outline-variant p-6 clinical-shadow">
+<div class="flex justify-between items-start mb-6">
+<div class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-sm">
+<span class="font-label-caps text-[10px]">БЛИЖАЙШАЯ ЗАПИСЬ</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="event">event</span>
+</div>
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<p class="font-h2 text-h2 text-on-surface">14 Октября, 14:30</p>
+<p class="font-body-sm text-on-surface-variant mt-1">Доктор: Смирнова О.В. • Проф. гигиена</p>
+</div>
+<button class="border border-primary px-6 h-11 flex items-center justify-center font-label-caps hover:bg-slate-50 transition-colors">
+                        ДЕТАЛИ
+                    </button>
+</div>
+</div>
+<!-- Active Treatment Plan -->
+<div class="bg-surface-container-low border border-outline-variant p-5 flex flex-col justify-between">
+<div>
+<span class="font-label-caps text-on-tertiary-container">ПЛАН ЛЕЧЕНИЯ</span>
+<p class="font-h2 text-h2 text-on-surface mt-2">Этап 3 из 5</p>
+<p class="font-body-sm text-on-surface-variant mt-1">Установка имплантата</p>
+</div>
+<div class="mt-8">
+<div class="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[60%]"></div>
+</div>
+<p class="font-label-caps text-[10px] mt-2 text-on-surface-variant">ВЫПОЛНЕНО 60%</p>
+</div>
+</div>
+<!-- Finances Card -->
+<div class="bg-primary-container text-on-primary border border-primary-container p-5 flex flex-col justify-between">
+<div>
+<span class="font-label-caps text-on-primary-container">БАЛАНС</span>
+<p class="font-h1 text-h1 text-white mt-2">12 500 ₽</p>
+</div>
+<div class="mt-8">
+<button class="bg-secondary text-on-secondary-fixed w-full h-11 flex items-center justify-center font-label-caps font-semibold active:scale-[0.98] transition-transform">
+                        ОПЛАТИТЬ
+                    </button>
+</div>
+</div>
+</div>
+<!-- Quick Action Grid -->
+<section class="space-y-4">
+<h3 class="font-label-caps text-on-surface-variant">БЫСТРЫЕ ДЕЙСТВИЯ</h3>
+<div class="grid grid-cols-3 gap-3">
+<button class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant hover:border-secondary transition-colors group">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-secondary mb-2" data-icon="add_circle">add_circle</span>
+<span class="font-label-caps text-[10px] text-center">ЗАПИСАТЬСЯ</span>
+</button>
+<button class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant hover:border-secondary transition-colors group">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-secondary mb-2" data-icon="payments">payments</span>
+<span class="font-label-caps text-[10px] text-center">ПЛАТЕЖ</span>
+</button>
+<button class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant hover:border-secondary transition-colors group">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-secondary mb-2" data-icon="call">call</span>
+<span class="font-label-caps text-[10px] text-center">КЛИНИКА</span>
+</button>
+</div>
+</section>
+<!-- Dental Health Tip (Contextual Card) -->
+<section class="bg-tertiary-fixed border border-outline-variant p-6 relative overflow-hidden">
+<div class="relative z-10 pr-20">
+<h4 class="font-h2 text-h2 text-on-tertiary-fixed">Совет дня</h4>
+<p class="font-body-sm text-on-tertiary-fixed-variant mt-2">Использование ирригатора снижает риск воспаления десен на 40%. Узнайте больше в разделе рекомендаций.</p>
+</div>
+<span class="material-symbols-outlined absolute -right-4 -bottom-4 text-8xl text-black/5" data-icon="dentistry">dentistry</span>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 right-0 w-full flex justify-around items-center h-16 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 z-50">
+<a class="flex flex-col items-center justify-center text-teal-600 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-900/20 w-full h-full" href="#">
+<span class="material-symbols-outlined" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Главная</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full hover:text-teal-500 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Записи</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full hover:text-teal-500 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dentistry">dentistry</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Формула</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full hover:text-teal-500 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Счета</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-full h-full hover:text-teal-500 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="more_horiz">more_horiz</span>
+<span class="font-manrope font-medium text-[10px] uppercase tracking-wider mt-1">Ещё</span>
+</a>
+</nav>
+</body></html>
