@@ -1,4 +1,7 @@
 export type { Bill } from "@/types";
+id: string;
+number: string;
+};
 
 const BILLS_KEY = "dental_bills";
 
