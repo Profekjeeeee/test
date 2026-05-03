@@ -1,3 +1,5 @@
+import { getCurrentUserId } from "@/lib/auth";
+
 export interface UserProfile {
   firstName: string;
   lastName: string;
@@ -10,14 +12,14 @@ export interface UserNotifications {
   sms: boolean;
 }
 
-const PROFILE_KEY = "userProfile";
-const NOTIF_KEY = "userNotifications";
+const BASE_PROFILE_KEY = "userProfile";
+const BASE_NOTIF_KEY = "userNotifications";
 
-const DEFAULT_PROFILE: UserProfile = {
-  firstName: "Александр",
-  lastName: "Коновалов",
-  phone: "+7 (999) 123-45-67",
-  email: "konovalov@email.com",
+const EMPTY_PROFILE: UserProfile = {
+  firstName: "",
+  lastName: "",
+  phone: "",
+  email: "",
 };
 
 const DEFAULT_NOTIFS: UserNotifications = {
@@ -25,30 +27,40 @@ const DEFAULT_NOTIFS: UserNotifications = {
   sms: false,
 };
 
+function profileKey(): string {
+  const uid = getCurrentUserId();
+  return uid ? `${BASE_PROFILE_KEY}_${uid}` : BASE_PROFILE_KEY;
+}
+
+function notifKey(): string {
+  const uid = getCurrentUserId();
+  return uid ? `${BASE_NOTIF_KEY}_${uid}` : BASE_NOTIF_KEY;
+}
+
 export function getProfile(): UserProfile {
-  if (typeof window === "undefined") return DEFAULT_PROFILE;
+  if (typeof window === "undefined") return EMPTY_PROFILE;
   try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    if (raw) return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
+    const raw = localStorage.getItem(profileKey());
+    if (raw) return { ...EMPTY_PROFILE, ...JSON.parse(raw) };
   } catch {}
-  return DEFAULT_PROFILE;
+  return { ...EMPTY_PROFILE };
 }
 
 export function saveProfile(profile: UserProfile): void {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  localStorage.setItem(profileKey(), JSON.stringify(profile));
   window.dispatchEvent(new CustomEvent("profileUpdated", { detail: profile }));
 }
 
 export function getNotifications(): UserNotifications {
   if (typeof window === "undefined") return DEFAULT_NOTIFS;
   try {
-    const raw = localStorage.getItem(NOTIF_KEY);
+    const raw = localStorage.getItem(notifKey());
     if (raw) return { ...DEFAULT_NOTIFS, ...JSON.parse(raw) };
   } catch {}
-  return DEFAULT_NOTIFS;
+  return { ...DEFAULT_NOTIFS };
 }
 
 export function saveNotifications(notifs: UserNotifications): void {
-  localStorage.setItem(NOTIF_KEY, JSON.stringify(notifs));
+  localStorage.setItem(notifKey(), JSON.stringify(notifs));
   window.dispatchEvent(new CustomEvent("notificationsUpdated", { detail: notifs }));
 }

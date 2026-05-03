@@ -1,10 +1,12 @@
+import { getCurrentUserId } from "@/lib/auth";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TreatmentItemStatus = "completed" | "in-progress" | "pending";
 
 export interface TreatmentPlanItem {
   id: string;
-  appointmentId?: string; // only set for appointment-derived items
+  appointmentId?: string;
   category: string;
   title: string;
   price: number;
@@ -50,7 +52,7 @@ export function getItemStatus(isoDate: string): TreatmentItemStatus {
   return "pending";
 }
 
-// ─── Stats (accepts any item array — used with merged data) ───────────────────
+// ─── Stats ────────────────────────────────────────────────────────────────────
 
 export function computeStats(items: TreatmentPlanItem[]): TreatmentPlanStats {
   let completed = 0;
@@ -76,97 +78,56 @@ export function computeStats(items: TreatmentPlanItem[]): TreatmentPlanStats {
   const progressPercent =
     total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  return {
-    completed,
-    inProgress,
-    pending,
-    total,
-    paidAmount,
-    totalAmount,
-    progressPercent,
-  };
+  return { completed, inProgress, pending, total, paidAmount, totalAmount, progressPercent };
 }
 
-// ─── Static plan items storage ────────────────────────────────────────────────
-// These are doctor-created items NOT linked to appointments.
-// Appointment-derived items come from lib/planUtils.ts via getAppointments().
+// ─── Storage ──────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = "treatment_plan";
-const STORAGE_VERSION = "v2"; // bump on breaking schema changes
-const VERSION_KEY = "treatment_plan_version";
+const BASE_KEY = "treatment_plan";
+const BASE_VERSION_KEY = "treatment_plan_version";
+const STORAGE_VERSION = "v3"; // bumped for user-scoped migration
 
-const STATIC_DEFAULT: TreatmentPlanItem[] = [
-  {
-    id: "tp-d1",
-    category: "Профилактика",
-    title: "Профессиональная гигиена",
-    price: 4500,
-    date: "2025-10-14",
-  },
-  {
-    id: "tp-d2",
-    category: "Профилактика",
-    title: "Снятие зубного камня",
-    price: 3000,
-    date: "2025-11-03",
-  },
-  {
-    id: "tp-d4",
-    category: "Терапия",
-    title: "Эндодонтическое лечение",
-    price: 12000,
-    date: "2026-06-15",
-  },
-  {
-    id: "tp-d5",
-    category: "Хирургия",
-    title: "Удаление зуба",
-    price: 3500,
-    date: "2026-07-20",
-  },
-  {
-    id: "tp-d6",
-    category: "Ортодонтия",
-    title: "Консультация ортодонта",
-    price: 2000,
-    date: "2026-08-10",
-  },
-];
+function storageKey(): string {
+  const uid = getCurrentUserId();
+  return uid ? `${BASE_KEY}_${uid}` : BASE_KEY;
+}
+
+function versionKey(): string {
+  const uid = getCurrentUserId();
+  return uid ? `${BASE_VERSION_KEY}_${uid}` : BASE_VERSION_KEY;
+}
 
 export function initTreatmentPlan(): void {
   if (typeof window === "undefined") return;
 
-  const version = localStorage.getItem(VERSION_KEY);
+  const version = localStorage.getItem(versionKey());
 
   if (version !== STORAGE_VERSION) {
-    // Migration: wipe old data that mixed appointment-linked items into this store.
-    // From now on, only truly static (no appointmentId) items live here.
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATIC_DEFAULT));
-    localStorage.setItem(VERSION_KEY, STORAGE_VERSION);
+    // New user or migration: start with empty plan
+    localStorage.setItem(storageKey(), JSON.stringify([]));
+    localStorage.setItem(versionKey(), STORAGE_VERSION);
     return;
   }
 
-  if (!localStorage.getItem(STORAGE_KEY)) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATIC_DEFAULT));
+  if (!localStorage.getItem(storageKey())) {
+    localStorage.setItem(storageKey(), JSON.stringify([]));
   }
 }
 
-/** Returns only the static (non-appointment) plan items. */
 export function getStaticPlanItems(): TreatmentPlanItem[] {
-  if (typeof window === "undefined") return STATIC_DEFAULT;
+  if (typeof window === "undefined") return [];
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return STATIC_DEFAULT;
+    const stored = localStorage.getItem(storageKey());
+    if (!stored) return [];
     const parsed = JSON.parse(stored) as TreatmentPlanItem[];
-    // Guard: never return appointment-linked items from here
     return parsed.filter((item) => !item.appointmentId);
   } catch {
-    return STATIC_DEFAULT;
+    return [];
   }
 }
 
 export function saveStaticPlanItems(items: TreatmentPlanItem[]): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  localStorage.setItem(storageKey(), JSON.stringify(items));
   window.dispatchEvent(new Event("treatmentPlanUpdated"));
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { findUserByPhone, setCurrentUser } from "@/lib/auth";
 
 const TEST_CODE = "1234";
 
@@ -41,8 +42,14 @@ export default function AuthPage() {
     setLoading(true);
     setError("");
     await new Promise((r) => setTimeout(r, 500));
-    localStorage.setItem("isLoggedIn", "true");
-    router.push("/main");
+
+    const existingUser = findUserByPhone(phone);
+    if (existingUser) {
+      setCurrentUser(existingUser.id);
+      router.replace("/main");
+    } else {
+      router.replace(`/registration?phone=${encodeURIComponent(phone)}`);
+    }
   };
 
   return (
@@ -104,7 +111,7 @@ export default function AuthPage() {
           </Button>
           <button
             className="text-[13px] text-gray-400 text-center"
-            onClick={() => setStep("phone")}
+            onClick={() => { setStep("phone"); setCode(""); setError(""); }}
           >
             Изменить номер
           </button>

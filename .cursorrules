@@ -30,3 +30,5 @@
 - Components: PascalCase (e.g., AppointmentCard.tsx)
 - Types/Interfaces: PascalCase with 'I' prefix or clear descriptive names (e.g., IAppointment).
 - Routes: Lowercase with underscores (matching the existing /screens folders).
+
+"При создании новых UI-компонентов или страниц админ-панели, всегда обращайся к скриншотам в папке .cursor/reference_images, чтобы соблюдать визуальный стиль (отступы, цвета, расположение элементов)."

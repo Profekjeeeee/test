@@ -1,3 +1,5 @@
+import { getCurrentUserId } from "@/lib/auth";
+
 export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "rescheduled";
 
 export interface Appointment {
@@ -15,59 +17,33 @@ export interface Appointment {
   status: AppointmentStatus;
 }
 
-const STORAGE_KEY = "appointments";
+const BASE_KEY = "appointments";
 
-const DEFAULT_APPOINTMENTS: Appointment[] = [
-  {
-    id: "1",
-    day: 9,
-    monthNum: 5,
-    month: "мая",
-    year: 2026,
-    time: "10:30",
-    doctor: "Михайлова А.В.",
-    specialty: "Терапевт",
-    service: "Терапия. Лечение кариеса",
-    price: 7950,
-    cabinet: "№ 5",
-    status: "scheduled",
-  },
-  {
-    id: "2",
-    day: 15,
-    monthNum: 4,
-    month: "апреля",
-    year: 2026,
-    time: "14:00",
-    doctor: "Иванов С.П.",
-    specialty: "Гигиенист",
-    service: "Профилактика. Профессиональная гигиена",
-    price: 4500,
-    cabinet: "№ 3",
-    status: "completed",
-  },
-];
+function storageKey(): string {
+  const uid = getCurrentUserId();
+  return uid ? `${BASE_KEY}_${uid}` : BASE_KEY;
+}
 
 export function initAppointments(): void {
   if (typeof window === "undefined") return;
-  if (!localStorage.getItem(STORAGE_KEY)) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_APPOINTMENTS));
+  if (!localStorage.getItem(storageKey())) {
+    localStorage.setItem(storageKey(), JSON.stringify([]));
   }
 }
 
 export function getAppointments(): Appointment[] {
-  if (typeof window === "undefined") return DEFAULT_APPOINTMENTS;
+  if (typeof window === "undefined") return [];
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as Appointment[]) : DEFAULT_APPOINTMENTS;
+    const stored = localStorage.getItem(storageKey());
+    return stored ? (JSON.parse(stored) as Appointment[]) : [];
   } catch {
-    return DEFAULT_APPOINTMENTS;
+    return [];
   }
 }
 
 export function saveAppointments(appointments: Appointment[]): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
+  localStorage.setItem(storageKey(), JSON.stringify(appointments));
   window.dispatchEvent(new CustomEvent("appointmentsUpdated"));
 }
 

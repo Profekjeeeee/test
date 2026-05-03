@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Clinic Admin</title>
+
+  <!-- Telegram Mini App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Шрифт Manrope (дизайн-токен проекта) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    /* ── Дизайн-токены ──────────────────────────────────────────── */
+    :root {
+      --primary:    #A1D6D7;
+      --secondary:  #9AB0C5;
+      --bg:         #F8FAFB;
+      --surface:    #FFFFFF;
+      --border:     #E2E8F0;
+      --text:       #1A202C;
+      --text-muted: #9AB0C5;
+      --danger:     #E53E3E;
+      --radius-card: 14px;
+      --radius-btn:  12px;
+      --nav-h:       64px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: 'Manrope', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+
+    /* ── Шапка ──────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: #fff;
+      overflow: hidden;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .header-title { font-size: 16px; font-weight: 700; }
+    .bell-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--primary); padding: 4px;
+    }
+    .bell-btn svg { width: 22px; height: 22px; }
+
+    /* ── Основной контейнер ─────────────────────────────────────── */
+    .main {
+      padding: 0 0 calc(var(--nav-h) + 16px);
+      min-height: 100vh;
+    }
+
+    /* ── Экраны ─────────────────────────────────────────────────── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Нижняя навигация ───────────────────────────────────────── */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: var(--nav-h);
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 20;
+    }
+    .nav-item {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 4px;
+      background: none; border: none; cursor: pointer;
+      color: var(--secondary);
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; font-weight: 500;
+      transition: color .15s;
+    }
+    .nav-item svg { width: 22px; height: 22px; }
+    .nav-item.active { color: var(--primary); }
+
+    /* ── Splash / Error ─────────────────────────────────────────── */
+    #splash {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; z-index: 100;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #splash.hidden { display: none; }
+
+    #error-screen {
+      display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; padding: 40px 24px; text-align: center; min-height: 60vh;
+    }
+    #error-screen.show { display: flex; }
+    .error-icon { font-size: 48px; }
+    .error-title { font-size: 18px; font-weight: 700; color: var(--danger); }
+    .error-msg { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+
+    /* ══════════════════════════════════════════════════════════════
+       ЭКРАН: ВРАЧИ
+    ══════════════════════════════════════════════════════════════ */
+    #screen-doctors { padding: 20px 16px; }
+    .screen-heading { margin-bottom: 4px; font-size: 22px; font-weight: 700; }
+    .screen-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.4; }
+
+    /* Поиск + фильтр */
+    .search-row {
+      display: flex; gap: 10px; margin-bottom: 20px;
+    }
+    .search-wrap {
+      flex: 1; position: relative;
+    }
+    .search-wrap svg {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); width: 16px; height: 16px;
+    }
+    .search-input {
+      width: 100%; height: 44px;
+      padding: 0 12px 0 38px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-btn);
+      background: var(--surface);
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px; color: var(--text);
+      outline: none;
+    }
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus { border-color: var(--primary); }
+
+    .filter-btn {
+      width: 44px; height: 44px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-btn);
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted); cursor: pointer;
+      flex-shrink: 0;
+    }
+    .filter-btn svg { width: 18px; height: 18px; }
+
+    /* Список врачей */
+    .doctors-list { display: flex; flex-direction: column; gap: 1px; }
+
+    .doctor-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 10px;
+      transition: opacity .2s;
+    }
+    .doctor-card.inactive { opacity: .65; }
+
+    .doctor-photo {
+      width: 52px; height: 52px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: var(--border);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .doctor-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .doctor-photo-placeholder {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: #EEF6F6;
+      font-size: 20px;
+    }
+
+    .doctor-info { flex: 1; min-width: 0; }
+    .doctor-name { font-size: 15px; font-weight: 600; }
+    .doctor-spec {
+      font-size: 12px; font-weight: 600;
+      letter-spacing: .04em; margin-top: 3px;
+    }
+    .doctor-spec.active-color  { color: var(--primary); }
+    .doctor-spec.inactive-color { color: var(--text-muted); }
+
+    /* Toggle switch */
+    .toggle-wrap { flex-shrink: 0; }
+    .toggle {
+      width: 44px; height: 26px;
+      background: var(--border);
+      border-radius: 13px;
+      position: relative;
+      cursor: pointer;
+      transition: background .2s;
+      border: none; outline: none;
+    }
+    .toggle.on { background: var(--primary); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      top: 3px; left: 3px;
+      transition: transform .2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    .toggle.on::after { transform: translateX(18px); }
+
+    /* Кнопка добавить */
+    .add-doctor-btn {
+      width: 100%; height: 52px;
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-card);
+      background: none;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 15px; font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      margin-top: 6px;
+      transition: border-color .15s, color .15s;
+    }
+    .add-doctor-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .add-doctor-btn svg { width: 18px; height: 18px; }
+
+    /* ══════════════════════════════════════════════════════════════
+       ЭКРАН: ЛЕНТА
+    ══════════════════════════════════════════════════════════════ */
+    #screen-feed { padding: 20px 16px; }
+
+    .feed-header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .today-badge {
+      background: var(--primary);
+      color: #fff; font-size: 11px; font-weight: 700;
+      padding: 4px 10px; border-radius: 20px;
+      letter-spacing: .06em;
+    }
+
+    .appt-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .appt-top {
+      display: flex; align-items: flex-start; gap: 12px;
+      margin-bottom: 12px;
+    }
+    .appt-icon {
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      background: #EEF6F6;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .appt-icon svg { width: 18px; height: 18px; color: var(--primary); }
+    .appt-meta { flex: 1; }
+    .appt-name { font-size: 15px; font-weight: 600; }
+    .appt-detail { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .appt-time { font-size: 15px; font-weight: 700; color: var(--text); }
+    .appt-status-ok {
+      font-size: 12px; font-weight: 600;
+      color: var(--primary); margin-top: 4px;
+    }
+
+    .appt-actions { display: flex; gap: 10px; }
+    .btn-call, .btn-confirm, .btn-history, .btn-edit {
+      flex: 1; height: 40px;
+      border-radius: 10px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: transform .1s, opacity .1s;
+      border: none;
+    }
+    .btn-call, .btn-history, .btn-edit {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-confirm {
+      background: var(--text);
+      color: #fff;
+    }
+    .btn-call:active, .btn-history:active, .btn-edit:active,
+    .btn-confirm:active { transform: scale(.95); opacity: .85; }
+    .btn-call svg, .btn-confirm svg,
+    .btn-history svg, .btn-edit svg { width: 16px; height: 16px; }
+
+    .appt-empty {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-card);
+      padding: 32px 16px;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+      color: var(--text-muted); font-size: 14px;
+    }
+    .appt-empty svg { width: 32px; height: 32px; color: var(--border); }
+
+    /* ── Toast ──────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: calc(var(--nav-h) + 16px);
+      left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--text);
+      color: #fff; font-size: 13px; font-weight: 500;
+      padding: 10px 20px; border-radius: 10px;
+      opacity: 0; pointer-events: none;
+      transition: opacity .2s, transform .2s;
+      white-space: nowrap; z-index: 50;
+    }
+    #toast.show {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Splash ─────────────────────────────────────────────────────── -->
+<div id="splash">
+  <div class="spinner"></div>
+  <span style="font-size:14px;color:var(--text-muted)">Загрузка...</span>
+</div>
+
+<!-- ── Шапка ──────────────────────────────────────────────────────── -->
+<header class="header" id="app-header" style="display:none">
+  <div class="header-left">
+    <div class="avatar" id="user-avatar">A</div>
+    <span class="header-title" id="header-title">Clinic Admin</span>
+  </div>
+  <button class="bell-btn" aria-label="Уведомления">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round"
+        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0
+           00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0
+           .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+    </svg>
+  </button>
+</header>
+
+<!-- ── Основной контент ────────────────────────────────────────────── -->
+<main class="main" id="app-main" style="display:none">
+
+  <!-- Ошибка авторизации -->
+  <div id="error-screen">
+    <div class="error-icon">🔒</div>
+    <div class="error-title">Доступ запрещён</div>
+    <div class="error-msg" id="error-msg">
+      Ваш Telegram ID не найден в базе администраторов.<br>
+      Попросите суперадмина добавить вас:<br>
+      <strong>Битрикс → Пользователи → UF_TELEGRAM_ID</strong>
+    </div>
+  </div>
+
+  <!-- ── ЭКРАН: ВРАЧИ ─────────────────────────────────────────────── -->
+  <section class="screen" id="screen-doctors">
+    <h1 class="screen-heading">Управление врачами</h1>
+    <p class="screen-sub">Настройте видимость специалистов<br>в приложении для пациентов.</p>
+
+    <div class="search-row">
+      <div class="search-wrap">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input
+          class="search-input"
+          type="search"
+          id="search-input"
+          placeholder="Поиск по фамилии..."
+          autocomplete="off"
+        />
+      </div>
+      <button class="filter-btn" id="filter-btn" aria-label="Фильтр">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 4h18M7 12h10M11 20h2"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="doctors-list" id="doctors-list">
+      <!-- карточки рендерятся JS-ом -->
+    </div>
+
+    <button class="add-doctor-btn" id="add-doctor-btn">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+      </svg>
+      Добавить нового врача
+    </button>
+  </section>
+
+  <!-- ── ЭКРАН: ЛЕНТА ─────────────────────────────────────────────── -->
+  <section class="screen" id="screen-feed">
+    <div class="feed-header-row">
+      <h1 class="screen-heading">Живая лента</h1>
+      <span class="today-badge">СЕГОДНЯ</span>
+    </div>
+    <div id="feed-list">
+      <!-- карточки рендерятся JS-ом -->
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Нижняя навигация ────────────────────────────────────────────── -->
+<nav class="bottom-nav" id="bottom-nav" style="display:none">
+  <button class="nav-item active" data-screen="doctors">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round"
+        d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4.13a4
+           4 0 11-8 0 4 4 0 018 0zm6-2a3 3 0 110-6 3 3 0 010 6z"/>
+    </svg>
+    Врачи
+  </button>
+  <button class="nav-item" data-screen="feed">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2
+           0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2
+           2 0 012 2"/>
+    </svg>
+    Лента
+  </button>
+</nav>
+
+<!-- ── Toast ──────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════
+// КОНФИГУРАЦИЯ
+// ═══════════════════════════════════════════════════════════════════
+
+const API_URL = '/api/admin/doctors.php';
+
+// Моковые записи для экрана «Лента» (в продакшне — отдельный endpoint)
+const MOCK_FEED = [
+  {
+    id: 1, patient: 'Иван И.', service: 'Терапия', procedure: 'Осмотр',
+    time: '14:00', status: 'pending', icon: 'calendar',
+  },
+  {
+    id: 2, patient: 'Мария С.', service: 'Хирургия', procedure: 'Удаление',
+    time: '15:30', status: 'pending', icon: 'bag',
+  },
+  {
+    id: 3, patient: 'Дмитрий В.', service: 'Гигиена', procedure: 'Чистка',
+    time: '16:45', status: 'ok', icon: 'pen',
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// СОСТОЯНИЕ
+// ═══════════════════════════════════════════════════════════════════
+
+const state = {
+  doctors: [],        // массив объектов DoctorItem
+  filterQuery: '',    // строка поиска
+  activeScreen: 'doctors',
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP
+// ═══════════════════════════════════════════════════════════════════
+
+const tg = window.Telegram?.WebApp;
+
+(async function init() {
+  // 1. Сигнализируем Telegram, что приложение готово к показу
+  tg?.ready();
+  tg?.expand();
+
+  // 2. Персонализируем шапку именем пользователя
+  const tgUser = tg?.initDataUnsafe?.user;
+  if (tgUser) {
+    const initials = [tgUser.first_name, tgUser.last_name]
+      .filter(Boolean).map(n => n[0]).join('').toUpperCase();
+    document.getElementById('user-avatar').textContent = initials || 'A';
+  }
+
+  // 3. Загружаем данные с бэкенда
+  await fetchDoctors();
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Общий хелпер: добавляет X-Telegram-Init-Data к каждому запросу.
+ * @param {string} action
+ * @param {Record<string,string>|null} postData  null = GET, object = POST
+ */
+async function apiRequest(action, postData = null) {
+  const initData = tg?.initData ?? '';
+
+  const headers = {
+    'X-Telegram-Init-Data': initData,
+  };
+
+  let response;
+
+  if (postData) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    const body = new URLSearchParams({ action, ...postData });
+    response = await fetch(API_URL, { method: 'POST', headers, body });
+  } else {
+    response = await fetch(`${API_URL}?action=${action}`, { method: 'GET', headers });
+  }
+
+  // Обрабатываем HTTP-ошибки как структурированный ответ
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = {}; }
+    return {
+      success: false,
+      httpCode: response.status,
+      error: parsed.error ?? `HTTP ${response.status}`,
+    };
+  }
+
+  return response.json();
+}
+
+/**
+ * Загружает список врачей и рендерит экран.
+ */
+async function fetchDoctors() {
+  const result = await apiRequest('getDoctorsList');
+
+  hideSplash();
+
+  // ── Ошибка 403 ────────────────────────────────────────────────
+  if (result.httpCode === 403 || (!result.success && result.error?.includes('Forbidden'))) {
+    showError('Доступ запрещён. Проверьте поле UF_TELEGRAM_ID в Битриксе.');
+    return;
+  }
+
+  if (!result.success) {
+    showError(result.error ?? 'Неизвестная ошибка сервера.');
+    return;
+  }
+
+  // ── Успех ─────────────────────────────────────────────────────
+  state.doctors = result.data ?? [];
+
+  showApp();
+  renderDoctors();
+  renderFeed();
+}
+
+/**
+ * Переключает статус врача: отправляет toggleDoctorStatus на бэкенд.
+ * @param {number} doctorId
+ * @param {number} currentStatus  0 или 1
+ */
+async function toggleDoctor(doctorId, currentStatus) {
+  const newStatus = currentStatus === 1 ? 0 : 1;
+
+  // Оптимистичный UI: меняем локально сразу
+  const doctor = state.doctors.find(d => d.id === doctorId);
+  if (doctor) {
+    doctor.is_active = Boolean(newStatus);
+    renderDoctors();
+  }
+
+  const result = await apiRequest('toggleDoctorStatus', {
+    id:     String(doctorId),
+    status: String(newStatus),
+  });
+
+  if (result.success) {
+    // Haptic: включили — лёгкий, выключили — средний
+    tg?.HapticFeedback?.impactOccurred(newStatus === 1 ? 'light' : 'medium');
+    showToast(newStatus === 1 ? 'Врач активирован' : 'Врач скрыт');
+  } else {
+    // Откатываем оптимистичный UI
+    if (doctor) {
+      doctor.is_active = Boolean(currentStatus);
+      renderDoctors();
+    }
+    tg?.HapticFeedback?.notificationOccurred('error');
+    showToast(`Ошибка: ${result.error}`, true);
+  }
+}
+
+/**
+ * Звонок пациенту (в реальном приложении открывает номер).
+ * @param {number} apptId
+ */
+function callPatient(apptId) {
+  tg?.HapticFeedback?.impactOccurred('light');
+  // В продакшне: window.location.href = `tel:${phone}`;
+  showToast('Набор номера...');
+}
+
+/**
+ * Подтверждение записи.
+ * @param {number} apptId
+ * @param {HTMLElement} btn
+ */
+async function confirmAppointment(apptId, btn) {
+  tg?.HapticFeedback?.impactOccurred('medium');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  // В продакшне: await apiRequest('confirmAppointment', { id: String(apptId) });
+  await new Promise(r => setTimeout(r, 600));
+
+  showToast('Запись подтверждена');
+  // Перерисовываем карточку как "ОК"
+  const appt = MOCK_FEED.find(a => a.id === apptId);
+  if (appt) { appt.status = 'ok'; renderFeed(); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// РЕНДЕРИНГ: ВРАЧИ
+// ═══════════════════════════════════════════════════════════════════
+
+function renderDoctors() {
+  const query  = state.filterQuery.toLowerCase().trim();
+  const list   = document.getElementById('doctors-list');
+  const source = query
+    ? state.doctors.filter(d => d.name.toLowerCase().includes(query))
+    : state.doctors;
+
+  if (!source.length) {
+    list.innerHTML = `
+      <div class="appt-empty" style="margin-bottom:16px">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501
+               20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676
+               0-5.216-.584-7.499-1.632z"/>
+        </svg>
+        Врачи не найдены
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = source.map(doc => `
+    <div class="doctor-card ${doc.is_active ? '' : 'inactive'}" data-id="${doc.id}">
+      <div class="doctor-photo">
+        ${doc.photo_url
+          ? `<img src="${escHtml(doc.photo_url)}" alt="${escHtml(doc.name)}" loading="lazy"/>`
+          : `<div class="doctor-photo-placeholder">👤</div>`
+        }
+      </div>
+      <div class="doctor-info">
+        <div class="doctor-name">${escHtml(doc.name)}</div>
+        <div class="doctor-spec ${doc.is_active ? 'active-color' : 'inactive-color'}">
+          ${escHtml(doc.specialization)}
+        </div>
+      </div>
+      <div class="toggle-wrap">
+        <button
+          class="toggle ${doc.is_active ? 'on' : ''}"
+          aria-label="${doc.is_active ? 'Скрыть' : 'Показать'} врача"
+          aria-pressed="${doc.is_active}"
+          onclick="toggleDoctor(${doc.id}, ${doc.is_active ? 1 : 0})"
+        ></button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// РЕНДЕРИНГ: ЛЕНТА
+// ═══════════════════════════════════════════════════════════════════
+
+function renderFeed() {
+  const container = document.getElementById('feed-list');
+
+  const cards = MOCK_FEED.map(appt => {
+    const isPending = appt.status === 'pending';
+    const icon = {
+      calendar: `<path stroke-linecap="round" stroke-linejoin="round"
+        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0
+           00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>`,
+      bag: `<path stroke-linecap="round" stroke-linejoin="round"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0
+           002-2V7a2 2 0 00-2-2h-2m-6 0V3a2 2 0 012-2h2a2 2 0
+           012 2v2m-6 0h6"/>`,
+      pen: `<path stroke-linecap="round" stroke-linejoin="round"
+        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0
+           013.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>`,
+    }[appt.icon] ?? '';
+
+    return `
+    <div class="appt-card">
+      <div class="appt-top">
+        <div class="appt-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            ${icon}
+          </svg>
+        </div>
+        <div class="appt-meta">
+          <div class="appt-name">${escHtml(appt.patient)}</div>
+          <div class="appt-detail">${escHtml(appt.service)} • ${escHtml(appt.procedure)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="appt-time">${escHtml(appt.time)}</div>
+          ${!isPending ? `<div class="appt-status-ok">✓✓ ОК</div>` : ''}
+        </div>
+      </div>
+      <div class="appt-actions">
+        ${isPending ? `
+          <button class="btn-call" onclick="callPatient(${appt.id})">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1
+                   0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516
+                   5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0
+                   01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+            </svg>
+            Позвонить
+          </button>
+          <button class="btn-confirm" id="confirm-${appt.id}"
+            onclick="confirmAppointment(${appt.id}, this)">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Подтвердить
+          </button>
+        ` : `
+          <button class="btn-history" onclick="showToast('История записи')">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            История
+          </button>
+          <button class="btn-edit" onclick="showToast('Редактирование')">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0
+                   002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828
+                   15H9v-2.828l8.586-8.586z"/>
+            </svg>
+            Изменить
+          </button>
+        `}
+      </div>
+    </div>`;
+  });
+
+  cards.push(`
+    <div class="appt-empty">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      Больше записей на сегодня нет
+    </div>
+  `);
+
+  container.innerHTML = cards.join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// НАВИГАЦИЯ
+// ═══════════════════════════════════════════════════════════════════
+
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const screen = btn.dataset.screen;
+    if (screen === state.activeScreen) return;
+
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(`screen-${screen}`).classList.add('active');
+
+    document.getElementById('header-title').textContent = {
+      doctors: 'Clinic Admin',
+      feed:    'Живая лента',
+    }[screen] ?? 'Clinic Admin';
+
+    state.activeScreen = screen;
+    tg?.HapticFeedback?.selectionChanged();
+  });
+});
+
+// ── Поиск ────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', e => {
+  state.filterQuery = e.target.value;
+  renderDoctors();
+});
+
+// ── Кнопка «Добавить врача» ───────────────────────────────────────
+document.getElementById('add-doctor-btn').addEventListener('click', () => {
+  tg?.HapticFeedback?.impactOccurred('light');
+  showToast('Раздел в разработке');
+});
+
+// ── Кнопка «Фильтр» ──────────────────────────────────────────────
+document.getElementById('filter-btn').addEventListener('click', () => {
+  tg?.HapticFeedback?.impactOccurred('light');
+  showToast('Фильтры в разработке');
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ═══════════════════════════════════════════════════════════════════
+
+function hideSplash() {
+  document.getElementById('splash').classList.add('hidden');
+}
+
+function showApp() {
+  document.getElementById('app-header').style.display = '';
+  document.getElementById('app-main').style.display   = '';
+  document.getElementById('bottom-nav').style.display = '';
+  document.getElementById('screen-doctors').classList.add('active');
+}
+
+function showError(msg) {
+  document.getElementById('app-header').style.display = '';
+  document.getElementById('app-main').style.display   = '';
+  const el = document.getElementById('error-screen');
+  el.classList.add('show');
+  document.getElementById('error-msg').innerHTML = msg;
+}
+
+let toastTimer;
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = isError ? 'var(--danger)' : 'var(--text)';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

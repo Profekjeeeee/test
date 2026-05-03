@@ -1,113 +1,34 @@
 import type { Bill } from "@/types";
+import { getCurrentUserId } from "@/lib/auth";
 
 export type { Bill };
 
-const BILLS_KEY = "dental_bills";
+const BASE_KEY = "dental_bills";
 
-const DEFAULT_BILLS: Bill[] = [
-  {
-    id: "bill-1",
-    number: "№ 2023-8842",
-    patientId: "p1",
-    items: [
-      {
-        id: "item-1-1",
-        service: "Профессиональная гигиена",
-        quantity: 1,
-        unitPrice: 4500,
-        total: 4500,
-        date: "2023-10-14",
-      },
-    ],
-    totalAmount: 4500,
-    paidAmount: 0,
-    status: "pending",
-    issuedAt: "2023-10-14",
-    canPayOnline: true,
-  },
-  {
-    id: "bill-2",
-    number: "№ 2023-9104",
-    patientId: "p1",
-    items: [
-      {
-        id: "item-2-1",
-        service: "Лечение кариеса (зуб 16)",
-        quantity: 1,
-        unitPrice: 7950,
-        total: 7950,
-        date: "2023-11-03",
-      },
-    ],
-    totalAmount: 7950,
-    paidAmount: 0,
-    status: "pending",
-    issuedAt: "2023-11-03",
-    canPayOnline: true,
-  },
-  {
-    id: "bill-3",
-    number: "№ 2023-8715",
-    patientId: "p1",
-    items: [
-      {
-        id: "item-3-1",
-        service: "Консультация стоматолога",
-        quantity: 1,
-        unitPrice: 1500,
-        total: 1500,
-        date: "2023-09-20",
-      },
-    ],
-    totalAmount: 1500,
-    paidAmount: 1500,
-    status: "paid",
-    issuedAt: "2023-09-20",
-    paidAt: "2023-09-20",
-    canPayOnline: false,
-  },
-  {
-    id: "bill-4",
-    number: "№ 2023-8634",
-    patientId: "p1",
-    items: [
-      {
-        id: "item-4-1",
-        service: "Профессиональное отбеливание",
-        quantity: 1,
-        unitPrice: 12000,
-        total: 12000,
-        date: "2023-08-15",
-      },
-    ],
-    totalAmount: 12000,
-    paidAmount: 12000,
-    status: "paid",
-    issuedAt: "2023-08-15",
-    paidAt: "2023-08-22",
-    canPayOnline: false,
-  },
-];
+function storageKey(): string {
+  const uid = getCurrentUserId();
+  return uid ? `${BASE_KEY}_${uid}` : BASE_KEY;
+}
 
 export function initBills(): Bill[] {
-  if (typeof window === "undefined") return DEFAULT_BILLS;
-  const stored = localStorage.getItem(BILLS_KEY);
+  if (typeof window === "undefined") return [];
+  const stored = localStorage.getItem(storageKey());
   if (!stored) {
-    localStorage.setItem(BILLS_KEY, JSON.stringify(DEFAULT_BILLS));
-    return DEFAULT_BILLS;
+    localStorage.setItem(storageKey(), JSON.stringify([]));
+    return [];
   }
   return JSON.parse(stored) as Bill[];
 }
 
 export function getBills(): Bill[] {
-  if (typeof window === "undefined") return DEFAULT_BILLS;
-  const stored = localStorage.getItem(BILLS_KEY);
-  return stored ? (JSON.parse(stored) as Bill[]) : DEFAULT_BILLS;
+  if (typeof window === "undefined") return [];
+  const stored = localStorage.getItem(storageKey());
+  return stored ? (JSON.parse(stored) as Bill[]) : [];
 }
 
 export function saveBills(bills: Bill[]): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(BILLS_KEY, JSON.stringify(bills));
+  localStorage.setItem(storageKey(), JSON.stringify(bills));
   window.dispatchEvent(new Event("billsUpdated"));
 }
 
@@ -122,7 +43,7 @@ export function addBillForAppointment(
   const newBill: Bill = {
     id: `bill-apt-${appointmentId}`,
     number: `№ ${new Date().getFullYear()}-${num}`,
-    patientId: "p1",
+    patientId: getCurrentUserId() ?? "guest",
     appointmentId,
     items: [
       {

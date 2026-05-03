@@ -375,18 +375,23 @@ export default function DentalFormulaPage() {
 
       <main className="px-4 py-4 flex flex-col gap-4 pb-24">
 
-        {/* ── Patient card ── */}
+        {/* ── Doctor card ── */}
         <div className="bg-white dark:bg-slate-900 rounded-[16px] border border-[#E2E8F0] dark:border-slate-700 px-4 py-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E2E8F0] to-[#CBD5E1] flex items-center justify-center flex-shrink-0">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="7" r="4" stroke="#64748B" strokeWidth="1.4" />
-              <path d="M3 18C3 15 6.13 12.5 10 12.5C13.87 12.5 17 15 17 18" stroke="#64748B" strokeWidth="1.4" strokeLinecap="round" />
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, #E6F5F4, #C8E8E5)" }}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-[#CBD5E1]">
+              <circle cx="10" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M3.5 17.5C3.5 14.5 6.5 12 10 12C13.5 12 16.5 14.5 16.5 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
           </div>
           <div className="min-w-0">
-            <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white truncate">Александр Коновалов</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              План лечения: №452-В&nbsp;•&nbsp;Обновлено 12.10.2023
+            <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white truncate">
+              Врач не назначен
+            </p>
+            <p className="text-[11px] mt-0.5" style={{ color: "#9ab0c5" }}>
+              Будет указан после первого приёма
             </p>
           </div>
         </div>

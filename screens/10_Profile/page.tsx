@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { logout } from "@/lib/auth";
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
 import { Toast } from "@/components/ui/Toast";
@@ -253,7 +254,7 @@ export default function ProfilePage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
+    logout();
     router.replace("/auth");
   };
 
@@ -356,18 +357,19 @@ export default function ProfilePage() {
               className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ background: "linear-gradient(135deg, #E6F5F4, #C8E8E5)" }}
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-primary">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-[#CBD5E1]">
                 <circle cx="10" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M3.5 17.5C3.5 14.5 6.5 12 10 12C13.5 12 16.5 14.5 16.5 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white">Михайлова А.В.</p>
-              <p className="text-[13px] mt-0.5 text-[#94A3B8]">Терапевт · Стаж 12 лет</p>
+              <p className="text-[15px] font-semibold text-[#94A3B8] dark:text-slate-400">
+                Врач не назначен
+              </p>
+              <p className="text-[12px] mt-0.5 text-[#CBD5E1] dark:text-slate-600">
+                Будет указан после первого приёма
+              </p>
             </div>
-            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 text-primary bg-primary-light dark:bg-[#0D2D3D]">
-              Ваш врач
-            </span>
           </div>
           <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-[10px] bg-[#F8FAFB] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155]">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
