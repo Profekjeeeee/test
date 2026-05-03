@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -330,11 +330,11 @@ function Stepper({ currentIdx }: { currentIdx: number }) {
                     ? "bg-primary text-white"
                     : i === currentIdx
                     ? "bg-primary text-white ring-2 ring-primary/20"
-                    : "bg-gray-100 text-gray-400"
+                    : "bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-slate-500"
                 }`}
               >
                 {i < currentIdx ? (
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="text-primary">
                     <path
                       d="M2 5l2.5 2.5L8 3"
                       stroke="white"
@@ -358,7 +358,7 @@ function Stepper({ currentIdx }: { currentIdx: number }) {
             {i < STEPS.length - 1 && (
               <div
                 className={`flex-1 h-[1.5px] mx-1.5 mb-3.5 rounded transition-colors duration-300 ${
-                  i < currentIdx ? "bg-primary" : "bg-gray-200"
+                  i < currentIdx ? "bg-primary" : "bg-gray-200 dark:bg-slate-600"
                 }`}
               />
             )}
@@ -400,25 +400,33 @@ function StepPane({
 
 // ─── Default reschedule appointment ──────────────────────────────────────────
 
-const DEFAULT_CURRENT: Appointment = {
-  id: "1",
-  day: 9,
-  monthNum: 5,
-  month: "мая",
-  year: 2025,
-  time: "10:30",
-  doctor: "Михайлова А.В.",
-  specialty: "Терапевт",
-  service: "Терапия. Лечение кариеса",
-  cabinet: "№ 5",
-  status: "scheduled",
-};
+const MONTHS_GENITIVE = [
+  "января","февраля","марта","апреля","мая","июня",
+  "июля","августа","сентября","октября","ноября","декабря",
+];
+
+function makeDefaultCurrent(): Appointment {
+  const now = new Date();
+  return {
+    id: "1",
+    day: 9,
+    monthNum: now.getMonth() + 1,
+    month: MONTHS_GENITIVE[now.getMonth()],
+    year: now.getFullYear(),
+    time: "10:30",
+    doctor: "Михайлова А.В.",
+    specialty: "Терапевт",
+    service: "Терапия. Лечение кариеса",
+    cabinet: "№ 5",
+    status: "scheduled",
+  };
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BookingPage() {
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-surface" />}>
+    <Suspense fallback={<div className="min-h-dvh bg-surface dark:bg-slate-950" />}>
       <BookingContent />
     </Suspense>
   );
@@ -435,7 +443,7 @@ function BookingContent() {
     isRescheduling ? "date" : "category"
   );
   const [currentAppointment, setCurrentAppointment] =
-    useState<Appointment>(DEFAULT_CURRENT);
+    useState<Appointment>(makeDefaultCurrent);
 
   const [selectedCategory, setSelectedCategory] =
     useState<ServiceCategory | null>(null);
@@ -549,7 +557,7 @@ function BookingContent() {
       : "Не выбрано";
 
   return (
-    <div className="min-h-dvh bg-surface pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
       <Header
         title={isRescheduling ? "Перенос записи" : "Запись на приём"}
         showBack
@@ -568,12 +576,12 @@ function BookingContent() {
           >
             <path
               d="M9 3V9L12.5 12.5"
-              stroke="#00665E"
+              stroke="currentColor"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            <circle cx="9" cy="9" r="7.5" stroke="#00665E" strokeWidth="1.5" />
+            <circle cx="9" cy="9" r="7.5" stroke="currentColor" strokeWidth="1.5" />
           </svg>
           <div>
             <p className="text-[13px] font-semibold text-primary">
@@ -595,7 +603,7 @@ function BookingContent() {
         {/* STEP 1 — Category */}
         {step === "category" && (
           <StepPane stepKey="category">
-            <p className="text-[17px] font-semibold text-[#0F172A]">
+            <p className="text-[17px] font-semibold text-[#0F172A] dark:text-white">
               Выберите направление
             </p>
             {CATEGORIES.map((cat) => (
@@ -619,7 +627,7 @@ function BookingContent() {
               >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{CATEGORY_ICONS[cat]}</span>
-                  <p className="text-[15px] font-medium text-[#0F172A]">
+                  <p className="text-[15px] font-medium text-[#0F172A] dark:text-white">
                     {cat}
                   </p>
                 </div>
@@ -632,7 +640,7 @@ function BookingContent() {
         {step === "doctor" && (
           <StepPane stepKey="doctor">
             <div>
-              <p className="text-[17px] font-semibold text-[#0F172A]">
+              <p className="text-[17px] font-semibold text-[#0F172A] dark:text-white">
                 Выберите врача
               </p>
               {selectedCategory && (
@@ -662,7 +670,7 @@ function BookingContent() {
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-[#0F172A] truncate">
+                    <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white truncate">
                       {doc.name}
                     </p>
                     <p className="text-[12px] text-gray-400">
@@ -671,7 +679,7 @@ function BookingContent() {
                   </div>
                   {selectedDoctorId === doc.id && (
                     <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="text-primary">
                         <path
                           d="M2 5l2.5 2.5L8 3"
                           stroke="white"
@@ -692,7 +700,7 @@ function BookingContent() {
         {step === "service" && (
           <StepPane stepKey="service">
             <div>
-              <p className="text-[17px] font-semibold text-[#0F172A]">
+              <p className="text-[17px] font-semibold text-[#0F172A] dark:text-white">
                 Выберите услугу
               </p>
               {selectedDoctor && (
@@ -717,7 +725,7 @@ function BookingContent() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-semibold text-[#0F172A]">
+                    <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white">
                       {svc.title}
                     </p>
                     <p className="text-[12px] text-gray-400 mt-0.5">
@@ -739,7 +747,7 @@ function BookingContent() {
         {step === "date" && (
           <StepPane stepKey="date">
             <div>
-              <p className="text-[17px] font-semibold text-[#0F172A]">
+              <p className="text-[17px] font-semibold text-[#0F172A] dark:text-white">
                 Дата и время
               </p>
               {!isRescheduling && selectedService && (
@@ -750,7 +758,7 @@ function BookingContent() {
             </div>
 
             <Card>
-              <p className="text-[15px] font-semibold mb-3">
+              <p className="text-[15px] font-semibold dark:text-white mb-3">
                 {new Date().toLocaleString("ru-RU", {
                   month: "long",
                   year: "numeric",
@@ -769,12 +777,12 @@ function BookingContent() {
                     <button
                       key={day}
                       disabled={isPast}
-                      className={`h-8 w-full rounded-[4px] text-[13px] font-medium transition-colors ${
+                        className={`h-8 w-full rounded-[4px] text-[13px] font-medium transition-colors ${
                         selectedDay === day
                           ? "bg-primary text-white"
                           : isPast
-                          ? "text-gray-300 cursor-not-allowed"
-                          : "hover:bg-primary-light text-[#0F172A]"
+                          ? "text-gray-300 dark:text-slate-600 cursor-not-allowed"
+                          : "hover:bg-primary-light dark:hover:bg-primary/20 text-[#0F172A] dark:text-slate-200"
                       }`}
                       onClick={() => {
                         setSelectedDay(day);
@@ -790,7 +798,7 @@ function BookingContent() {
 
             {selectedDay !== null && (
               <Card>
-                <p className="text-[14px] font-semibold text-[#0F172A] mb-3">
+                <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white mb-3">
                   Доступное время · {selectedDay}{" "}
                   {MONTHS_SHORT[new Date().getMonth()]}
                 </p>
@@ -815,12 +823,12 @@ function BookingContent() {
                           h-10 rounded-[4px] text-[13px] font-semibold border transition-all
                           ${
                             isBusy
-                              ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through"
+                              ? "border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-300 dark:text-slate-600 cursor-not-allowed line-through"
                               : isCurrent
                               ? "border-amber-200 bg-amber-50 text-amber-400 cursor-not-allowed"
                               : isSelected
                               ? "border-primary bg-primary text-white shadow-sm"
-                              : "border-gray-200 bg-white text-[#0F172A] hover:border-primary hover:text-primary active:scale-95"
+                              : "border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white hover:border-primary hover:text-primary active:scale-95"
                           }
                         `}
                       >
@@ -829,10 +837,10 @@ function BookingContent() {
                     );
                   })}
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-1.5">
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 flex flex-wrap gap-x-4 gap-y-1.5">
                   {[
                     { cls: "bg-primary", label: "Выбрано" },
-                    { cls: "bg-gray-100", label: "Занято" },
+                    { cls: "bg-gray-100 dark:bg-slate-600", label: "Занято" },
                     ...(isRescheduling
                       ? [
                           {
@@ -858,7 +866,7 @@ function BookingContent() {
         {/* STEP 5 — Confirm */}
         {step === "confirm" && (
           <StepPane stepKey="confirm">
-            <p className="text-[17px] font-semibold text-[#0F172A]">
+            <p className="text-[17px] font-semibold text-[#0F172A] dark:text-white">
               Подтверждение
             </p>
 
@@ -898,7 +906,7 @@ function BookingContent() {
                     <ConfirmRow label="Кабинет" value="№ 5" />
                     {selectedService && (
                       <>
-                        <div className="h-px bg-gray-100" />
+                        <div className="h-px bg-gray-100 dark:bg-slate-700" />
                         <div className="flex justify-between items-center">
                           <span className="text-[13px] text-gray-400">
                             К оплате
@@ -945,13 +953,13 @@ function BookingContent() {
               router.push("/main");
             }}
           />
-          <div className="relative w-full max-w-sm bg-white rounded-[20px] p-6 shadow-xl animate-[slideUp_0.3s_ease-out]">
+          <div className="relative w-full max-w-sm bg-white dark:bg-[#1E293B] rounded-[20px] p-6 shadow-xl animate-[slideUp_0.3s_ease-out]">
             <div className="flex flex-col items-center text-center gap-3">
               <div className="w-14 h-14 rounded-full bg-primary-light flex items-center justify-center">
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-primary">
                   <path
                     d="M6 14l5.5 5.5L22 8"
-                    stroke="#00665E"
+                    stroke="currentColor"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -959,7 +967,7 @@ function BookingContent() {
                 </svg>
               </div>
               <div>
-                <p className="text-[17px] font-bold text-[#0F172A]">
+                <p className="text-[17px] font-bold text-[#0F172A] dark:text-white">
                   {isRescheduling ? "Запись перенесена!" : "Запись создана!"}
                 </p>
                 <p className="text-[14px] text-gray-500 mt-1">
@@ -1005,7 +1013,7 @@ function ConfirmRow({
       <span className="text-[13px] text-gray-400 flex-shrink-0">{label}</span>
       <span
         className={`text-[14px] font-semibold text-right ${
-          accent ? "text-primary" : "text-[#0F172A]"
+          accent ? "text-primary" : "text-[#0F172A] dark:text-white"
         }`}
       >
         {value}

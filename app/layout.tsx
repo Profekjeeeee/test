@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const manrope = Manrope({
   subsets: ["latin", "cyrillic"],
@@ -43,14 +44,16 @@ export default function RootLayout({
   return (
     <html lang="ru" className={`${manrope.variable} ${inter.variable}`}>
       <head>
-        {/* Принудительно сбрасываем остатки тёмной темы у старых пользователей */}
+        {/* Анти-FOUC: применяем сохранённую тему до рендера */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{document.documentElement.classList.remove('dark');localStorage.removeItem('theme')}catch(e){}`,
+            __html: `try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}`,
           }}
         />
       </head>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

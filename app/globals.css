@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
-/* Принудительно отключаем тёмную тему: variant `dark:` срабатывает
-   только при наличии класса .dark на html, а мы его никогда не ставим.
-   Без этого Tailwind v4 по умолчанию активирует dark: через
-   @media (prefers-color-scheme: dark) → подхватывает системную тему ОС. */
+/* dark: вариант срабатывает только при наличии класса .dark на html.
+   Системная тема ОС не влияет — управляем темой вручную через localStorage. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Manrope", "Inter", sans-serif;
-  --color-primary: #00665E;
-  --color-primary-dark: #004D46;
-  --color-primary-light: #E6F2F1;
+  /* Светлая тема: насыщенный тил для читаемости на белом фоне */
+  --color-primary: #4E8D8F;
+  --color-primary-dark: #3D7A7C;
+  --color-primary-light: #D4ECED;
+  --color-secondary: #9AB0C5;
   --color-surface: #F7F9FB;
   --color-error: #BA1A1A;
   --color-tooth-healthy: #FFFFFF;
@@ -32,6 +32,15 @@
     background-color: #F7F9FB;
   }
 
+  html.dark {
+    color-scheme: dark;
+    background-color: #0F172A;
+    /* Тёмная тема: бледный неоновый тил — контрастен на тёмном фоне */
+    --color-primary: #A1D6D7;
+    --color-primary-dark: #7BBFC0;
+    --color-primary-light: #1A3D3F;
+  }
+
   body {
     @apply bg-surface text-[#0F172A] antialiased;
     max-width: 390px;
@@ -39,20 +48,24 @@
     min-height: 100dvh;
     overflow-x: hidden;
   }
-}
 
-/* Жёсткий страховочный сброс на случай если браузер
-   или внешние стили попытаются применить тёмный фон. */
-html, body {
-  background-color: #F7F9FB !important;
-  color: #0F172A !important;
-}
+  html.dark body {
+    background-color: #0F172A;
+    color: #E2E8F0;
+  }
 
-@media (prefers-color-scheme: dark) {
-  html, body {
-    background-color: #F7F9FB !important;
-    color: #0F172A !important;
-    color-scheme: light !important;
+  /* Плавные переходы при смене темы — только после первой загрузки */
+  html.theme-ready body,
+  html.theme-ready *,
+  html.theme-ready *::before,
+  html.theme-ready *::after {
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease,
+      border-color 0.3s ease,
+      box-shadow 0.3s ease,
+      fill 0.3s ease,
+      stroke 0.3s ease;
   }
 }
 
@@ -62,6 +75,11 @@ html, body {
   }
   .screen-padding {
     @apply px-6 pt-4;
+  }
+
+  /* Свечение активных элементов в тёмной теме */
+  .dark .glow-primary {
+    box-shadow: 0 0 0 1px rgba(161, 214, 215, 0.3), 0 0 12px rgba(161, 214, 215, 0.15);
   }
 }
 

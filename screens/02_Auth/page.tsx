@@ -46,7 +46,7 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-surface flex flex-col justify-center px-6 pb-8">
+    <main className="min-h-dvh bg-surface dark:bg-slate-950 flex flex-col justify-center px-6 pb-8">
       <div className="mb-10">
         <div className="w-12 h-12 rounded-[12px] bg-primary flex items-center justify-center mb-6">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -56,7 +56,7 @@ export default function AuthPage() {
             />
           </svg>
         </div>
-        <h1 className="text-[28px] font-bold text-[#0F172A] leading-tight tracking-tight">
+        <h1 className="text-[28px] font-bold text-[#0F172A] dark:text-white leading-tight tracking-tight">
           {step === "phone" ? "Вход в кабинет" : "Код из СМС"}
         </h1>
         <p className="text-[15px] text-gray-500 mt-2 leading-relaxed">

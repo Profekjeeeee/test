@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -188,38 +188,38 @@ const DENTAL_PRICES: PriceCategory[] = [
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   hygiene: (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-primary">
       <path
         d="M3 5.5C3 4 4 3 5.5 3C7 3 7.5 4 8 4C8.5 4 9 3 10.5 3C12 3 13 4 13 5.5C13 7 12 8 11.5 8.5C11.5 8.5 11 11 11 12.5C11 13.5 10.5 14 9.5 14C8.5 14 8 13.5 7.5 12C7 10.5 7.5 9 8 9C8.5 9 9 10.5 8.5 12"
-        stroke="#00665E"
+        stroke="currentColor"
         strokeWidth="1.3"
         strokeLinecap="round"
       />
     </svg>
   ),
   therapy: (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M8 2V14M2 8H14" stroke="#00665E" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-primary">
+      <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   ),
   surgery: (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-primary">
       <path
         d="M3 13L13 3M10 3H13V6"
-        stroke="#00665E"
+        stroke="currentColor"
         strokeWidth="1.3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="M6 10L3 13" stroke="#00665E" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M6 10L3 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   ),
   orthodontics: (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="6" width="12" height="4" rx="2" stroke="#00665E" strokeWidth="1.3" />
-      <circle cx="5.5" cy="8" r="1" fill="#00665E" />
-      <circle cx="8" cy="8" r="1" fill="#00665E" />
-      <circle cx="10.5" cy="8" r="1" fill="#00665E" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-primary">
+      <rect x="2" y="6" width="12" height="4" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="5.5" cy="8" r="1" fill="currentColor" />
+      <circle cx="8" cy="8" r="1" fill="currentColor" />
+      <circle cx="10.5" cy="8" r="1" fill="currentColor" />
     </svg>
   ),
 };
@@ -252,11 +252,11 @@ export default function PriceListPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFB] pb-[88px]">
+    <div className="min-h-dvh bg-[#F8FAFB] dark:bg-slate-950 pb-[88px]">
       <Header title="Прайс-лист" showBack />
 
       {/* Sticky search */}
-      <div className="sticky top-14 z-30 bg-[#F8FAFB] px-5 pt-3 pb-2 border-b border-gray-100">
+      <div className="sticky top-14 z-30 bg-[#F8FAFB] dark:bg-slate-950 px-5 pt-3 pb-2 border-b border-gray-100 dark:border-slate-700">
         <div className="relative">
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -273,14 +273,14 @@ export default function PriceListPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск по услугам..."
-            className="w-full h-10 pl-9 pr-9 rounded-[10px] bg-white border border-gray-200 text-[14px] text-[#0F172A] placeholder-gray-400 outline-none focus:border-primary transition-colors"
+            className="w-full h-10 pl-9 pr-9 rounded-[10px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-[14px] text-[#0F172A] dark:text-white placeholder-gray-400 outline-none focus:border-primary transition-colors"
           />
           {query && (
             <button
               onClick={() => setQuery("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-primary">
                 <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
               </svg>
             </button>
@@ -338,13 +338,13 @@ function CategorySection({
   onBook: (service: string, price: number, itemTitle: string) => void;
 }) {
   return (
-    <div className="bg-white rounded-[16px] border border-gray-100 overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 rounded-[16px] border border-gray-100 dark:border-slate-700 overflow-hidden">
       {/* Category header */}
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 bg-[#F8FAFB]">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-[#F8FAFB] dark:bg-slate-800">
         <div className="w-7 h-7 rounded-[8px] bg-primary/10 flex items-center justify-center flex-shrink-0">
           {CATEGORY_ICONS[category.id]}
         </div>
-        <p className="text-[13px] font-bold text-[#0F172A] tracking-tight">
+        <p className="text-[13px] font-bold text-[#0F172A] dark:text-white tracking-tight">
           {category.title}
         </p>
         <span className="ml-auto text-[11px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
@@ -360,7 +360,7 @@ function CategorySection({
             onBook={(price, title) => onBook(category.bookingService, price, title)}
           />
           {idx < category.items.length - 1 && (
-            <div className="h-px bg-gray-100 mx-4" />
+            <div className="h-px bg-gray-100 dark:bg-slate-700 mx-4" />
           )}
         </div>
       ))}
@@ -381,7 +381,7 @@ function PriceRow({
     <div className="flex items-start gap-3 px-4 py-3.5">
       {/* Text */}
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold text-[#0F172A] leading-snug">
+        <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white leading-snug">
           {item.title}
         </p>
         <p className="text-[12px] text-gray-400 mt-0.5 leading-relaxed">
@@ -391,7 +391,7 @@ function PriceRow({
 
       {/* Price + button */}
       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-        <p className="text-[15px] font-bold text-[#0F172A] tabular-nums whitespace-nowrap">
+        <p className="text-[15px] font-bold text-[#0F172A] dark:text-white tabular-nums whitespace-nowrap">
           {item.price.toLocaleString("ru-RU")} ₽
         </p>
         <button

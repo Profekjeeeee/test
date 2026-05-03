@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
 import { Toast } from "@/components/ui/Toast";
@@ -13,6 +14,7 @@ import {
   type UserProfile,
   type UserNotifications,
 } from "@/lib/userProfile";
+import { getNextAppointment, type Appointment } from "@/lib/appointments";
 
 // ─── Phone formatting ──────────────────────────────────────────────────────────
 
@@ -76,7 +78,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
         height: 24,
         borderRadius: 12,
         position: "relative",
-        backgroundColor: on ? "#00665E" : "#CBD5E1",
+        backgroundColor: on ? "var(--color-primary)" : "#CBD5E1",
         transition: "background-color 220ms ease",
       }}
     >
@@ -127,7 +129,7 @@ function Field({ label, value, onChange, error, type = "text", inputMode, placeh
           "placeholder:text-gray-400 dark:placeholder:text-slate-600",
           error
             ? "border-[#EF4444] bg-[#FFF5F5] shadow-[0_0_0_3px_rgba(239,68,68,0.08)] text-[#0F172A] dark:bg-[#3B1212] dark:border-[#EF4444] dark:text-white"
-            : "border-[#E2E8F0] bg-[#FAFCFC] text-[#0F172A] dark:bg-[#0F172A] dark:border-[#334155] dark:text-white focus:border-primary dark:focus:border-[#00A896]",
+            : "border-[#E2E8F0] bg-[#FAFCFC] text-[#0F172A] dark:bg-[#0F172A] dark:border-[#334155] dark:text-white focus:border-primary dark:focus:border-[#A1D6D7]",
         ].join(" ")}
         style={{ fontFamily: "Manrope, sans-serif" }}
       />
@@ -147,9 +149,9 @@ const CLINIC_LINKS = [
     href: "/price-list",
     label: "Прайс-лист",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <rect x="3" y="2" width="12" height="14" rx="2" stroke="#00665E" strokeWidth="1.3" />
-        <path d="M6 6H12M6 9H10M6 12H8" stroke="#00665E" strokeWidth="1.3" strokeLinecap="round" />
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <rect x="3" y="2" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M6 6H12M6 9H10M6 12H8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -157,9 +159,9 @@ const CLINIC_LINKS = [
     href: "/contacts",
     label: "Контакты и адрес",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <path d="M9 2C6.23858 2 4 4.23858 4 7C4 10.5 9 16 9 16C9 16 14 10.5 14 7C14 4.23858 11.7614 2 9 2Z" stroke="#00665E" strokeWidth="1.3" />
-        <circle cx="9" cy="7" r="2" stroke="#00665E" strokeWidth="1.3" />
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <path d="M9 2C6.23858 2 4 4.23858 4 7C4 10.5 9 16 9 16C9 16 14 10.5 14 7C14 4.23858 11.7614 2 9 2Z" stroke="currentColor" strokeWidth="1.3" />
+        <circle cx="9" cy="7" r="2" stroke="currentColor" strokeWidth="1.3" />
       </svg>
     ),
   },
@@ -167,8 +169,8 @@ const CLINIC_LINKS = [
     href: "/prevention",
     label: "Рекомендации",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <path d="M9 2L10.8 6.5L16 7.3L12.5 10.7L13.5 16L9 13.5L4.5 16L5.5 10.7L2 7.3L7.2 6.5L9 2Z" stroke="#00665E" strokeWidth="1.3" strokeLinejoin="round" />
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <path d="M9 2L10.8 6.5L16 7.3L12.5 10.7L13.5 16L9 13.5L4.5 16L5.5 10.7L2 7.3L7.2 6.5L9 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
       </svg>
     ),
   },
@@ -176,10 +178,10 @@ const CLINIC_LINKS = [
     href: "/doctors",
     label: "Наши врачи",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <circle cx="9" cy="6" r="3" stroke="#00665E" strokeWidth="1.3" />
-        <path d="M3 16C3 13.2386 5.68629 11 9 11C12.3137 11 15 13.2386 15 16" stroke="#00665E" strokeWidth="1.3" strokeLinecap="round" />
-        <path d="M12 4H16M14 2V6" stroke="#00665E" strokeWidth="1.3" strokeLinecap="round" />
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <circle cx="9" cy="6" r="3" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M3 16C3 13.2386 5.68629 11 9 11C12.3137 11 15 13.2386 15 16" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M12 4H16M14 2V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -195,17 +197,27 @@ const NOTIF_ITEMS: { key: keyof UserNotifications; label: string; sub: string }[
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [form, setForm] = useState<UserProfile>({ firstName: "", lastName: "", phone: "", email: "" });
   const [notifs, setNotifs] = useState<UserNotifications>({ push: true, sms: false });
+  const [darkTheme, setDarkTheme] = useState(false);
+
+  useEffect(() => {
+    try {
+      setDarkTheme(localStorage.getItem("theme") === "dark");
+    } catch {}
+  }, []);
   const [touched, setTouched] = useState<Partial<Record<keyof UserProfile, boolean>>>({});
   const [saving, setSaving] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
+  const [nextApt, setNextApt] = useState<Appointment | null>(null);
 
   useEffect(() => {
     const profile = getProfile();
     const n = getNotifications();
     setForm(profile);
     setNotifs(n);
+    setNextApt(getNextAppointment());
   }, []);
 
   const errors = validate(form);
@@ -240,6 +252,11 @@ export default function ProfilePage() {
     });
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("isLoggedIn");
+    router.replace("/auth");
+  };
+
   const initials = getInitials(form.firstName, form.lastName);
   const saveDisabled = saving || (allTouched && hasErrors);
 
@@ -255,7 +272,7 @@ export default function ProfilePage() {
             className="w-[68px] h-[68px] rounded-full flex items-center justify-center flex-shrink-0"
             style={{ background: "linear-gradient(135deg, #E6F5F4 0%, #C8E8E5 100%)" }}
           >
-            <span className="text-[22px] font-bold text-[#00665E]">{initials}</span>
+            <span className="text-[22px] font-bold text-primary">{initials}</span>
           </div>
           <div>
             <p className="text-[18px] font-bold text-[#0F172A] dark:text-white">
@@ -310,7 +327,7 @@ export default function ProfilePage() {
             disabled={saveDisabled}
             className="mt-5 w-full h-12 rounded-[12px] text-[15px] font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all"
             style={{
-              backgroundColor: saveDisabled ? "#E2E8F0" : "#00665E",
+              backgroundColor: saveDisabled ? "#E2E8F0" : "var(--color-primary)",
               color: saveDisabled ? "#94A3B8" : "#FFFFFF",
               fontFamily: "Manrope, sans-serif",
             }}
@@ -339,16 +356,16 @@ export default function ProfilePage() {
               className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ background: "linear-gradient(135deg, #E6F5F4, #C8E8E5)" }}
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="7" r="3.5" stroke="#00665E" strokeWidth="1.4" />
-                <path d="M3.5 17.5C3.5 14.5 6.5 12 10 12C13.5 12 16.5 14.5 16.5 17.5" stroke="#00665E" strokeWidth="1.4" strokeLinecap="round" />
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-primary">
+                <circle cx="10" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M3.5 17.5C3.5 14.5 6.5 12 10 12C13.5 12 16.5 14.5 16.5 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white">Михайлова А.В.</p>
               <p className="text-[13px] mt-0.5 text-[#94A3B8]">Терапевт · Стаж 12 лет</p>
             </div>
-            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 text-[#00665E] bg-[#E6F5F4] dark:bg-[#0D3B36]">
+            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 text-primary bg-primary-light dark:bg-[#0D2D3D]">
               Ваш врач
             </span>
           </div>
@@ -359,7 +376,10 @@ export default function ProfilePage() {
               <path d="M2 7H14" stroke="#94A3B8" strokeWidth="1.3" />
             </svg>
             <p className="text-[12px] text-[#64748B] dark:text-slate-400">
-              Следующий приём: <span className="font-semibold text-[#0F172A] dark:text-white">9 мая, 10:30</span>
+              {nextApt
+                ? <>Следующий приём: <span className="font-semibold text-[#0F172A] dark:text-white">{nextApt.day} {nextApt.month}, {nextApt.time}</span></>
+                : <span className="text-gray-400">Нет предстоящих записей</span>
+              }
             </p>
           </div>
         </div>
@@ -385,6 +405,24 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* ── Interface ── */}
+        <div className="bg-white dark:bg-[#1E293B] rounded-[16px] border border-[#E2E8F0] dark:border-[#334155] px-4 py-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: "#9ab0c5" }}>
+            Интерфейс
+          </p>
+          <div className="flex items-center justify-between py-3">
+            <div className="flex-1 min-w-0 pr-4">
+              <p className="text-[15px] font-medium text-[#0F172A] dark:text-white">Темная тема</p>
+              <p className="text-[12px] mt-0.5 text-[#94A3B8]">Снижает нагрузку на глаза в вечернее время</p>
+            </div>
+            <Toggle on={darkTheme} onToggle={() => {
+              const next = !darkTheme;
+              setDarkTheme(next);
+              window.dispatchEvent(new CustomEvent("themeChange", { detail: { dark: next } }));
+            }} />
+          </div>
+        </div>
+
         {/* ── Clinic ── */}
         <div className="bg-white dark:bg-[#1E293B] rounded-[16px] border border-[#E2E8F0] dark:border-[#334155] px-4 py-2">
           <p className="text-[11px] font-bold uppercase tracking-widest pt-3 pb-2 text-[#94A3B8] dark:text-slate-500">
@@ -396,7 +434,7 @@ export default function ProfilePage() {
               href={item.href}
               className={`flex items-center gap-3 py-3 active:opacity-70 transition-opacity ${idx < CLINIC_LINKS.length - 1 ? "border-b border-[#F1F5F9] dark:border-[#334155]" : ""}`}
             >
-              <div className="w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 bg-[#E6F5F4] dark:bg-[#0D3B36]">
+              <div className="w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 bg-[#E6F5F4] dark:bg-[#0D2D3D]">
                 {item.icon}
               </div>
               <span className="flex-1 text-[15px] font-medium text-[#0F172A] dark:text-white">{item.label}</span>
@@ -407,7 +445,10 @@ export default function ProfilePage() {
           ))}
         </div>
 
-        <button className="text-[14px] font-semibold text-center py-2 text-[#EF4444]">
+        <button
+          onClick={handleLogout}
+          className="text-[14px] font-semibold text-center py-2 text-[#EF4444] active:opacity-50 transition-opacity"
+        >
           Выйти из аккаунта
         </button>
 

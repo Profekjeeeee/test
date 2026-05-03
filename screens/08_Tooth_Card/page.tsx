@@ -248,7 +248,7 @@ export default function ToothCardPage() {
 
   if (!tooth) {
     return (
-      <div className="min-h-dvh bg-surface flex items-center justify-center">
+      <div className="min-h-dvh bg-surface dark:bg-slate-950 flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -260,7 +260,7 @@ export default function ToothCardPage() {
   const guarantee = getGuarantee(tooth.condition);
 
   return (
-    <div className="min-h-dvh bg-surface pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
       <Header title={`Зуб №${toothNum}`} showBack />
 
       <main className="px-4 py-4 flex flex-col gap-3 pb-28">

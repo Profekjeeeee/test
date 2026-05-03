@@ -6,12 +6,18 @@
 
 ## Design Tokens (Clinical Precision Style)
 - Font: Manrope (Sans-serif)
-- Colors: 
-  - Primary: #00665E (Deep Green)
+- Colors:
+  - Primary: #A1D6D7 (Light Blue — active states, buttons, toggles, icons, highlights)
+  - Secondary / Inactive: #9AB0C5 (Muted Blue — labels, inactive tabs, secondary text)
   - Background: #F8FAFB (Light Blue/Grey tint)
   - Tooth Status: Healthy (White), Treated (Blue), Caries (Red), Removed (Grey)
 - Border Radius: 12px - 16px for cards and containers
 - Shadows: Minimal or none (use thin borders #E2E8F0 instead)
+
+## Color Usage Rules
+- ALWAYS use #A1D6D7 for: active nav items, primary buttons, toggles (on state), progress indicators, selected states, accent icons.
+- ALWAYS use #9AB0C5 for: inactive nav labels, placeholder text, disabled elements, secondary captions.
+- NEVER use the old green #00665E in any new code.
 
 ## Development Rules
 - Use 'use client' directive only when interactivity is needed.

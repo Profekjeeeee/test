@@ -135,7 +135,7 @@ export default function TreatmentPlanPage() {
   const stages = groupIntoStages(items);
 
   return (
-    <div className="min-h-dvh bg-surface pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
       <Header title="План лечения" showBack />
 
       <main className="px-5 py-4 flex flex-col gap-5">
@@ -155,13 +155,13 @@ export default function TreatmentPlanPage() {
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">
                 Итого
               </p>
-              <p className="text-[22px] font-bold text-[#0F172A] tabular-nums">
+              <p className="text-[22px] font-bold text-[#0F172A] dark:text-white tabular-nums">
                 {formatPrice(stats.totalAmount)}
               </p>
             </div>
           </div>
 
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
+          <div className="h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
             <div
               className="h-full bg-primary rounded-full transition-all duration-500"
               style={{ width: `${stats.progressPercent}%` }}
@@ -172,7 +172,7 @@ export default function TreatmentPlanPage() {
             <p className="text-[12px] text-gray-400">{stats.completed} из {stats.total} услуг</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
+          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100 dark:border-slate-700">
             {[
               { label: "Выполнено",   value: stats.completed,  barColor: "bg-primary",    textColor: "text-primary" },
               { label: "В процессе",  value: stats.inProgress, barColor: "bg-amber-400",  textColor: "text-amber-600" },
@@ -231,14 +231,14 @@ export default function TreatmentPlanPage() {
                       <div className="flex items-center gap-3">
                         <StatusIcon status={status} />
                         <div className="flex-1 min-w-0">
-                          <p className={`text-[14px] font-semibold leading-snug ${isDone ? "text-gray-400 line-through" : "text-[#0F172A]"}`}>
+                          <p className={`text-[14px] font-semibold leading-snug ${isDone ? "text-gray-400 dark:text-slate-600 line-through" : "text-[#0F172A] dark:text-white"}`}>
                             {item.title}
                           </p>
                           <p className={`text-[12px] mt-0.5 ${isDone ? "text-gray-300" : "text-gray-400"}`}>
                             {formatDate(item.date)}
                           </p>
                         </div>
-                        <p className={`text-[14px] font-bold flex-shrink-0 ${isDone ? "text-gray-300" : "text-[#0F172A]"}`}>
+                        <p className={`text-[14px] font-bold flex-shrink-0 ${isDone ? "text-gray-300 dark:text-slate-600" : "text-[#0F172A] dark:text-white"}`}>
                           {formatPrice(item.price)}
                         </p>
                       </div>

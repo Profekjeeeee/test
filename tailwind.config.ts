@@ -1,4 +1,4 @@
-import type { Config } from "tailwindcss";
+﻿import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: "class",
@@ -15,15 +15,15 @@ const config: Config = {
       },
       colors: {
         primary: {
-          DEFAULT: "#00665E",
-          dark: "#004D46",
-          light: "#E6F2F1",
+          DEFAULT: "#4E8D8F",
+          dark: "#3D7A7C",
+          light: "#D4ECED",
+        },
+        secondary: {
+          DEFAULT: "#9AB0C5",
         },
         navy: {
           DEFAULT: "#0F172A",
-        },
-        teal: {
-          DEFAULT: "#0D9488",
         },
         surface: "#F7F9FB",
         error: "#BA1A1A",

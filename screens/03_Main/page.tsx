@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,8 +21,17 @@ const DAILY_TIPS = [
   "Профилактический осмотр каждые 6 месяцев предотвращает 90% серьёзных проблем.",
 ];
 
+function formatCurrentDate(): string {
+  const now = new Date();
+  const weekday = now.toLocaleString("ru-RU", { weekday: "long" });
+  const day = now.getDate();
+  const month = now.toLocaleString("ru-RU", { month: "long" });
+  return `${weekday}, ${day} ${month}`;
+}
+
 export default function MainPage() {
   const router = useRouter();
+  const [currentDateStr, setCurrentDateStr] = useState("");
   const [nextApt, setNextApt] = useState<Appointment | null>(null);
   const [upcomingCount, setUpcomingCount] = useState(0);
   const [pendingAmount, setPendingAmount] = useState(0);
@@ -35,6 +44,7 @@ export default function MainPage() {
   const [firstName, setFirstName] = useState("Иван");
 
   useEffect(() => {
+    setCurrentDateStr(formatCurrentDate());
     initPlanSources();
     setNextApt(getNextAppointment());
     setUpcomingCount(getUpcomingCount());
@@ -103,8 +113,11 @@ export default function MainPage() {
     <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
       {/* Header */}
       <header className="px-6 pt-6 pb-2">
-        <p className="text-[13px] font-medium text-gray-400 dark:text-slate-500 uppercase tracking-wider">
-          Пятница, 2 мая
+        <p
+          className="text-[13px] font-medium uppercase tracking-wider"
+          style={{ color: "#9ab0c5" }}
+        >
+          {currentDateStr}
         </p>
         <h1 className="text-[24px] font-bold text-[#0F172A] dark:text-white mt-0.5">
           Добрый день, {firstName}
@@ -171,8 +184,8 @@ export default function MainPage() {
           <Link href="/booking">
             <Card padding="sm" className="text-center py-3.5">
               <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <path d="M10 4V16M4 10H16" stroke="#00665E" strokeWidth="1.5" strokeLinecap="round" />
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
+                  <path d="M10 4V16M4 10H16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </div>
               <p className="text-[11px] font-semibold text-[#0F172A] dark:text-white leading-tight">
@@ -183,10 +196,10 @@ export default function MainPage() {
           <Link href="/formula">
             <Card padding="sm" className="text-center py-3.5">
               <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
                   <path
                     d="M10 2C8 2 6 3.5 6 6C6 8 7 9.5 7.5 11C8 12.5 8 14 7.5 16C7 17.5 8 18.5 9 18.5C10 18.5 10.5 17.5 10 16"
-                    stroke="#00665E"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                   />
@@ -200,9 +213,9 @@ export default function MainPage() {
           <Link href="/price-list">
             <Card padding="sm" className="text-center py-3.5">
               <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <rect x="3" y="2" width="14" height="16" rx="2" stroke="#00665E" strokeWidth="1.5" />
-                  <path d="M7 7H13M7 10.5H11M7 14H9" stroke="#00665E" strokeWidth="1.3" strokeLinecap="round" />
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
+                  <rect x="3" y="2" width="14" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M7 7H13M7 10.5H11M7 14H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
                 </svg>
               </div>
               <p className="text-[11px] font-semibold text-[#0F172A] dark:text-white leading-tight">
@@ -291,13 +304,11 @@ export default function MainPage() {
           >
             <path
               d="M6.5 3C4.5 3 3 4.5 3 7C3 9.5 4.5 11 5.5 12C5.5 12 5 15 5 18C5 20.5 6 21.5 7.5 21.5C9 21.5 10 20.5 10.5 18.5C11 16.5 11.5 13 12 13C12.5 13 13 16.5 13.5 18.5C14 20.5 15 21.5 16.5 21.5C18 21.5 19 20.5 19 18C19 15 18.5 12 18.5 12C19.5 11 21 9.5 21 7C21 4.5 19.5 3 17.5 3C15.5 3 14 4.5 12 4.5C10 4.5 8.5 3 6.5 3Z"
-              fill="#00665E"
+              fill="var(--color-primary)"
             />
           </svg>
-
-          {/* Заголовок */}
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-5 h-5 rounded-full bg-[#00665E] flex items-center justify-center flex-shrink-0">
+            <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                 <path d="M6 2V7M6 9.5V10" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -325,11 +336,11 @@ export default function MainPage() {
           <Link
             href="/prevention"
             className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold transition-opacity duration-300"
-            style={{ color: "#00665E", opacity: tipVisible ? 1 : 0 }}
+            style={{ color: "var(--color-primary)", opacity: tipVisible ? 1 : 0 }}
           >
             Узнайте больше в разделе рекомендаций
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2.5 6H9.5M6.5 3.5L9.5 6L6.5 8.5" stroke="#00665E" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M2.5 6H9.5M6.5 3.5L9.5 6L6.5 8.5" stroke="var(--color-primary)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Link>
         </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -215,8 +215,8 @@ function InfoBottomSheet({ onClose }: { onClose: () => void }) {
               <span
                 className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-bold mt-0.5"
                 style={{
-                  backgroundColor: "#E6F5F4",
-                  color: "#00665E",
+                  backgroundColor: "var(--color-primary-light)",
+                  color: "var(--color-primary)",
                   fontFamily: "Manrope, sans-serif",
                 }}
               >
@@ -234,7 +234,7 @@ function InfoBottomSheet({ onClose }: { onClose: () => void }) {
         <button
           onClick={handleClose}
           className="w-full h-[52px] rounded-[14px] text-white text-[15px] font-semibold active:scale-95 transition-transform"
-          style={{ backgroundColor: "#00665E", fontFamily: "Manrope, sans-serif" }}
+          style={{ backgroundColor: "var(--color-primary)", fontFamily: "Manrope, sans-serif" }}
         >
           Понятно
         </button>

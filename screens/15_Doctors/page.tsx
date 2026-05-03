@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -30,7 +30,7 @@ const DOCTORS: Doctor[] = [
     research:
       "Автор 18 научных публикаций по методам лечения кариеса и реставрационной стоматологии. Участник ежегодных конференций СтАР.",
     initials: "АМ",
-    color: "#E6F2F1",
+    color: "#E8F6F6",
   },
   {
     id: "ivanov",
@@ -92,7 +92,7 @@ export default function DoctorsPage() {
       : DOCTORS.filter((d) => d.specialtyTag === activeFilter);
 
   return (
-    <div className="min-h-dvh bg-surface pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
       <Header title="Наши врачи" />
 
       {/* Filter chips */}
@@ -108,7 +108,7 @@ export default function DoctorsPage() {
                 ${
                   activeFilter === f
                     ? "bg-primary text-white border-primary"
-                    : "bg-white text-gray-500 border-gray-200 active:border-primary active:text-primary"
+                    : "bg-white dark:bg-slate-800 text-gray-500 border-gray-200 dark:border-slate-600 active:border-primary active:text-primary"
                 }
               `}
             >
@@ -140,7 +140,7 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
   const bookingService = SPECIALTY_BOOKING_SERVICE[doctor.specialtyTag] ?? "Терапия";
 
   return (
-    <div className="bg-white rounded-[16px] border border-[#E2E8F0] overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 rounded-[16px] border border-[#E2E8F0] dark:border-slate-700 overflow-hidden">
       {/* Main row */}
       <div className="p-4 flex items-start gap-4">
         {/* Avatar */}
@@ -153,7 +153,7 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-bold text-[#0F172A] leading-tight">{doctor.name}</p>
+          <p className="text-[15px] font-bold text-[#0F172A] dark:text-white leading-tight">{doctor.name}</p>
 
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center h-5 px-2 rounded-full bg-primary/10 text-primary text-[11px] font-semibold">
@@ -183,7 +183,7 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
           >
             <path
               d="M3 5L7 9L11 5"
-              stroke="#00665E"
+              stroke="currentColor"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -193,14 +193,14 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
         </button>
 
         {expanded && (
-          <div className="mt-2 p-3 bg-surface rounded-[10px] border border-[#E2E8F0]">
-            <p className="text-[13px] text-[#475569] leading-relaxed">{doctor.research}</p>
+          <div className="mt-2 p-3 bg-surface dark:bg-slate-800 rounded-[10px] border border-[#E2E8F0] dark:border-slate-700">
+            <p className="text-[13px] text-[#475569] dark:text-slate-400 leading-relaxed">{doctor.research}</p>
           </div>
         )}
       </div>
 
       {/* Divider */}
-      <div className="h-[1px] bg-[#E2E8F0] mx-4" />
+      <div className="h-[1px] bg-[#E2E8F0] dark:bg-slate-700 mx-4" />
 
       {/* Action */}
       <div className="p-4">
@@ -214,7 +214,7 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
             active:scale-95 transition-transform
           "
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-primary">
             <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="white" strokeWidth="1.3" />
             <path d="M5 2V4M11 2V4M2 7H14" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
