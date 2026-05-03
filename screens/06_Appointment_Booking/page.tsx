@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -417,6 +417,14 @@ const DEFAULT_CURRENT: Appointment = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BookingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-dvh bg-surface" />}>
+      <BookingContent />
+    </Suspense>
+  );
+}
+
+function BookingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
