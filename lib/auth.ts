@@ -80,11 +80,64 @@ function mapClientRow(row: {
   };
 }
 
+/** Только цифры; ведущая 8 заменяется на 7 (совпадение с полем phone в Supabase). */
 export function normalizePhone(raw: string): string {
   let digits = raw.replace(/\D/g, "");
   if (digits.startsWith("8")) digits = "7" + digits.slice(1);
-  if (digits.length > 0 && !digits.startsWith("7")) digits = "7" + digits;
   return digits;
+}
+
+async function supabaseSelectEmployeeByPhone(cleanPhone: string) {
+  return supabase.from("dental_employees").select("*").eq("phone", cleanPhone).maybeSingle();
+}
+
+async function supabaseSelectClientByPhone(cleanPhone: string) {
+  return supabase.from("dental_clients").select("*").eq("phone", cleanPhone).maybeSingle();
+}
+
+function formatPostgrestError(error: { message: string; code?: string; details?: string }): string {
+  const code = error.code ?? "unknown";
+  const details = error.details ? ` details=${error.details}` : "";
+  return `${error.message} [code=${code}]${details}`;
+}
+
+/** Шаг A авторизации: сотрудник; supabaseError — только при сбое запроса (не при «нет строки»). */
+export async function fetchEmployeeByPhoneForAuth(rawPhone: string): Promise<{
+  cleanPhone: string;
+  employee: DentalEmployeeRecord | null;
+  supabaseError: string | null;
+}> {
+  const cleanPhone = normalizePhone(rawPhone);
+  const { data, error } = await supabaseSelectEmployeeByPhone(cleanPhone);
+  if (error) {
+    return { cleanPhone, employee: null, supabaseError: formatPostgrestError(error) };
+  }
+  if (!data) {
+    return { cleanPhone, employee: null, supabaseError: null };
+  }
+  return {
+    cleanPhone,
+    employee: mapEmployeeRow(data as Parameters<typeof mapEmployeeRow>[0]),
+    supabaseError: null,
+  };
+}
+
+/** Шаг B: клиент по уже нормализованному номеру. */
+export async function fetchClientByPhoneForAuth(cleanPhone: string): Promise<{
+  client: DentalClientRecord | null;
+  supabaseError: string | null;
+}> {
+  const { data, error } = await supabaseSelectClientByPhone(cleanPhone);
+  if (error) {
+    return { client: null, supabaseError: formatPostgrestError(error) };
+  }
+  if (!data) {
+    return { client: null, supabaseError: null };
+  }
+  return {
+    client: mapClientRow(data as Parameters<typeof mapClientRow>[0]),
+    supabaseError: null,
+  };
 }
 
 /** Подтянуть клиентов и сотрудников в память (нужно перед UI, завязанным на getDentalClients). */
@@ -115,22 +168,14 @@ export function getDentalEmployees(): DentalEmployeeRecord[] {
 
 export async function findEmployeeByPhone(phone: string): Promise<DentalEmployeeRecord | null> {
   const n = normalizePhone(phone);
-  const { data, error } = await supabase
-    .from("dental_employees")
-    .select("*")
-    .eq("phone", n)
-    .maybeSingle();
+  const { data, error } = await supabaseSelectEmployeeByPhone(n);
   if (error || !data) return null;
   return mapEmployeeRow(data as Parameters<typeof mapEmployeeRow>[0]);
 }
 
 export async function findClientByPhone(phone: string): Promise<DentalClientRecord | null> {
   const n = normalizePhone(phone);
-  const { data, error } = await supabase
-    .from("dental_clients")
-    .select("*")
-    .eq("phone", n)
-    .maybeSingle();
+  const { data, error } = await supabaseSelectClientByPhone(n);
   if (error || !data) return null;
   return mapClientRow(data as Parameters<typeof mapClientRow>[0]);
 }

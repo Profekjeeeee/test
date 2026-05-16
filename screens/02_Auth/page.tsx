@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
-  findEmployeeByPhone,
-  findClientByPhone,
+  fetchEmployeeByPhoneForAuth,
+  fetchClientByPhoneForAuth,
   setCurrentUser,
   setDentalSession,
   normalizePhone,
@@ -27,10 +27,16 @@ export default function AuthPage() {
   const [error, setError] = useState("");
 
   const handlePhoneSubmit = async () => {
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 11) {
+    const cleanPhone = normalizePhone(phone);
+    if (cleanPhone.length < 11) {
       setError("Введите корректный номер телефона");
-      addDentalLog("WARN", "guest", "", "validation_phone", "Номер телефона слишком короткий");
+      addDentalLog(
+        "WARN",
+        "guest",
+        "",
+        "validation_phone",
+        `Номер телефона слишком короткий | raw=${phone} | cleanPhone=${cleanPhone}`
+      );
       return;
     }
     setLoading(true);
@@ -55,8 +61,38 @@ export default function AuthPage() {
     setError("");
     await new Promise((r) => setTimeout(r, 500));
 
-    const employee = await findEmployeeByPhone(phone);
-    if (employee) {
+    const cleanPhone = normalizePhone(phone);
+    addDentalLog(
+      "INFO",
+      "guest",
+      "",
+      "auth_lookup_start",
+      `Шаг A→B→C | raw=${phone} | cleanPhone=${cleanPhone}`
+    );
+
+    const empLookup = await fetchEmployeeByPhoneForAuth(phone);
+    if (empLookup.supabaseError) {
+      addDentalLog(
+        "ERROR",
+        "guest",
+        "",
+        "auth_step_a_dental_employees",
+        `Supabase | cleanPhone=${empLookup.cleanPhone} | ${empLookup.supabaseError}`
+      );
+      setError("Не удалось проверить номер. Попробуйте позже.");
+      setLoading(false);
+      return;
+    }
+
+    if (empLookup.employee) {
+      const employee = empLookup.employee;
+      addDentalLog(
+        "INFO",
+        employee.role === "admin" ? "admin" : "doctor",
+        employee.id,
+        "auth_employee_found",
+        `INFO | doctor/admin found | cleanPhone=${empLookup.cleanPhone} | role=${employee.role}`
+      );
       setDentalSession({
         id: employee.id,
         role: employee.role,
@@ -80,8 +116,37 @@ export default function AuthPage() {
       return;
     }
 
-    const client = await findClientByPhone(phone);
-    if (client) {
+    addDentalLog(
+      "INFO",
+      "guest",
+      "",
+      "auth_step_a_miss",
+      `dental_employees пусто по phone | cleanPhone=${empLookup.cleanPhone}`
+    );
+
+    const clientLookup = await fetchClientByPhoneForAuth(empLookup.cleanPhone);
+    if (clientLookup.supabaseError) {
+      addDentalLog(
+        "ERROR",
+        "guest",
+        "",
+        "auth_step_b_dental_clients",
+        `Supabase | cleanPhone=${empLookup.cleanPhone} | ${clientLookup.supabaseError}`
+      );
+      setError("Не удалось проверить номер. Попробуйте позже.");
+      setLoading(false);
+      return;
+    }
+
+    if (clientLookup.client) {
+      const client = clientLookup.client;
+      addDentalLog(
+        "INFO",
+        "client",
+        client.id,
+        "auth_client_found",
+        `Старый клиент | cleanPhone=${empLookup.cleanPhone}`
+      );
       await setCurrentUser(client.id);
       addDentalLog("INFO", "client", client.id, "login_success", "Вход пациента");
       setLoading(false);
@@ -89,8 +154,16 @@ export default function AuthPage() {
       return;
     }
 
+    addDentalLog(
+      "INFO",
+      "guest",
+      "",
+      "auth_step_b_miss",
+      `dental_clients пусто | cleanPhone=${empLookup.cleanPhone} → регистрация нового пациента`
+    );
+
     setLoading(false);
-    router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(phone)}`);
+    router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(empLookup.cleanPhone)}`);
   };
 
   const normalizedDigits = normalizePhone(phone);
