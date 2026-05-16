@@ -89,6 +89,8 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [demoBypassNotice, setDemoBypassNotice] = useState(false);
   const bypassInFlightRef = useRef(false);
+  /** Синхронный якорь номера между шагами (переживает async-gap и частичные потери setState при ремоунте). */
+  const authPhoneRef = useRef("");
 
   /** Восстановление после ремоунта Strict Mode и т.п. */
   useEffect(() => {
@@ -97,13 +99,14 @@ export default function AuthPage() {
     const pinned = readTempAuthPhone();
     if (pinned.length >= 11) {
       console.log("[AUTH] восстановлен телефон из localStorage для шага кода:", pinned);
+      authPhoneRef.current = pinned;
       setAuthCleanPhone(pinned);
     }
   }, [step, authCleanPhone]);
 
   const handlePhoneSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const cleanPhone = normalizePhone(phone);
+    const cleanPhone = normalizePhone(phone.replace(/\D/g, ""));
     if (cleanPhone.length < 11) {
       setError("Введите корректный номер телефона");
       addDentalLog(
@@ -117,11 +120,15 @@ export default function AuthPage() {
     }
     setLoading(true);
     setError("");
+
+    // ВАЖНО: до любого await — иначе после remount (Strict Mode) setState с предыдущего инстанса отбрасывается.
+    persistTempAuthPhone(cleanPhone);
+    authPhoneRef.current = cleanPhone;
+    setAuthCleanPhone(cleanPhone);
+    setStep("code");
+
     try {
       await new Promise((r) => setTimeout(r, 500));
-      persistTempAuthPhone(cleanPhone);
-      setAuthCleanPhone(cleanPhone);
-      setStep("code");
       addDentalLog(
         "INFO",
         "guest",
@@ -135,7 +142,7 @@ export default function AuthPage() {
   };
 
   const resolveCleanPhoneForMaster = (): string | null => {
-    const activePhone = authCleanPhone || readTempAuthPhone();
+    const activePhone = authPhoneRef.current || authCleanPhone || readTempAuthPhone();
     if (!activePhone) {
       console.error("Телефон потерян! Невозможно проверить роль.");
       alert("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
@@ -304,7 +311,7 @@ export default function AuthPage() {
     console.log("=== AUTH DEBUG ===");
     console.log("Введенный код (сырой):", enteredCode);
     console.log("Код (нормализованный):", normalizedCode);
-    console.log("Телефон из стейта:", authCleanPhone);
+    console.log("Телефон (стейт / ref / LS):", authCleanPhone, authPhoneRef.current, readTempAuthPhone());
 
     if (isMasterSmsCode(normalizedCode)) {
       await runMasterAuthSession({ instantUi: false });
@@ -335,6 +342,8 @@ export default function AuthPage() {
 
   const normalizedDigits = normalizePhone(phone);
   const digitLen = normalizedDigits.length;
+  /** Номер для подписи на шаге OTP (стейт мог обнулиться при ремоунте — читаем LS). */
+  const otpScreenPhone = authCleanPhone || readTempAuthPhone() || authPhoneRef.current || phone;
 
   return (
     <main className="min-h-dvh bg-surface dark:bg-slate-950 flex flex-col justify-center px-6 pb-8">
@@ -353,7 +362,7 @@ export default function AuthPage() {
         <p className="text-[15px] text-secondary mt-2 leading-relaxed">
           {step === "phone"
             ? "Один номер для пациентов и сотрудников клиники — после СМС вы попадёте в нужный раздел."
-            : `Код отправлен на\u00a0${phone} (демо: до 6 цифр)`}
+            : `Код отправлен на\u00a0${otpScreenPhone || "…"} (демо: до 6 цифр)`}
         </p>
         {step === "phone" && (
           <div className="flex flex-wrap gap-2 mt-4">
@@ -433,6 +442,7 @@ export default function AuthPage() {
             type="button"
             onClick={() => {
               bypassInFlightRef.current = false;
+              authPhoneRef.current = "";
               setDemoBypassNotice(false);
               setStep("phone");
               clearTempAuthPhone();
