@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -17,8 +17,35 @@ import { addDentalLog } from "@/lib/logger";
 /** Сквозной демо-код: только цифры; ввод нормализуется через replace(/\D/g). */
 const MASTER_SMS_CODE = "1234";
 
+/** Номер на шаге кода переживает ремоунты/перезагрузку страницы на том же домене. */
+const SESSION_AUTH_PHONE_KEY = "dental_auth_clean_phone";
+
 function normalizeSmsCodeInput(raw: string): string {
-  return raw.replace(/\D/g, "").slice(0, 4);
+  return raw.normalize("NFC").replace(/\D/g, "").slice(0, 4);
+}
+
+function persistAuthCleanPhone(cleanPhone: string): void {
+  try {
+    sessionStorage.setItem(SESSION_AUTH_PHONE_KEY, cleanPhone);
+  } catch {
+    /* игнорируем private mode и т.п. */
+  }
+}
+
+function readPersistedAuthCleanPhone(): string {
+  try {
+    return sessionStorage.getItem(SESSION_AUTH_PHONE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function clearPersistedAuthCleanPhone(): void {
+  try {
+    sessionStorage.removeItem(SESSION_AUTH_PHONE_KEY);
+  } catch {
+    /* */
+  }
 }
 
 type AuthStep = "phone" | "code";
@@ -33,48 +60,26 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handlePhoneSubmit = async () => {
-    const cleanPhone = normalizePhone(phone);
-    if (cleanPhone.length < 11) {
-      setError("Введите корректный номер телефона");
-      addDentalLog(
-        "WARN",
-        "guest",
-        "",
-        "validation_phone",
-        `Номер телефона слишком короткий | raw=${phone} | cleanPhone=${cleanPhone}`
-      );
-      return;
+  /** Подтягиваем сохранённый номер при возврате на шаг кода после ремоунта React. */
+  useEffect(() => {
+    if (step !== "code") return;
+    if (authCleanPhone.length >= 11) return;
+    const fromStore = readPersistedAuthCleanPhone();
+    if (fromStore.length >= 11) {
+      setAuthCleanPhone(fromStore);
     }
-    setLoading(true);
-    setError("");
-    await new Promise((r) => setTimeout(r, 500));
-    setAuthCleanPhone(cleanPhone);
-    setLoading(false);
-    setStep("code");
+  }, [step, authCleanPhone]);
+
+  const resolveSavedPhoneDigits = (): string => {
+    if (authCleanPhone.length >= 11) return authCleanPhone;
+    const persisted = readPersistedAuthCleanPhone();
+    if (persisted.length >= 11) setAuthCleanPhone(persisted);
+    return persisted.length >= 11 ? persisted : "";
   };
 
-  const handleCodeSubmit = async () => {
-    const digitsCode = normalizeSmsCodeInput(code);
-    if (!digitsCode) {
-      setError("Введите код из СМС");
-      addDentalLog("WARN", "guest", "", "validation_code_empty", "Пустой код подтверждения");
-      return;
-    }
-
-    if (digitsCode !== MASTER_SMS_CODE) {
-      setError(`Неверный код. Демо-код: ${MASTER_SMS_CODE}`);
-      addDentalLog(
-        "WARN",
-        "guest",
-        "",
-        "validation_code_invalid",
-        `Неверный код | raw_len=${code.length} digits=${digitsCode}`
-      );
-      return;
-    }
-
-    const cleanPhone = authCleanPhone;
+  /** Мастер-код → Supabase без вызова внешних SMS-сервисов. */
+  const checkUserRoleAndRedirect = async (savedPhone: string): Promise<void> => {
+    const cleanPhone = normalizePhone(savedPhone);
     if (!cleanPhone || cleanPhone.length < 11) {
       setError("Вернитесь и введите номер телефона");
       addDentalLog(
@@ -82,14 +87,12 @@ export default function AuthPage() {
         "guest",
         "",
         "auth_master_missing_phone",
-        `authCleanPhone пуст или короткий | authCleanPhone=${authCleanPhone || "(пусто)"}`
+        `savedPhone недействителен | savedPhone=${savedPhone || "(пусто)"}`
       );
       setStep("phone");
+      clearPersistedAuthCleanPhone();
       return;
     }
-
-    setLoading(true);
-    setError("");
 
     addDentalLog(
       "INFO",
@@ -109,7 +112,6 @@ export default function AuthPage() {
         `Supabase | cleanPhone=${empLookup.cleanPhone} | ${empLookup.supabaseError}`
       );
       setError("Не удалось проверить номер. Попробуйте позже.");
-      setLoading(false);
       return;
     }
 
@@ -129,7 +131,7 @@ export default function AuthPage() {
         "auth_success_master_code",
         `id=${employee.id} | ${employee.fullName}`
       );
-      setLoading(false);
+      clearPersistedAuthCleanPhone();
       router.replace(
         employee.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet
       );
@@ -154,7 +156,6 @@ export default function AuthPage() {
         `Supabase | cleanPhone=${empLookup.cleanPhone} | ${clientLookup.supabaseError}`
       );
       setError("Не удалось проверить номер. Попробуйте позже.");
-      setLoading(false);
       return;
     }
 
@@ -162,7 +163,7 @@ export default function AuthPage() {
       const client = clientLookup.client;
       await setCurrentUser(client.id);
       addDentalLog("INFO", "client", cleanPhone, "auth_success_master_code", `id=${client.id}`);
-      setLoading(false);
+      clearPersistedAuthCleanPhone();
       router.replace(ROUTES.clientHome);
       return;
     }
@@ -175,8 +176,70 @@ export default function AuthPage() {
       `Новый пациент | cleanPhone=${empLookup.cleanPhone} → регистрация`
     );
 
-    setLoading(false);
+    clearPersistedAuthCleanPhone();
     router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(empLookup.cleanPhone)}`);
+  };
+
+  const handlePhoneSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const cleanPhone = normalizePhone(phone);
+    if (cleanPhone.length < 11) {
+      setError("Введите корректный номер телефона");
+      addDentalLog(
+        "WARN",
+        "guest",
+        "",
+        "validation_phone",
+        `Номер телефона слишком короткий | raw=${phone} | cleanPhone=${cleanPhone}`
+      );
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      persistAuthCleanPhone(cleanPhone);
+      setAuthCleanPhone(cleanPhone);
+      setStep("code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Подтверждение кода: блокируем нативный submit формы, мастер-код первым делом — без запросов к SMS. */
+  const handleVerifyCode = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const enteredCode = normalizeSmsCodeInput(code);
+
+    if (enteredCode === MASTER_SMS_CODE) {
+      const savedPhone = resolveSavedPhoneDigits();
+      console.log("Мастер-код активирован для номера:", savedPhone || "(нет в стейте/хранилище)");
+
+      setLoading(true);
+      setError("");
+      try {
+        await checkUserRoleAndRedirect(savedPhone);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (!enteredCode) {
+      setError("Введите код из СМС");
+      addDentalLog("WARN", "guest", "", "validation_code_empty", "Пустой код подтверждения");
+      return;
+    }
+
+    setError(`Неверный код. Демо-код: ${MASTER_SMS_CODE}`);
+    addDentalLog(
+      "WARN",
+      "guest",
+      "",
+      "validation_code_invalid",
+      `Неверный код | raw_len=${code.length} digits=${enteredCode}`
+    );
   };
 
   const normalizedDigits = normalizePhone(phone);
@@ -216,7 +279,7 @@ export default function AuthPage() {
       </div>
 
       {step === "phone" ? (
-        <div className="flex flex-col gap-5">
+        <form className="flex flex-col gap-5" onSubmit={handlePhoneSubmit} noValidate>
           <Input
             label="Телефон"
             type="tel"
@@ -240,18 +303,19 @@ export default function AuthPage() {
               </>
             ) : null}
           </p>
-          <Button size="full" loading={loading} onClick={handlePhoneSubmit}>
+          <Button type="submit" size="full" loading={loading}>
             Получить код
           </Button>
-        </div>
+        </form>
       ) : (
-        <div className="flex flex-col gap-5">
+        <form className="flex flex-col gap-5" onSubmit={handleVerifyCode}>
           <Input
             label="Код подтверждения"
             type="text"
             inputMode="numeric"
+            autoComplete="one-time-code"
             placeholder="• • • •"
-            maxLength={4}
+            maxLength={6}
             value={code}
             onChange={(e) => {
               setCode(normalizeSmsCodeInput(e.target.value));
@@ -259,7 +323,7 @@ export default function AuthPage() {
             }}
             error={error}
           />
-          <Button size="full" loading={loading} onClick={handleCodeSubmit}>
+          <Button type="submit" size="full" loading={loading}>
             Войти
           </Button>
           <button
@@ -267,6 +331,7 @@ export default function AuthPage() {
             type="button"
             onClick={() => {
               setStep("phone");
+              clearPersistedAuthCleanPhone();
               setAuthCleanPhone("");
               setCode("");
               setError("");
@@ -274,7 +339,7 @@ export default function AuthPage() {
           >
             Изменить номер
           </button>
-        </div>
+        </form>
       )}
     </main>
   );
