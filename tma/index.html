@@ -378,14 +378,13 @@
 <!-- ── Основной контент ────────────────────────────────────────────── -->
 <main class="main" id="app-main" style="display:none">
 
-  <!-- Ошибка авторизации -->
+  <!-- Ошибка загрузки локальных данных -->
   <div id="error-screen">
-    <div class="error-icon">🔒</div>
-    <div class="error-title">Доступ запрещён</div>
+    <div class="error-icon">⚠️</div>
+    <div class="error-title">Не удалось загрузить данные</div>
     <div class="error-msg" id="error-msg">
-      Ваш Telegram ID не найден в базе администраторов.<br>
-      Попросите суперадмина добавить вас:<br>
-      <strong>Битрикс → Пользователи → UF_TELEGRAM_ID</strong>
+      Проверьте память устройства или очистите кэш Mini App и откройте снова.<br>
+      Данные хранятся только на этом устройстве (<strong>localStorage</strong>).
     </div>
   </div>
 
@@ -468,12 +467,40 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════════════
-// КОНФИГУРАЦИЯ
+// КОНФИГУРАЦИЯ — только локально (Telegram Mini App standalone)
 // ═══════════════════════════════════════════════════════════════════
 
-const API_URL = '/api/admin/doctors.php';
+const DOCTORS_STORAGE_KEY = 'tma_admin_doctors_v1';
 
-// Моковые записи для экрана «Лента» (в продакшне — отдельный endpoint)
+/** Начальный список, если в localStorage ещё ничего нет */
+const DEFAULT_DOCTORS = [
+  {
+    id: 1,
+    name: 'Смирнов Константин Андреевич',
+    specialization: 'Хирургия, имплантология',
+    photo_url: null,
+    is_active: true,
+    sort: 10,
+  },
+  {
+    id: 2,
+    name: 'Козлова Елена Викторовна',
+    specialization: 'Терапия, эндодонтия',
+    photo_url: null,
+    is_active: true,
+    sort: 20,
+  },
+  {
+    id: 3,
+    name: 'Фёдоров Игорь Сергеевич',
+    specialization: 'Ортодонтия',
+    photo_url: null,
+    is_active: false,
+    sort: 30,
+  },
+];
+
+// Демо-записи для экрана «Лента» (при необходимости — тоже можно вынести в localStorage)
 const MOCK_FEED = [
   {
     id: 1, patient: 'Иван И.', service: 'Терапия', procedure: 'Осмотр',
@@ -518,72 +545,65 @@ const tg = window.Telegram?.WebApp;
     document.getElementById('user-avatar').textContent = initials || 'A';
   }
 
-  // 3. Загружаем данные с бэкенда
-  await fetchDoctors();
+  // 3. Загружаем врачей из localStorage (без сетевых запросов)
+  await loadDoctors();
 })();
 
 // ═══════════════════════════════════════════════════════════════════
-// API
+// ХРАНИЛИЩЕ (localStorage)
 // ═══════════════════════════════════════════════════════════════════
 
-/**
- * Общий хелпер: добавляет X-Telegram-Init-Data к каждому запросу.
- * @param {string} action
- * @param {Record<string,string>|null} postData  null = GET, object = POST
- */
-async function apiRequest(action, postData = null) {
-  const initData = tg?.initData ?? '';
-
-  const headers = {
-    'X-Telegram-Init-Data': initData,
+function normalizeDoctorRow(raw) {
+  const id = Number(raw.id);
+  if (!Number.isFinite(id)) return null;
+  return {
+    id,
+    name: String(raw.name ?? ''),
+    specialization: String(raw.specialization ?? ''),
+    photo_url: raw.photo_url == null ? null : String(raw.photo_url),
+    is_active: Boolean(raw.is_active),
+    sort: Number(raw.sort) || 0,
   };
+}
 
-  let response;
-
-  if (postData) {
-    headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    const body = new URLSearchParams({ action, ...postData });
-    response = await fetch(API_URL, { method: 'POST', headers, body });
-  } else {
-    response = await fetch(`${API_URL}?action=${action}`, { method: 'GET', headers });
+function loadDoctorsFromStorage() {
+  try {
+    const raw = localStorage.getItem(DOCTORS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const rows = parsed.map(normalizeDoctorRow).filter(Boolean);
+    return rows.length ? rows : null;
+  } catch {
+    return null;
   }
+}
 
-  // Обрабатываем HTTP-ошибки как структурированный ответ
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    let parsed;
-    try { parsed = JSON.parse(text); } catch { parsed = {}; }
-    return {
-      success: false,
-      httpCode: response.status,
-      error: parsed.error ?? `HTTP ${response.status}`,
-    };
-  }
-
-  return response.json();
+function saveDoctorsToStorage() {
+  localStorage.setItem(DOCTORS_STORAGE_KEY, JSON.stringify(state.doctors));
 }
 
 /**
- * Загружает список врачей и рендерит экран.
+ * Загружает список врачей из localStorage и рендерит экран.
  */
-async function fetchDoctors() {
-  const result = await apiRequest('getDoctorsList');
+async function loadDoctors() {
+  await new Promise((r) => setTimeout(r, 0));
+
+  let doctors = loadDoctorsFromStorage();
+  if (!doctors) {
+    doctors = DEFAULT_DOCTORS.map((d) => ({ ...d }));
+    state.doctors = doctors;
+    saveDoctorsToStorage();
+  } else {
+    state.doctors = doctors;
+  }
 
   hideSplash();
 
-  // ── Ошибка 403 ────────────────────────────────────────────────
-  if (result.httpCode === 403 || (!result.success && result.error?.includes('Forbidden'))) {
-    showError('Доступ запрещён. Проверьте поле UF_TELEGRAM_ID в Битриксе.');
+  if (!state.doctors.length) {
+    showError('Список врачей пуст. Сбросьте данные приложения или переустановите Mini App.');
     return;
   }
-
-  if (!result.success) {
-    showError(result.error ?? 'Неизвестная ошибка сервера.');
-    return;
-  }
-
-  // ── Успех ─────────────────────────────────────────────────────
-  state.doctors = result.data ?? [];
 
   showApp();
   renderDoctors();
@@ -591,37 +611,28 @@ async function fetchDoctors() {
 }
 
 /**
- * Переключает статус врача: отправляет toggleDoctorStatus на бэкенд.
+ * Переключает видимость врача; сохраняет в localStorage.
  * @param {number} doctorId
  * @param {number} currentStatus  0 или 1
  */
 async function toggleDoctor(doctorId, currentStatus) {
   const newStatus = currentStatus === 1 ? 0 : 1;
+  const doctor = state.doctors.find((d) => d.id === doctorId);
+  if (!doctor) return;
 
-  // Оптимистичный UI: меняем локально сразу
-  const doctor = state.doctors.find(d => d.id === doctorId);
-  if (doctor) {
-    doctor.is_active = Boolean(newStatus);
-    renderDoctors();
-  }
+  const prev = doctor.is_active;
+  doctor.is_active = Boolean(newStatus);
+  renderDoctors();
 
-  const result = await apiRequest('toggleDoctorStatus', {
-    id:     String(doctorId),
-    status: String(newStatus),
-  });
-
-  if (result.success) {
-    // Haptic: включили — лёгкий, выключили — средний
+  try {
+    saveDoctorsToStorage();
     tg?.HapticFeedback?.impactOccurred(newStatus === 1 ? 'light' : 'medium');
     showToast(newStatus === 1 ? 'Врач активирован' : 'Врач скрыт');
-  } else {
-    // Откатываем оптимистичный UI
-    if (doctor) {
-      doctor.is_active = Boolean(currentStatus);
-      renderDoctors();
-    }
+  } catch (e) {
+    doctor.is_active = prev;
+    renderDoctors();
     tg?.HapticFeedback?.notificationOccurred('error');
-    showToast(`Ошибка: ${result.error}`, true);
+    showToast('Не удалось сохранить', true);
   }
 }
 
@@ -645,7 +656,7 @@ async function confirmAppointment(apptId, btn) {
   btn.disabled = true;
   btn.textContent = '...';
 
-  // В продакшне: await apiRequest('confirmAppointment', { id: String(apptId) });
+  // Локальный демо-режим; при расширении — сохранять статус в localStorage
   await new Promise(r => setTimeout(r, 600));
 
   showToast('Запись подтверждена');

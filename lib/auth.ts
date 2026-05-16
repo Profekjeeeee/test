@@ -61,4 +61,24 @@ export function setCurrentUser(id: string): void {
 export function logout(): void {
   localStorage.removeItem(CURRENT_USER_KEY);
   localStorage.removeItem("isLoggedIn");
+  localStorage.removeItem("isAdmin");
+}
+
+// ─── Admin mode ────────────────────────────────────────────────────────────────
+
+export const ADMIN_PHONE = "77777777777";
+
+export function setAdminMode(): void {
+  localStorage.setItem("isAdmin", "true");
+  localStorage.setItem("isLoggedIn", "true");
+}
+
+export function isAdminMode(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("isAdmin") === "true";
+}
+
+export function clearAdminMode(): void {
+  localStorage.removeItem("isAdmin");
+  localStorage.removeItem("isLoggedIn");
 }

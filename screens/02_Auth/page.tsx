@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { findUserByPhone, setCurrentUser } from "@/lib/auth";
+import { findUserByPhone, setCurrentUser, setAdminMode, ADMIN_PHONE, normalizePhone } from "@/lib/auth";
 
 const TEST_CODE = "1234";
 
@@ -19,13 +19,21 @@ export default function AuthPage() {
   const [error, setError] = useState("");
 
   const handlePhoneSubmit = async () => {
-    if (phone.replace(/\D/g, "").length < 11) {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 11) {
       setError("Введите корректный номер телефона");
       return;
     }
     setLoading(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 500));
+
+    if (normalizePhone(phone) === ADMIN_PHONE) {
+      setAdminMode();
+      router.replace("/admin");
+      return;
+    }
+
     setLoading(false);
     setStep("code");
   };
