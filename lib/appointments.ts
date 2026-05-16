@@ -15,7 +15,12 @@ export interface Appointment {
   price?: number;
   cabinet: string;
   status: AppointmentStatus;
+  /** ID пациента в dental_clients; подставляется при записи из ЛК пациента */
+  patientId?: string;
 }
+
+/** Запись из общего пула localStorage (все ключи appointments / appointments_<userId>). */
+export type ClinicAppointment = Appointment;
 
 const BASE_KEY = "appointments";
 
@@ -54,9 +59,48 @@ export function getUpcomingCount(): number {
 
 export function addAppointment(apt: Omit<Appointment, "id">): Appointment {
   const all = getAppointments();
-  const newApt: Appointment = { ...apt, id: Date.now().toString() };
+  const uid = getCurrentUserId();
+  const newApt: Appointment = {
+    ...apt,
+    id: Date.now().toString(),
+    patientId: apt.patientId ?? uid ?? undefined,
+  };
   saveAppointments([newApt, ...all]);
   return newApt;
+}
+
+/** Все приёмы клиники из ключей `appointments` и `appointments_<patientId>`. */
+export function getAllClinicAppointments(): ClinicAppointment[] {
+  if (typeof window === "undefined") return [];
+  const result: ClinicAppointment[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (key === BASE_KEY) {
+      try {
+        const arr = JSON.parse(localStorage.getItem(key) || "[]") as Appointment[];
+        arr.forEach((a) => result.push({ ...a }));
+      } catch {
+        /* skip */
+      }
+      continue;
+    }
+    if (key.startsWith(`${BASE_KEY}_`)) {
+      const suffix = key.slice(BASE_KEY.length + 1);
+      try {
+        const arr = JSON.parse(localStorage.getItem(key) || "[]") as Appointment[];
+        arr.forEach((a) =>
+          result.push({
+            ...a,
+            patientId: a.patientId ?? (suffix.length ? suffix : undefined),
+          })
+        );
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  return result;
 }
 
 export function cancelAppointment(id: string): void {

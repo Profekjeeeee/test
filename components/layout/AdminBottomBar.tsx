@@ -16,7 +16,7 @@ const ADMIN_TABS: { id: string; label: string; href: string; icon: React.FC<Icon
   {
     id: "dashboard",
     label: "Дашборд",
-    href: "/admin",
+    href: "/screens/admin/dashboard",
     icon: ({ active, activeStroke, activeFill }) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <rect x="3" y="3" width="8" height="8" rx="2"
@@ -35,9 +35,30 @@ const ADMIN_TABS: { id: string; label: string; href: string; icon: React.FC<Icon
     ),
   },
   {
+    id: "messages",
+    label: "Чаты",
+    href: "/screens/admin/messages",
+    icon: ({ active, activeStroke, activeFill }) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M4 14V18L8 14H18C18.5523 14 19 13.5523 19 13V7C19 6.44772 18.5523 6 18 6H6C5.44772 6 5 6.44772 5 7V14H4Z"
+          stroke={active ? activeStroke : INACTIVE}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          fill={active ? activeFill : "none"}
+        />
+        <path d="M8 10H16M8 12.5H13"
+          stroke={active ? activeStroke : INACTIVE}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "feed",
     label: "Лента",
-    href: "/admin/feed",
+    href: "/screens/admin/feed",
     icon: ({ active, activeStroke, activeFill }) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <rect x="3" y="3" width="18" height="4" rx="2"
@@ -55,7 +76,7 @@ const ADMIN_TABS: { id: string; label: string; href: string; icon: React.FC<Icon
   {
     id: "doctors",
     label: "Врачи",
-    href: "/admin/doctors",
+    href: "/screens/admin/doctors",
     icon: ({ active, activeStroke, activeFill }) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="8" r="4"
@@ -71,7 +92,7 @@ const ADMIN_TABS: { id: string; label: string; href: string; icon: React.FC<Icon
   {
     id: "price",
     label: "Прайс",
-    href: "/admin/price",
+    href: "/screens/admin/price",
     icon: ({ active, activeStroke, activeFill }) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path d="M6 2H18C18.5523 2 19 2.44772 19 3V22L16 20L13 22L10 20L7 22L5 21V3C5 2.44772 5.44772 2 6 2Z"
@@ -92,7 +113,11 @@ export default function AdminBottomBar() {
   const activeFill   = isDark ? DARK_FILL   : LIGHT_FILL;
 
   const isActive = (href: string) =>
-    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+    href === "/screens/admin/dashboard"
+      ? pathname === "/screens/admin/dashboard"
+      : href === "/screens/admin/messages"
+        ? pathname.startsWith("/screens/admin/messages")
+      : pathname.startsWith(href);
 
   return (
     <nav

@@ -16,6 +16,7 @@ import {
   type UserNotifications,
 } from "@/lib/userProfile";
 import { getNextAppointment, type Appointment } from "@/lib/appointments";
+import { ROUTES } from "@/lib/routes";
 
 // ─── Phone formatting ──────────────────────────────────────────────────────────
 
@@ -146,6 +147,16 @@ function Field({ label, value, onChange, error, type = "text", inputMode, placeh
 // ─── Clinic links ─────────────────────────────────────────────────────────────
 
 const CLINIC_LINKS = [
+  {
+    href: ROUTES.patientSupportChat,
+    label: "Поддержка / чат",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <path d="M4 13V15L7 13H13C13.5523 13 14 12.5523 14 12V6C14 5.44772 13.5523 5 13 5H5C4.44772 5 4 5.44772 4 6V13Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+        <path d="M6 8H12M6 10H10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
   {
     href: "/price-list",
     label: "Прайс-лист",

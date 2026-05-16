@@ -131,3 +131,15 @@ export function saveStaticPlanItems(items: TreatmentPlanItem[]): void {
   localStorage.setItem(storageKey(), JSON.stringify(items));
   window.dispatchEvent(new Event("treatmentPlanUpdated"));
 }
+
+/** Все позиции плана лечения пользователя (по patientId в localStorage). */
+export function getTreatmentPlanItemsForUser(userId: string): TreatmentPlanItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`${BASE_KEY}_${userId}`);
+    if (!raw) return [];
+    return JSON.parse(raw) as TreatmentPlanItem[];
+  } catch {
+    return [];
+  }
+}

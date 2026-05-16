@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { BottomTabId } from "@/types";
+import { ROUTES } from "@/lib/routes";
 import { useUpcomingCount } from "@/hooks/useUpcomingCount";
 import { useDarkMode } from "@/hooks/useDarkMode";
 
@@ -18,7 +19,7 @@ const TABS: { id: BottomTabId; label: string; href: string; icon: React.FC<IconP
   {
     id: "home",
     label: "Главная",
-    href: "/main",
+    href: ROUTES.clientHome,
     icon: ({ active, activeStroke, activeFill }) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path

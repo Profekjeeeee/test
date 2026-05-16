@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createUser, setCurrentUser } from "@/lib/auth";
+import { ROUTES } from "@/lib/routes";
 import { saveProfile } from "@/lib/userProfile";
 
 const NAME_RE = /^[а-яёА-ЯЁa-zA-Z][а-яёА-ЯЁa-zA-Z\s-]{1,}$/;
@@ -71,7 +72,7 @@ export default function RegistrationPage() {
       email: form.email.trim(),
     });
 
-    router.replace("/main");
+    router.replace(ROUTES.clientHome);
   };
 
   const saveDisabled = saving || (Object.keys(touched).length === 3 && hasErrors);

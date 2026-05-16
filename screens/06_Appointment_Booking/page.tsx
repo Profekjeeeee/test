@@ -13,6 +13,7 @@ import {
   type Appointment,
 } from "@/lib/appointments";
 import { addBillForAppointment } from "@/lib/bills";
+import { ROUTES } from "@/lib/routes";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -545,7 +546,7 @@ function BookingContent() {
     setShowModal(true);
     setTimeout(() => {
       setShowModal(false);
-      router.push("/main");
+      router.push(ROUTES.clientHome);
     }, 2500);
   };
 
@@ -950,7 +951,7 @@ function BookingContent() {
             className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
             onClick={() => {
               setShowModal(false);
-              router.push("/main");
+              router.push(ROUTES.clientHome);
             }}
           />
           <div className="relative w-full max-w-sm bg-white dark:bg-[#1E293B] rounded-[20px] p-6 shadow-xl animate-[slideUp_0.3s_ease-out]">
@@ -984,7 +985,7 @@ function BookingContent() {
                 className="mt-1 w-full h-11 rounded-[10px] bg-primary text-white text-[14px] font-semibold active:opacity-80 transition-opacity"
                 onClick={() => {
                   setShowModal(false);
-                  router.push("/main");
+                  router.push(ROUTES.clientHome);
                 }}
               >
                 На главную

@@ -6,6 +6,7 @@ import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
 import { initTeeth, getTeeth } from "@/lib/teeth";
 import type { ToothCondition, ToothStatus } from "@/types";
+import { ROUTES } from "@/lib/routes";
 
 // ─── Quadrant arrays (display order left-to-right) ────────────────────────────
 
@@ -369,7 +370,7 @@ export default function DentalFormulaPage() {
 
   return (
     <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
-      <Header title="Формула" showBack backHref="/main" rightSlot={<HeaderActions onInfoClick={() => setShowInfo(true)} />} />
+      <Header title="Формула" showBack backHref={ROUTES.clientHome} rightSlot={<HeaderActions onInfoClick={() => setShowInfo(true)} />} />
 
       {showInfo && <InfoBottomSheet onClose={() => setShowInfo(false)} />}
 

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import PatientAppGate from "@/components/auth/PatientAppGate";
 
 const manrope = Manrope({
   subsets: ["latin", "cyrillic"],
@@ -52,7 +53,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <PatientAppGate>{children}</PatientAppGate>
+        </ThemeProvider>
       </body>
     </html>
   );

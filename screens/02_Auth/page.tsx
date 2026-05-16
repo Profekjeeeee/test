@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { findUserByPhone, setCurrentUser, setAdminMode, ADMIN_PHONE, normalizePhone } from "@/lib/auth";
+import {
+  ensureDentalEmployeesInitialized,
+  findEmployeeByPhone,
+  findClientByPhone,
+  setCurrentUser,
+  setDentalSession,
+  normalizePhone,
+} from "@/lib/auth";
+import { ROUTES } from "@/lib/routes";
 
 const TEST_CODE = "1234";
 
@@ -18,6 +26,10 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    ensureDentalEmployeesInitialized();
+  }, []);
+
   const handlePhoneSubmit = async () => {
     const digits = phone.replace(/\D/g, "");
     if (digits.length < 11) {
@@ -27,13 +39,6 @@ export default function AuthPage() {
     setLoading(true);
     setError("");
     await new Promise((r) => setTimeout(r, 500));
-
-    if (normalizePhone(phone) === ADMIN_PHONE) {
-      setAdminMode();
-      router.replace("/admin");
-      return;
-    }
-
     setLoading(false);
     setStep("code");
   };
@@ -51,14 +56,38 @@ export default function AuthPage() {
     setError("");
     await new Promise((r) => setTimeout(r, 500));
 
-    const existingUser = findUserByPhone(phone);
-    if (existingUser) {
-      setCurrentUser(existingUser.id);
-      router.replace("/main");
-    } else {
-      router.replace(`/registration?phone=${encodeURIComponent(phone)}`);
+    const employee = findEmployeeByPhone(phone);
+    if (employee) {
+      setDentalSession({
+        id: employee.id,
+        role: employee.role,
+        fullName: employee.fullName,
+        phone: employee.phone,
+        specialization: employee.specialization,
+      });
+      setLoading(false);
+      if (employee.role === "admin") {
+        router.replace(ROUTES.adminDashboard);
+      } else {
+        router.replace(ROUTES.doctorCabinet);
+      }
+      return;
     }
+
+    const client = findClientByPhone(phone);
+    if (client) {
+      setCurrentUser(client.id);
+      setLoading(false);
+      router.replace(ROUTES.clientHome);
+      return;
+    }
+
+    setLoading(false);
+    router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(phone)}`);
   };
+
+  const normalizedDigits = normalizePhone(phone);
+  const digitLen = normalizedDigits.length;
 
   return (
     <main className="min-h-dvh bg-surface dark:bg-slate-950 flex flex-col justify-center px-6 pb-8">
@@ -74,11 +103,23 @@ export default function AuthPage() {
         <h1 className="text-[28px] font-bold text-[#0F172A] dark:text-white leading-tight tracking-tight">
           {step === "phone" ? "Вход в кабинет" : "Код из СМС"}
         </h1>
-        <p className="text-[15px] text-gray-500 mt-2 leading-relaxed">
+        <p className="text-[15px] text-secondary mt-2 leading-relaxed">
           {step === "phone"
-            ? "Введите номер телефона, указанный при регистрации в клинике"
+            ? "Один номер для пациентов и сотрудников клиники — после СМС вы попадёте в нужный раздел."
             : `Отправили 4-значный код на\u00a0${phone}`}
         </p>
+        {step === "phone" && (
+          <div className="flex flex-wrap gap-2 mt-4">
+            {(["Пациент", "Врач", "Админ"] as const).map((label) => (
+              <span
+                key={label}
+                className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-lg border border-[#E2E8F0] dark:border-[#334155] text-secondary"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {step === "phone" ? (
@@ -95,6 +136,16 @@ export default function AuthPage() {
             error={error}
             inputMode="tel"
           />
+          <p className="text-[12px] text-secondary -mt-2">
+            Демо: код <span className="font-mono text-[#0F172A] dark:text-white">{TEST_CODE}</span>
+            {digitLen >= 11 ? (
+              <>
+                {" · "}
+                Нормализовано:{" "}
+                <span className="font-mono text-[#0F172A] dark:text-white">{normalizedDigits}</span>
+              </>
+            ) : null}
+          </p>
           <Button size="full" loading={loading} onClick={handlePhoneSubmit}>
             Получить код
           </Button>
@@ -118,8 +169,13 @@ export default function AuthPage() {
             Войти
           </Button>
           <button
-            className="text-[13px] text-gray-400 text-center"
-            onClick={() => { setStep("phone"); setCode(""); setError(""); }}
+            className="text-[13px] text-gray-400 text-center active:scale-95 transition-transform"
+            type="button"
+            onClick={() => {
+              setStep("phone");
+              setCode("");
+              setError("");
+            }}
           >
             Изменить номер
           </button>

@@ -38,6 +38,15 @@ function buildHealthyTeeth(): ToothStatus[] {
   }));
 }
 
+/** Полный набор здоровых зубов по умолчанию (FDI). */
+export function buildDefaultTeeth(): ToothStatus[] {
+  return buildHealthyTeeth();
+}
+
+function formulaStorageKeyForUser(userId: string): string {
+  return `${BASE_KEY}_${userId}`;
+}
+
 function storageKey(): string {
   const uid = getCurrentUserId();
   return uid ? `${BASE_KEY}_${uid}` : BASE_KEY;
@@ -67,5 +76,21 @@ export function getTooth(number: number): ToothStatus | undefined {
 export function saveTeeth(teeth: ToothStatus[]): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(storageKey(), JSON.stringify(teeth));
+  window.dispatchEvent(new CustomEvent("teethUpdated"));
+}
+
+export function getTeethSnapshotForUser(userId: string): ToothStatus[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(formulaStorageKeyForUser(userId));
+    return raw ? (JSON.parse(raw) as ToothStatus[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveTeethSnapshotForUser(userId: string, teeth: ToothStatus[]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(formulaStorageKeyForUser(userId), JSON.stringify(teeth));
   window.dispatchEvent(new CustomEvent("teethUpdated"));
 }

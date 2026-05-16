@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { clearAdminMode } from "@/lib/auth";
+import { logout } from "@/lib/auth";
+import { ROUTES } from "@/lib/routes";
 
 const STATS = [
   { label: "Записей сегодня", value: "12", sub: "+3 с утра", color: "bg-[#D4ECED] dark:bg-[#1A3D3F]", textColor: "text-primary" },
@@ -29,8 +30,8 @@ export default function AdminDashboardPage() {
   const router = useRouter();
 
   const handleLogout = () => {
-    clearAdminMode();
-    router.replace("/auth");
+    logout();
+    router.replace(ROUTES.auth);
   };
 
   return (
