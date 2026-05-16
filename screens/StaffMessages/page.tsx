@@ -52,6 +52,7 @@ export default function StaffMessagesPage({ mode }: Props) {
   const [selected, setSelected] = useState<StaffDialogPreview | null>(null);
   const [thread, setThread] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -145,28 +146,36 @@ export default function StaffMessagesPage({ mode }: Props) {
   const handleSendStaff = async () => {
     if (!selected || !draft.trim()) return;
 
-    if (mode === "admin") {
-      if (selected.scope === "clinic") {
-        await sendAdminToPatient({ patientId: selected.patientId, chatType: "clinic", body: draft });
-      } else {
-        await sendAdminToPatient({ patientId: selected.patientId, chatType: "support", body: draft });
+    setSending(true);
+    try {
+      if (mode === "admin") {
+        if (selected.scope === "clinic") {
+          await sendAdminToPatient({ patientId: selected.patientId, chatType: "clinic", body: draft });
+        } else {
+          await sendAdminToPatient({ patientId: selected.patientId, chatType: "support", body: draft });
+        }
+      } else if (session) {
+        const pref = inferDoctorReplyPreference(thread, session.phone);
+        if (pref === "doctor") {
+          await sendDoctorToPatientPersonal(session.phone, selected.patientId, draft);
+        } else {
+          await sendStaffToPatientClinic(selected.patientId, draft);
+        }
       }
-    } else if (session) {
-      const pref = inferDoctorReplyPreference(thread, session.phone);
-      if (pref === "doctor") {
-        await sendDoctorToPatientPersonal(session.phone, selected.patientId, draft);
-      } else {
-        await sendStaffToPatientClinic(selected.patientId, draft);
-      }
-    }
 
-    setDraft("");
-    refreshThread();
-    refreshList();
-    if (selected.scope === "doctor_merge" && session) {
-      markStaffConversationRead(selected.patientId, "doctor_merge", session.phone);
-    } else if (selected.scope !== "doctor_merge") {
-      markStaffConversationRead(selected.patientId, selected.scope);
+      setDraft("");
+      refreshThread();
+      refreshList();
+      if (selected.scope === "doctor_merge" && session) {
+        markStaffConversationRead(selected.patientId, "doctor_merge", session.phone);
+      } else if (selected.scope !== "doctor_merge") {
+        markStaffConversationRead(selected.patientId, selected.scope);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Ошибка отправки сообщения: " + message);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -423,14 +432,15 @@ export default function StaffMessagesPage({ mode }: Props) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    handleSendStaff();
+                    void handleSendStaff();
                   }
                 }}
+                disabled={sending}
               />
               <button
                 type="button"
-                onClick={handleSendStaff}
-                disabled={!draft.trim()}
+                onClick={() => void handleSendStaff()}
+                disabled={!draft.trim() || sending}
                 className="h-11 px-4 rounded-[12px] bg-primary text-white text-[13px] font-semibold disabled:opacity-40 active:scale-95 transition-transform"
               >
                 Отправить

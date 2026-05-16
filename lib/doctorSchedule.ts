@@ -35,6 +35,8 @@ export function sortAppointmentsHistoryDesc(a: ClinicAppointment, b: ClinicAppoi
 
 export function appointmentStatusLabelRu(status: AppointmentStatus): string {
   switch (status) {
+    case "pending":
+      return "На подтверждении";
     case "scheduled":
       return "Запланирован";
     case "completed":

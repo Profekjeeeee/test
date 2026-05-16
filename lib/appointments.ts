@@ -1,7 +1,31 @@
 import { supabase } from "@/lib/supabaseClient";
-import { getCurrentUserId } from "@/lib/auth";
+import {
+  findClientByPhone,
+  getCurrentUserId,
+  getDentalClients,
+  getDentalSession,
+} from "@/lib/auth";
 
-export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "rescheduled";
+export type AppointmentStatus =
+  | "pending"
+  | "scheduled"
+  | "completed"
+  | "cancelled"
+  | "rescheduled";
+
+/** Телефоны врачей (seed `dental_employees`) — id как на экране записи (d1…d10). */
+export const DOCTOR_BOOKING_ID_TO_PHONE: Record<string, string> = {
+  d1: "79991112233",
+  d2: "79001001002",
+  d3: "79001001003",
+  d4: "79994445566",
+  d5: "79001001005",
+  d6: "79001001006",
+  d7: "79001001007",
+  d8: "79001001008",
+  d9: "79001001009",
+  d10: "79001001010",
+};
 
 export interface Appointment {
   id: string;
@@ -41,6 +65,7 @@ interface AppointmentRow {
   id: string;
   client_id: string | null;
   doctor_id: string | null;
+  doctor_phone: string | null;
   appointment_date: string;
   appointment_time: string;
   status: string;
@@ -109,21 +134,60 @@ export function getAppointments(): Appointment[] {
   return all.filter((a) => a.patientId === uid);
 }
 
-export function getUpcomingCount(): number {
-  return getAppointments().filter((a) => a.status === "scheduled").length;
+function isActiveUpcomingStatus(s: AppointmentStatus): boolean {
+  return s === "scheduled" || s === "rescheduled" || s === "pending";
 }
 
-export type NewAppointmentInput = Omit<Appointment, "id"> & { doctorId?: string | null };
+export function getUpcomingCount(): number {
+  return getAppointments().filter((a) => isActiveUpcomingStatus(a.status)).length;
+}
+
+export type NewAppointmentInput = Omit<Appointment, "id" | "status"> & {
+  doctorId?: string | null;
+  status?: AppointmentStatus;
+};
+
+/** ID пациента для вставки в `appointments.client_id`: по currentUserId, телефону в id или сессии. */
+export async function resolveClientIdForAppointment(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const uid = getCurrentUserId();
+  const clients = getDentalClients();
+
+  if (uid) {
+    if (clients.some((c) => c.id === uid)) return uid;
+    const digits = uid.replace(/\D/g, "");
+    if (digits.length >= 10) {
+      const c = await findClientByPhone(digits);
+      if (c) return c.id;
+    }
+    return uid;
+  }
+
+  const session = getDentalSession();
+  if (session?.role === "client" && session.phone) {
+    const c = await findClientByPhone(session.phone);
+    if (c) return c.id;
+  }
+  return null;
+}
 
 export async function addAppointment(apt: NewAppointmentInput): Promise<Appointment> {
-  const uid = getCurrentUserId();
-  const patientId = apt.patientId ?? uid ?? null;
+  const patientId = apt.patientId ?? (await resolveClientIdForAppointment());
+  if (!patientId) {
+    throw new Error("Не удалось определить пациента. Войдите в аккаунт или обновите страницу.");
+  }
+
+  const docId = apt.doctorId ?? null;
+  const doctorPhone = docId ? DOCTOR_BOOKING_ID_TO_PHONE[docId] ?? null : null;
+  const status: AppointmentStatus = apt.status ?? "pending";
+
   const insertPayload = {
     client_id: patientId,
-    doctor_id: apt.doctorId ?? null,
+    doctor_id: docId,
+    doctor_phone: doctorPhone,
     appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
     appointment_time: apt.time,
-    status: apt.status,
+    status,
     doctor_display_name: apt.doctor,
     specialty: apt.specialty || null,
     service: apt.service || null,
@@ -169,7 +233,7 @@ export function getNextAppointment(): Appointment | null {
 
   const scheduled = all
     .filter((a) => {
-      if (a.status !== "scheduled") return false;
+      if (!isActiveUpcomingStatus(a.status)) return false;
       const d = new Date(a.year, a.monthNum - 1, a.day);
       return d >= today;
     })

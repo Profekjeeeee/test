@@ -88,15 +88,13 @@ export interface TreatmentPlan {
   updatedAt: string;
 }
 
-// ─── Chat (localStorage: dental_messages) ─────────────────────────────────────
-
-/** Сообщение единого чата: клиника, техподдержка или лечащий врач. */
+/** Сообщение чата клиники: данные из Supabase `dental_messages`. */
 export interface ChatMessage {
   id: string;
   senderId: string;
   senderRole: "client" | "doctor" | "admin";
   senderName: string;
-  /** 'admin' | 'clinic' | ID пациента | телефон врача (например \"79991112233\") */
+  /** `clinic` | `support` | UUID пациента | телефон врача (например "79991112233"); legacy: `admin` = поддержка */
   recipientId: string;
   text: string;
   timestamp: number;

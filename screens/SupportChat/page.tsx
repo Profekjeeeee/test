@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import BottomBar from "@/components/layout/BottomBar";
 import { ROUTES } from "@/lib/routes";
-import { getCurrentUserId } from "@/lib/auth";
+import { getCurrentUserId, resolveHydratedSession, refreshDentalCaches } from "@/lib/auth";
 import {
   CHAT_UPDATED_EVENT,
   hydrateDentalMessages,
@@ -36,10 +36,15 @@ export default function PatientSupportChatPage() {
   const [tab, setTab] = useState<PatientChatTab>("clinic");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setUid(getCurrentUserId());
+    void (async () => {
+      await refreshDentalCaches();
+      await resolveHydratedSession();
+      setUid(getCurrentUserId());
+    })();
   }, []);
 
   const refresh = useCallback(() => {
@@ -77,10 +82,19 @@ export default function PatientSupportChatPage() {
 
   const handleSend = async () => {
     if (!draft.trim()) return;
-    await sendPatientMessage(tab, draft);
-    setDraft("");
-    refresh();
-    if (uid) markPatientConversationRead(uid, tab);
+    setSending(true);
+    try {
+      await sendPatientMessage(tab, draft);
+      setDraft("");
+      refresh();
+      const u = getCurrentUserId();
+      if (u) markPatientConversationRead(u, tab);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Ошибка отправки сообщения: " + message);
+    } finally {
+      setSending(false);
+    }
   };
 
   const clinicUnread = Boolean(uid && tab !== "clinic" && getPatientUnread(uid, "clinic"));
@@ -210,12 +224,12 @@ export default function PatientSupportChatPage() {
                 handleSend();
               }
             }}
-            disabled={!uid}
+            disabled={!uid || sending}
           />
           <button
             type="button"
             onClick={handleSend}
-            disabled={!uid || !draft.trim()}
+            disabled={!uid || !draft.trim() || sending}
             className="h-11 px-4 rounded-[12px] bg-primary text-white text-[13px] font-semibold disabled:opacity-40 active:scale-95 transition-transform"
           >
             Отпр.

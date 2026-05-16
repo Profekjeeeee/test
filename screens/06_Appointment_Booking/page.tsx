@@ -505,53 +505,57 @@ function BookingContent() {
   const handleConfirm = async () => {
     if (!selectedDay || !selectedTime) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
 
     const now = new Date();
     const monthNum = now.getMonth() + 1;
     const monthName = MONTHS_SHORT[now.getMonth()];
     const year = now.getFullYear();
 
-    if (isRescheduling && appointmentId) {
-      await rescheduleAppointment(appointmentId, {
-        day: selectedDay,
-        monthNum,
-        month: monthName,
-        year,
-        time: selectedTime,
-      });
-    } else {
-      const serviceTitle = selectedService
-        ? selectedService.title
-        : `${selectedCategory ?? "Консультация"}`;
-      const doctorName = selectedDoctor?.name ?? "Врач не выбран";
-      const specialty = selectedDoctor?.speciality ?? "";
-      const price = selectedService?.price ?? 0;
+    try {
+      if (isRescheduling && appointmentId) {
+        await rescheduleAppointment(appointmentId, {
+          day: selectedDay,
+          monthNum,
+          month: monthName,
+          year,
+          time: selectedTime,
+        });
+      } else {
+        const serviceTitle = selectedService
+          ? selectedService.title
+          : `${selectedCategory ?? "Консультация"}`;
+        const doctorName = selectedDoctor?.name ?? "Врач не выбран";
+        const specialty = selectedDoctor?.speciality ?? "";
+        const price = selectedService?.price ?? 0;
 
-      const newApt = await addAppointment({
-        day: selectedDay,
-        monthNum,
-        month: monthName,
-        year,
-        time: selectedTime,
-        doctor: doctorName,
-        specialty,
-        service: `${selectedCategory}. ${serviceTitle}`,
-        price,
-        cabinet: "№ 5",
-        status: "scheduled",
-        doctorId: selectedDoctorId,
-      });
+        const newApt = await addAppointment({
+          day: selectedDay,
+          monthNum,
+          month: monthName,
+          year,
+          time: selectedTime,
+          doctor: doctorName,
+          specialty,
+          service: `${selectedCategory}. ${serviceTitle}`,
+          price,
+          cabinet: "№ 5",
+          doctorId: selectedDoctorId,
+        });
 
-      addBillForAppointment(newApt.id, serviceTitle, price);
+        addBillForAppointment(newApt.id, serviceTitle, price);
+      }
+
+      setShowModal(true);
+      setTimeout(() => {
+        setShowModal(false);
+        router.push(ROUTES.clientHome);
+      }, 2500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Ошибка записи: " + message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-    setShowModal(true);
-    setTimeout(() => {
-      setShowModal(false);
-      router.push(ROUTES.clientHome);
-    }, 2500);
   };
 
   const confirmDate =

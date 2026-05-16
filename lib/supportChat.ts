@@ -17,8 +17,6 @@ export type PatientChatTab = "clinic" | "support" | "doctor";
 /** @deprecated alias — используйте PatientChatTab */
 export type SupportChatChannel = "clinic" | "support";
 
-/** Совместимость: раньше ключ localStorage; события чата теперь через Supabase + CHAT_UPDATED_EVENT */
-export const DENTAL_MESSAGES_KEY = "dental_messages";
 export const DENTAL_CHAT_UPDATED_EVENT = "dental_chat_updated";
 export const CHAT_UPDATED_EVENT = DENTAL_CHAT_UPDATED_EVENT;
 
@@ -27,6 +25,17 @@ const STAFF_READS_KEY = "dental_chat_staff_read_v2";
 const SUPPORT_AUDIT_KEY = "dental_chat_support_audit";
 
 const DEFAULT_ATTENDING_DOCTOR_PHONE = "79991112233";
+
+function isSupportInboxRecipient(id: string): boolean {
+  return id === "support" || id === "admin";
+}
+
+function newMessageId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `msg_${crypto.randomUUID()}`;
+  }
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+}
 
 interface DbMessageRow {
   id: string;
@@ -78,11 +87,25 @@ export async function hydrateDentalMessages(): Promise<void> {
  */
 export function subscribeDentalMessagesRealtime(onReloaded: () => void): () => void {
   const channel = supabase
-    .channel("dental_messages_postgres")
+    .channel("chat_changes")
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "dental_messages" },
-      () => {
+      (payload: { new?: unknown }) => {
+        const row = payload.new as DbMessageRow | undefined;
+        if (
+          row &&
+          typeof row.id === "string" &&
+          typeof row.body === "string" &&
+          typeof row.sender_id === "string"
+        ) {
+          const msg = dbRowToChatMessage(row);
+          const without = messagesCache.filter((m) => m.id !== msg.id);
+          messagesCache = [...without, msg].sort((a, b) => a.timestamp - b.timestamp);
+          emitUpdated();
+          onReloaded();
+          return;
+        }
         void hydrateDentalMessages().then(() => {
           emitUpdated();
           onReloaded();
@@ -178,7 +201,7 @@ export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
     if (tab === "support") {
       return (
         m.chatType === "support" &&
-        ((m.senderId === uid && m.recipientId === "admin") ||
+        ((m.senderId === uid && isSupportInboxRecipient(m.recipientId)) ||
           (m.senderRole === "admin" && m.recipientId === uid))
       );
     }
@@ -284,7 +307,7 @@ export function getPatientUnread(uid: string, tab: PatientChatTab): boolean {
     if (tab === "support") {
       return (
         m.chatType === "support" &&
-        ((m.senderId === uid && m.recipientId === "admin") ||
+        ((m.senderId === uid && isSupportInboxRecipient(m.recipientId)) ||
           (m.senderRole === "admin" && m.recipientId === uid))
       );
     }
@@ -351,10 +374,10 @@ export function markStaffConversationRead(
 
 export async function appendChatMessage(
   msg: Omit<ChatMessage, "id" | "timestamp">
-): Promise<ChatMessage | null> {
+): Promise<ChatMessage> {
   const full: ChatMessage = {
     ...msg,
-    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    id: newMessageId(),
     timestamp: Date.now(),
   };
 
@@ -366,12 +389,11 @@ export async function appendChatMessage(
     chat_type: full.chatType,
     sender_role: full.senderRole,
     sender_name: full.senderName,
-    created_at: new Date(full.timestamp).toISOString(),
   });
 
   if (error) {
     console.error("[supportChat insert]", error);
-    return null;
+    throw new Error(error.message);
   }
 
   await hydrateDentalMessages();
@@ -439,7 +461,7 @@ export async function sendPatientMessage(
       senderId: uid,
       senderRole: "client",
       senderName: name,
-      recipientId: "admin",
+      recipientId: "support",
       text,
       chatType: "support",
     });
@@ -559,7 +581,7 @@ export function getStaffBranchMessages(
       }
       return (
         m.chatType === "support" &&
-        ((m.senderRole === "client" && m.senderId === patientId && m.recipientId === "admin") ||
+        ((m.senderRole === "client" && m.senderId === patientId && isSupportInboxRecipient(m.recipientId)) ||
           (m.senderRole === "admin" && m.recipientId === patientId))
       );
     })
@@ -695,7 +717,7 @@ export function getSupportMessages(
       .filter(
         (m) =>
           m.chatType === "support" &&
-          ((m.senderId === uid && m.recipientId === "admin") ||
+          ((m.senderId === uid && isSupportInboxRecipient(m.recipientId)) ||
             (m.senderRole === "admin" && m.recipientId === uid))
       )
       .sort((a, b) => a.timestamp - b.timestamp);

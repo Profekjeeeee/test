@@ -67,6 +67,7 @@ function formatPrice(price: number): string {
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  pending:     { label: "Ожидает подтверждения", color: "text-amber-700 bg-amber-50" },
   scheduled:   { label: "Запланирована",  color: "text-primary bg-primary-light" },
   completed:   { label: "Завершена",       color: "text-gray-500 bg-gray-100" },
   cancelled:   { label: "Отменена",        color: "text-red-500 bg-red-50" },
@@ -103,7 +104,7 @@ export default function AppointmentsPage() {
 
   const filtered = appointments.filter((a) =>
     tab === "upcoming"
-      ? a.status === "scheduled" || a.status === "rescheduled"
+      ? a.status === "scheduled" || a.status === "rescheduled" || a.status === "pending"
       : a.status === "completed" || a.status === "cancelled"
   );
 
@@ -146,7 +147,11 @@ export default function AppointmentsPage() {
           </div>
         ) : (
           filtered.map((apt) => {
-            const st = STATUS_LABELS[apt.status];
+            const st =
+              STATUS_LABELS[apt.status] ?? {
+                label: String(apt.status),
+                color: "text-gray-600 bg-gray-100 dark:bg-slate-700 dark:text-white",
+              };
             const price = resolvePrice(apt);
             const isPast = tab === "past";
             const isPaid = paidAppointmentIds.has(apt.id);
@@ -197,7 +202,9 @@ export default function AppointmentsPage() {
                 </div>
 
                 {/* Action buttons for scheduled */}
-                {apt.status === "scheduled" && (
+                {(apt.status === "scheduled" ||
+                  apt.status === "pending" ||
+                  apt.status === "rescheduled") && (
                   <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 flex gap-2">
                     <button
                       onClick={() => handleReschedule(apt)}
