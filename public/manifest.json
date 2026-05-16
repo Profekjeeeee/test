@@ -1,0 +1,12 @@
+{
+  "name": "Стоматология",
+  "short_name": "Стоматология",
+  "description": "Личный кабинет пациента стоматологической клиники",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F8FAFB",
+  "theme_color": "#A1D6D7"
+}
