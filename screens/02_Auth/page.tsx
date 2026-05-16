@@ -14,7 +14,12 @@ import {
 import { ROUTES } from "@/lib/routes";
 import { addDentalLog } from "@/lib/logger";
 
-const TEST_CODE = "1234";
+/** Сквозной демо-код: только цифры; ввод нормализуется через replace(/\D/g). */
+const MASTER_SMS_CODE = "1234";
+
+function normalizeSmsCodeInput(raw: string): string {
+  return raw.replace(/\D/g, "").slice(0, 4);
+}
 
 type AuthStep = "phone" | "code";
 
@@ -22,6 +27,8 @@ export default function AuthPage() {
   const router = useRouter();
   const [step, setStep] = useState<AuthStep>("phone");
   const [phone, setPhone] = useState("");
+  /** Номер, зафиксированный на шаге 1 (тот же запрос к Supabase на шаге 2). */
+  const [authCleanPhone, setAuthCleanPhone] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -42,35 +49,57 @@ export default function AuthPage() {
     setLoading(true);
     setError("");
     await new Promise((r) => setTimeout(r, 500));
+    setAuthCleanPhone(cleanPhone);
     setLoading(false);
     setStep("code");
   };
 
   const handleCodeSubmit = async () => {
-    if (!code.trim()) {
+    const digitsCode = normalizeSmsCodeInput(code);
+    if (!digitsCode) {
       setError("Введите код из СМС");
       addDentalLog("WARN", "guest", "", "validation_code_empty", "Пустой код подтверждения");
       return;
     }
-    if (code !== TEST_CODE) {
-      setError(`Неверный код. Подсказка: ${TEST_CODE}`);
-      addDentalLog("WARN", "guest", "", "validation_code_invalid", "Неверный код из СМС");
+
+    if (digitsCode !== MASTER_SMS_CODE) {
+      setError(`Неверный код. Демо-код: ${MASTER_SMS_CODE}`);
+      addDentalLog(
+        "WARN",
+        "guest",
+        "",
+        "validation_code_invalid",
+        `Неверный код | raw_len=${code.length} digits=${digitsCode}`
+      );
       return;
     }
+
+    const cleanPhone = authCleanPhone;
+    if (!cleanPhone || cleanPhone.length < 11) {
+      setError("Вернитесь и введите номер телефона");
+      addDentalLog(
+        "WARN",
+        "guest",
+        "",
+        "auth_master_missing_phone",
+        `authCleanPhone пуст или короткий | authCleanPhone=${authCleanPhone || "(пусто)"}`
+      );
+      setStep("phone");
+      return;
+    }
+
     setLoading(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 500));
 
-    const cleanPhone = normalizePhone(phone);
     addDentalLog(
       "INFO",
       "guest",
       "",
-      "auth_lookup_start",
-      `Шаг A→B→C | raw=${phone} | cleanPhone=${cleanPhone}`
+      "auth_master_code_flow",
+      `master ${MASTER_SMS_CODE} | cleanPhone=${cleanPhone}`
     );
 
-    const empLookup = await fetchEmployeeByPhoneForAuth(phone);
+    const empLookup = await fetchEmployeeByPhoneForAuth(cleanPhone);
     if (empLookup.supabaseError) {
       addDentalLog(
         "ERROR",
@@ -86,13 +115,6 @@ export default function AuthPage() {
 
     if (empLookup.employee) {
       const employee = empLookup.employee;
-      addDentalLog(
-        "INFO",
-        employee.role === "admin" ? "admin" : "doctor",
-        employee.id,
-        "auth_employee_found",
-        `INFO | doctor/admin found | cleanPhone=${empLookup.cleanPhone} | role=${employee.role}`
-      );
       setDentalSession({
         id: employee.id,
         role: employee.role,
@@ -102,17 +124,15 @@ export default function AuthPage() {
       });
       addDentalLog(
         "INFO",
-        employee.role === "admin" ? "admin" : "doctor",
-        employee.id,
-        "login_success",
-        employee.role === "admin" ? "Вход администратора" : "Вход врача"
+        employee.role,
+        cleanPhone,
+        "auth_success_master_code",
+        `id=${employee.id} | ${employee.fullName}`
       );
       setLoading(false);
-      if (employee.role === "admin") {
-        router.replace(ROUTES.adminDashboard);
-      } else {
-        router.replace(ROUTES.doctorCabinet);
-      }
+      router.replace(
+        employee.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet
+      );
       return;
     }
 
@@ -121,7 +141,7 @@ export default function AuthPage() {
       "guest",
       "",
       "auth_step_a_miss",
-      `dental_employees пусто по phone | cleanPhone=${empLookup.cleanPhone}`
+      `dental_employees нет строки | cleanPhone=${empLookup.cleanPhone}`
     );
 
     const clientLookup = await fetchClientByPhoneForAuth(empLookup.cleanPhone);
@@ -140,15 +160,8 @@ export default function AuthPage() {
 
     if (clientLookup.client) {
       const client = clientLookup.client;
-      addDentalLog(
-        "INFO",
-        "client",
-        client.id,
-        "auth_client_found",
-        `Старый клиент | cleanPhone=${empLookup.cleanPhone}`
-      );
       await setCurrentUser(client.id);
-      addDentalLog("INFO", "client", client.id, "login_success", "Вход пациента");
+      addDentalLog("INFO", "client", cleanPhone, "auth_success_master_code", `id=${client.id}`);
       setLoading(false);
       router.replace(ROUTES.clientHome);
       return;
@@ -159,7 +172,7 @@ export default function AuthPage() {
       "guest",
       "",
       "auth_step_b_miss",
-      `dental_clients пусто | cleanPhone=${empLookup.cleanPhone} → регистрация нового пациента`
+      `Новый пациент | cleanPhone=${empLookup.cleanPhone} → регистрация`
     );
 
     setLoading(false);
@@ -217,7 +230,8 @@ export default function AuthPage() {
             inputMode="tel"
           />
           <p className="text-[12px] text-secondary -mt-2">
-            Демо: код <span className="font-mono text-[#0F172A] dark:text-white">{TEST_CODE}</span>
+            Демо: код{" "}
+            <span className="font-mono text-[#0F172A] dark:text-white">{MASTER_SMS_CODE}</span>
             {digitLen >= 11 ? (
               <>
                 {" · "}
@@ -240,7 +254,7 @@ export default function AuthPage() {
             maxLength={4}
             value={code}
             onChange={(e) => {
-              setCode(e.target.value);
+              setCode(normalizeSmsCodeInput(e.target.value));
               setError("");
             }}
             error={error}
@@ -253,6 +267,7 @@ export default function AuthPage() {
             type="button"
             onClick={() => {
               setStep("phone");
+              setAuthCleanPhone("");
               setCode("");
               setError("");
             }}
