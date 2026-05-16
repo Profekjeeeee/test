@@ -30,13 +30,6 @@ function isSupportInboxRecipient(id: string): boolean {
   return id === "support" || id === "admin";
 }
 
-function newMessageId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `msg_${crypto.randomUUID()}`;
-  }
-  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-}
-
 interface DbMessageRow {
   id: string;
   sender_id: string;
@@ -375,27 +368,26 @@ export function markStaffConversationRead(
 export async function appendChatMessage(
   msg: Omit<ChatMessage, "id" | "timestamp">
 ): Promise<ChatMessage> {
-  const full: ChatMessage = {
-    ...msg,
-    id: newMessageId(),
-    timestamp: Date.now(),
-  };
+  // id генерирует БД (DEFAULT / GENERATED); не передаём id в insert.
+  const { data: row, error } = await supabase
+    .from("chat_messages")
+    .insert({
+      sender_id: msg.senderId,
+      recipient_id: msg.recipientId,
+      text: msg.text,
+      sender_role: msg.senderRole,
+      chat_type: msg.chatType,
+      sender_name: msg.senderName,
+    })
+    .select("*")
+    .single();
 
-  // sender_id / recipient_id / text / sender_role — основные поля; chat_type и sender_name нужны для веток и отображения имён в UI.
-  const { error } = await supabase.from("chat_messages").insert({
-    id: full.id,
-    sender_id: full.senderId,
-    recipient_id: full.recipientId,
-    text: full.text,
-    sender_role: full.senderRole,
-    chat_type: full.chatType,
-    sender_name: full.senderName,
-  });
-
-  if (error) {
+  if (error || !row) {
     console.error("[supportChat insert]", error);
-    throw new Error(error.message);
+    throw new Error(error?.message ?? "Не удалось сохранить сообщение");
   }
+
+  const full = dbRowToChatMessage(row as DbMessageRow);
 
   await hydrateDentalMessages();
 
