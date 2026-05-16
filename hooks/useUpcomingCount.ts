@@ -7,8 +7,7 @@ export function useUpcomingCount(): number {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    initAppointments();
-    setCount(getUpcomingCount());
+    void initAppointments().then(() => setCount(getUpcomingCount()));
 
     const update = () => setCount(getUpcomingCount());
 

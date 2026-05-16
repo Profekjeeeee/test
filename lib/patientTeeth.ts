@@ -4,7 +4,7 @@ import type { ToothStatus } from "@/types";
 
 const FULL_FORMULA = 32;
 
-/** Актуальное состояние формулы: приоритет dental_clients.formulaTeeth → dental_formula_<id> → дефолт. */
+/** Актуальное состояние формулы: приоритет dental_clients.formula_teeth → dental_formula_<id> → дефолт. */
 export function getPatientTeethState(patientId: string): ToothStatus[] {
   const client = getDentalClients().find((c) => c.id === patientId);
   if (client?.formulaTeeth && client.formulaTeeth.length >= FULL_FORMULA) {
@@ -15,8 +15,8 @@ export function getPatientTeethState(patientId: string): ToothStatus[] {
   return buildDefaultTeeth();
 }
 
-/** Пишет в dental_clients и синхронизирует ключ dental_formula_<patientId> для ЛК пациента. */
-export function persistPatientTeeth(patientId: string, teeth: ToothStatus[]): void {
-  updateClientFormulaTeeth(patientId, teeth);
+/** Пишет в Supabase (dental_clients.formula_teeth) и синхронизирует ключ dental_formula_<patientId> для ЛК пациента. */
+export async function persistPatientTeeth(patientId: string, teeth: ToothStatus[]): Promise<void> {
+  await updateClientFormulaTeeth(patientId, teeth);
   saveTeethSnapshotForUser(patientId, teeth);
 }

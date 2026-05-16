@@ -2,7 +2,7 @@
 - Framework: Next.js (App Router)
 - Styling: Tailwind CSS
 - Language: TypeScript
-- State: LocalStorage for persistent mock data (appointments, user profile, billing)
+- State: профиль и черновики — localStorage; клиенты, сотрудники, записи и чаты — Supabase (см. lib/supabaseClient.ts).
 
 ## Design Tokens (Clinical Precision Style)
 - Font: Manrope (Sans-serif)
@@ -21,7 +21,7 @@
 
 ## Development Rules
 - Use 'use client' directive only when interactivity is needed.
-- Maintain a single source of truth in LocalStorage for appointment data.
+- Единый источник записей на приём и обмен сообщениями чата — таблицы Supabase; кэш на клиенте обновляется через refreshAppointmentsCache / Realtime.
 - All Russian text should be handled correctly with proper date formatting (e.g., "Пятница, 2 мая").
 - Buttons must have a visible active/pressed state (scale-95).
 - Follow the modular structure in the /screens directory.

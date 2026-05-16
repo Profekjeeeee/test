@@ -10,6 +10,7 @@ import {
   getAppointments,
   addAppointment,
   rescheduleAppointment,
+  refreshAppointmentsCache,
   type Appointment,
 } from "@/lib/appointments";
 import { addBillForAppointment } from "@/lib/bills";
@@ -482,12 +483,14 @@ function BookingContent() {
   // Load rescheduling appointment
   useEffect(() => {
     if (isRescheduling && appointmentId) {
-      const all = getAppointments();
-      const found = all.find((a) => a.id === appointmentId);
-      if (found) {
-        setCurrentAppointment(found);
-        setSelectedDay(found.day);
-      }
+      void refreshAppointmentsCache().then(() => {
+        const all = getAppointments();
+        const found = all.find((a) => a.id === appointmentId);
+        if (found) {
+          setCurrentAppointment(found);
+          setSelectedDay(found.day);
+        }
+      });
     }
   }, [isRescheduling, appointmentId]);
 
@@ -510,7 +513,7 @@ function BookingContent() {
     const year = now.getFullYear();
 
     if (isRescheduling && appointmentId) {
-      rescheduleAppointment(appointmentId, {
+      await rescheduleAppointment(appointmentId, {
         day: selectedDay,
         monthNum,
         month: monthName,
@@ -525,7 +528,7 @@ function BookingContent() {
       const specialty = selectedDoctor?.speciality ?? "";
       const price = selectedService?.price ?? 0;
 
-      const newApt = addAppointment({
+      const newApt = await addAppointment({
         day: selectedDay,
         monthNum,
         month: monthName,
@@ -537,6 +540,7 @@ function BookingContent() {
         price,
         cabinet: "№ 5",
         status: "scheduled",
+        doctorId: selectedDoctorId,
       });
 
       addBillForAppointment(newApt.id, serviceTitle, price);

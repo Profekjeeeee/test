@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CHAT_UPDATED_EVENT,
-  DENTAL_MESSAGES_KEY,
-  SUPPORT_CHAT_POLL_MS,
+  hydrateDentalMessages,
+  subscribeDentalMessagesRealtime,
   getDoctorDialogPreviews,
   getDoctorPatientThreadMessages,
   getStaffBranchMessages,
@@ -21,7 +21,7 @@ import {
   type StaffDialogPreview,
   type SupportAuditEntry,
 } from "@/lib/supportChat";
-import { logout, resolveHydratedSession, type DentalSession } from "@/lib/auth";
+import { logout, resolveHydratedSession, getDentalSession, type DentalSession } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 
 function formatMsgTime(ts: number): string {
@@ -55,7 +55,7 @@ export default function StaffMessagesPage({ mode }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setSession(resolveHydratedSession());
+    void resolveHydratedSession().then(setSession);
   }, []);
 
   const channelFilter =
@@ -71,7 +71,7 @@ export default function StaffMessagesPage({ mode }: Props) {
 
   const refreshList = useCallback(() => {
     if (mode === "doctor") {
-      const s = resolveHydratedSession();
+      const s = getDentalSession();
       if (!s?.phone) {
         setPreviews([]);
         return;
@@ -91,35 +91,26 @@ export default function StaffMessagesPage({ mode }: Props) {
     if (mode === "admin" && adminSection === "audit") {
       refreshAudit();
       const onCustom = () => refreshAudit();
-      const onStorage = (e: StorageEvent) => {
-        if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
-        refreshAudit();
-      };
       window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
-      window.addEventListener("storage", onStorage);
-      const id = window.setInterval(refreshAudit, SUPPORT_CHAT_POLL_MS);
       return () => {
         window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
-        window.removeEventListener("storage", onStorage);
-        window.clearInterval(id);
       };
     }
   }, [mode, adminSection, refreshAudit]);
 
   useEffect(() => {
-    refreshList();
-    const onCustom = () => refreshList();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
+    let unsub: (() => void) | undefined;
+    void (async () => {
+      await hydrateDentalMessages();
       refreshList();
-    };
+      unsub = subscribeDentalMessagesRealtime(refreshList);
+    })();
+
+    const onCustom = () => refreshList();
     window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
-    window.addEventListener("storage", onStorage);
-    const id = window.setInterval(refreshList, SUPPORT_CHAT_POLL_MS);
     return () => {
+      unsub?.();
       window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
-      window.removeEventListener("storage", onStorage);
-      window.clearInterval(id);
     };
   }, [refreshList]);
 
@@ -141,17 +132,9 @@ export default function StaffMessagesPage({ mode }: Props) {
     }
     refreshThread();
     const onCustom = () => refreshThread();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
-      refreshThread();
-    };
     window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
-    window.addEventListener("storage", onStorage);
-    const id = window.setInterval(refreshThread, SUPPORT_CHAT_POLL_MS);
     return () => {
       window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
-      window.removeEventListener("storage", onStorage);
-      window.clearInterval(id);
     };
   }, [selected, refreshThread, session]);
 
@@ -159,21 +142,21 @@ export default function StaffMessagesPage({ mode }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread.length]);
 
-  const handleSendStaff = () => {
+  const handleSendStaff = async () => {
     if (!selected || !draft.trim()) return;
 
     if (mode === "admin") {
       if (selected.scope === "clinic") {
-        sendAdminToPatient({ patientId: selected.patientId, chatType: "clinic", body: draft });
+        await sendAdminToPatient({ patientId: selected.patientId, chatType: "clinic", body: draft });
       } else {
-        sendAdminToPatient({ patientId: selected.patientId, chatType: "support", body: draft });
+        await sendAdminToPatient({ patientId: selected.patientId, chatType: "support", body: draft });
       }
     } else if (session) {
       const pref = inferDoctorReplyPreference(thread, session.phone);
       if (pref === "doctor") {
-        sendDoctorToPatientPersonal(session.phone, selected.patientId, draft);
+        await sendDoctorToPatientPersonal(session.phone, selected.patientId, draft);
       } else {
-        sendStaffToPatientClinic(selected.patientId, draft);
+        await sendStaffToPatientClinic(selected.patientId, draft);
       }
     }
 

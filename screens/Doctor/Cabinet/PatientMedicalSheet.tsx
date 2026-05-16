@@ -88,10 +88,11 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
   const [saving, setSaving] = useState(false);
   const [savedHint, setSavedHint] = useState(false);
   const [aptRev, setAptRev] = useState(0);
+  const [clientRev, setClientRev] = useState(0);
 
   const client = useMemo(
     () => getDentalClients().find((c) => c.id === patientId),
-    [patientId]
+    [patientId, clientRev]
   );
 
   useEffect(() => {
@@ -101,12 +102,13 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
   }, [patientId]);
 
   useEffect(() => {
-    const bump = () => setAptRev((n) => n + 1);
-    window.addEventListener("appointmentsUpdated", bump);
-    window.addEventListener("dentalClientsUpdated", bump);
+    const bumpApt = () => setAptRev((n) => n + 1);
+    const bumpClient = () => setClientRev((n) => n + 1);
+    window.addEventListener("appointmentsUpdated", bumpApt);
+    window.addEventListener("dentalClientsUpdated", bumpClient);
     return () => {
-      window.removeEventListener("appointmentsUpdated", bump);
-      window.removeEventListener("dentalClientsUpdated", bump);
+      window.removeEventListener("appointmentsUpdated", bumpApt);
+      window.removeEventListener("dentalClientsUpdated", bumpClient);
     };
   }, []);
 
@@ -126,12 +128,15 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
   const patientTitle = client ? `${client.lastName} ${client.firstName}`.trim() : "Пациент";
   const phoneLabel = client?.phone ?? "—";
 
-  const handleSaveFormula = () => {
+  const handleSaveFormula = async () => {
     setSaving(true);
-    persistPatientTeeth(patientId, draftTeeth);
-    setSaving(false);
-    setSavedHint(true);
-    window.setTimeout(() => setSavedHint(false), 2200);
+    try {
+      await persistPatientTeeth(patientId, draftTeeth);
+      setSavedHint(true);
+      window.setTimeout(() => setSavedHint(false), 2200);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const patchCondition = (num: number, condition: ToothCondition) => {

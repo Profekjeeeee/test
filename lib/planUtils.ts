@@ -3,7 +3,7 @@
  *
  * Логика:
  *  1. Статичные элементы плана (от врача, без appointmentId) — из treatmentPlan localStorage.
- *  2. Элементы из записей пациента — деривируются из appointments (status !== "cancelled").
+ *  2. Элементы из записей пациента — деривируются из записей Supabase (appointments), синхронизируемых через refreshAppointmentsCache.
  *  Итоговый список = merge(static, fromAppointments).
  *
  * Ни appointments.ts, ни treatmentPlan.ts не импортируют друг друга —
@@ -66,7 +66,7 @@ export function getMergedPlanStats(): TreatmentPlanStats {
 
 // ─── Init both stores ─────────────────────────────────────────────────────────
 
-export function initPlanSources(): void {
-  initAppointments();
+export async function initPlanSources(): Promise<void> {
+  await initAppointments();
   initTreatmentPlan();
 }

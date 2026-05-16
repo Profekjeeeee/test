@@ -57,13 +57,13 @@ export default function RegistrationPage() {
     setSaving(true);
     await new Promise((r) => setTimeout(r, 600));
 
-    const user = createUser(phone, {
+    const user = await createUser(phone, {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       email: form.email.trim(),
     });
 
-    setCurrentUser(user.id);
+    await setCurrentUser(user.id);
 
     saveProfile({
       firstName: form.firstName.trim(),

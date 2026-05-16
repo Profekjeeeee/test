@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
-  ensureDentalEmployeesInitialized,
   findEmployeeByPhone,
   findClientByPhone,
   setCurrentUser,
@@ -26,10 +25,6 @@ export default function AuthPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    ensureDentalEmployeesInitialized();
-  }, []);
 
   const handlePhoneSubmit = async () => {
     const digits = phone.replace(/\D/g, "");
@@ -60,7 +55,7 @@ export default function AuthPage() {
     setError("");
     await new Promise((r) => setTimeout(r, 500));
 
-    const employee = findEmployeeByPhone(phone);
+    const employee = await findEmployeeByPhone(phone);
     if (employee) {
       setDentalSession({
         id: employee.id,
@@ -85,9 +80,9 @@ export default function AuthPage() {
       return;
     }
 
-    const client = findClientByPhone(phone);
+    const client = await findClientByPhone(phone);
     if (client) {
-      setCurrentUser(client.id);
+      await setCurrentUser(client.id);
       addDentalLog("INFO", "client", client.id, "login_success", "Вход пациента");
       setLoading(false);
       router.replace(ROUTES.clientHome);

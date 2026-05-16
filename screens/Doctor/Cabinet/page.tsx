@@ -8,9 +8,14 @@ import {
   resolveHydratedSession,
   type DentalSession,
   getDentalClients,
+  refreshDentalCaches,
 } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
-import { getAllClinicAppointments, type ClinicAppointment } from "@/lib/appointments";
+import {
+  getAllClinicAppointments,
+  refreshAppointmentsCache,
+  type ClinicAppointment,
+} from "@/lib/appointments";
 import {
   filterAppointmentsByDoctor,
   isSameCalendarDay,
@@ -42,7 +47,11 @@ export default function DoctorCabinetPage() {
   const [sheetPatientId, setSheetPatientId] = useState<string | null>(null);
 
   useEffect(() => {
-    setSession(resolveHydratedSession());
+    void (async () => {
+      await refreshDentalCaches();
+      await refreshAppointmentsCache();
+      setSession(await resolveHydratedSession());
+    })();
   }, []);
 
   useEffect(() => {
@@ -181,7 +190,7 @@ export default function DoctorCabinetPage() {
             <div className="rounded-2xl border border-dashed border-[#E2E8F0] dark:border-slate-700 px-4 py-8 text-center">
               <p className="text-[14px] text-secondary">На выбранную дату нет записей к этому врачу.</p>
               <p className="text-[12px] text-secondary mt-2 opacity-80">
-                Новые приёмы подтягиваются из общего массива записей клиники (localStorage).
+                Новые приёмы синхронизируются через Supabase — видны и в браузере, и в Telegram Mini App.
               </p>
             </div>
           ) : (

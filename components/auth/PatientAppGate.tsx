@@ -5,9 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   CURRENT_USER_STORAGE_KEY,
   DENTAL_SESSION_STORAGE_KEY,
+  refreshDentalCaches,
   resolveHydratedSession,
   type DentalSession,
 } from "@/lib/auth";
+import { refreshAppointmentsCache } from "@/lib/appointments";
 import { addDentalLog } from "@/lib/logger";
 import {
   PUBLIC_ROUTE_PREFIXES,
@@ -34,20 +36,29 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
   const hydrationLogDone = useRef(false);
 
   useEffect(() => {
-    function readSession(): DentalSession | null {
-      return resolveHydratedSession();
-    }
+    let cancelled = false;
 
-    setHydratedSession(readSession());
+    void (async () => {
+      await refreshDentalCaches();
+      await refreshAppointmentsCache();
+      const session = await resolveHydratedSession();
+      if (!cancelled) setHydratedSession(session);
+    })();
 
     const onStorage = (e: StorageEvent) => {
       const k = e.key;
       if (k !== null && k !== DENTAL_SESSION_STORAGE_KEY && k !== CURRENT_USER_STORAGE_KEY) return;
-      setHydratedSession(readSession());
+      void (async () => {
+        const session = await resolveHydratedSession();
+        if (!cancelled) setHydratedSession(session);
+      })();
     };
 
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   /** Лог один раз после первого чтения сессии с клиента */

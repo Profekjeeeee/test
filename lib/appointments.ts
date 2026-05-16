@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserId } from "@/lib/auth";
 
 export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "rescheduled";
@@ -5,8 +6,8 @@ export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "resch
 export interface Appointment {
   id: string;
   day: number;
-  monthNum: number; // 1–12
-  month: string;    // "мая", "апреля" и т.д.
+  monthNum: number;
+  month: string;
   year: number;
   time: string;
   doctor: string;
@@ -15,115 +16,150 @@ export interface Appointment {
   price?: number;
   cabinet: string;
   status: AppointmentStatus;
-  /** ID пациента в dental_clients; подставляется при записи из ЛК пациента */
   patientId?: string;
 }
 
-/** Запись из общего пула localStorage (все ключи appointments / appointments_<userId>). */
+/** То же поле, что раньше; источник — таблица `appointments` в Supabase. */
 export type ClinicAppointment = Appointment;
 
-const BASE_KEY = "appointments";
+export const RU_MONTHS_SHORT = [
+  "янв",
+  "фев",
+  "мар",
+  "апр",
+  "мая",
+  "июн",
+  "июл",
+  "авг",
+  "сен",
+  "окт",
+  "ноя",
+  "дек",
+] as const;
 
-function storageKey(): string {
-  const uid = getCurrentUserId();
-  return uid ? `${BASE_KEY}_${uid}` : BASE_KEY;
+interface AppointmentRow {
+  id: string;
+  client_id: string | null;
+  doctor_id: string | null;
+  appointment_date: string;
+  appointment_time: string;
+  status: string;
+  doctor_display_name: string;
+  specialty: string | null;
+  service: string | null;
+  price: number | string | null;
+  cabinet: string | null;
 }
 
-export function initAppointments(): void {
-  if (typeof window === "undefined") return;
-  if (!localStorage.getItem(storageKey())) {
-    localStorage.setItem(storageKey(), JSON.stringify([]));
+function isoDateLocal(year: number, monthNum: number, day: number): string {
+  const mm = String(monthNum).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
+}
+
+function rowToAppointment(row: AppointmentRow): Appointment {
+  const parts = row.appointment_date.split("-").map((x) => parseInt(x, 10));
+  const year = parts[0] ?? 1970;
+  const monthNum = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+  const month = RU_MONTHS_SHORT[monthNum - 1] ?? "";
+  return {
+    id: row.id,
+    day,
+    monthNum,
+    month,
+    year,
+    time: row.appointment_time,
+    doctor: row.doctor_display_name,
+    specialty: row.specialty ?? "",
+    service: row.service ?? "",
+    price: row.price != null ? Number(row.price) : undefined,
+    cabinet: row.cabinet ?? "",
+    status: row.status as AppointmentStatus,
+    patientId: row.client_id ?? undefined,
+  };
+}
+
+let clinicCache: ClinicAppointment[] | null = null;
+
+export async function refreshAppointmentsCache(): Promise<void> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .order("appointment_date", { ascending: true })
+    .order("appointment_time", { ascending: true });
+  if (error) {
+    console.error("[appointments]", error);
+    return;
   }
+  clinicCache = ((data ?? []) as AppointmentRow[]).map(rowToAppointment);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("appointmentsUpdated"));
+  }
+}
+
+export async function initAppointments(): Promise<void> {
+  await refreshAppointmentsCache();
 }
 
 export function getAppointments(): Appointment[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(storageKey());
-    return stored ? (JSON.parse(stored) as Appointment[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveAppointments(appointments: Appointment[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(storageKey(), JSON.stringify(appointments));
-  window.dispatchEvent(new CustomEvent("appointmentsUpdated"));
+  const uid = getCurrentUserId();
+  const all = clinicCache ?? [];
+  if (!uid) return [];
+  return all.filter((a) => a.patientId === uid);
 }
 
 export function getUpcomingCount(): number {
-  const all = getAppointments();
-  return all.filter((a) => a.status === "scheduled").length;
+  return getAppointments().filter((a) => a.status === "scheduled").length;
 }
 
-export function addAppointment(apt: Omit<Appointment, "id">): Appointment {
-  const all = getAppointments();
+export type NewAppointmentInput = Omit<Appointment, "id"> & { doctorId?: string | null };
+
+export async function addAppointment(apt: NewAppointmentInput): Promise<Appointment> {
   const uid = getCurrentUserId();
-  const newApt: Appointment = {
-    ...apt,
-    id: Date.now().toString(),
-    patientId: apt.patientId ?? uid ?? undefined,
+  const patientId = apt.patientId ?? uid ?? null;
+  const insertPayload = {
+    client_id: patientId,
+    doctor_id: apt.doctorId ?? null,
+    appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
+    appointment_time: apt.time,
+    status: apt.status,
+    doctor_display_name: apt.doctor,
+    specialty: apt.specialty || null,
+    service: apt.service || null,
+    price: apt.price ?? null,
+    cabinet: apt.cabinet || null,
   };
-  saveAppointments([newApt, ...all]);
-  return newApt;
+  const { data, error } = await supabase.from("appointments").insert(insertPayload).select("*").single();
+  if (error) throw error;
+  await refreshAppointmentsCache();
+  return rowToAppointment(data as AppointmentRow);
 }
 
-/** Все приёмы клиники из ключей `appointments` и `appointments_<patientId>`. */
 export function getAllClinicAppointments(): ClinicAppointment[] {
-  if (typeof window === "undefined") return [];
-  const result: ClinicAppointment[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    if (key === BASE_KEY) {
-      try {
-        const arr = JSON.parse(localStorage.getItem(key) || "[]") as Appointment[];
-        arr.forEach((a) => result.push({ ...a }));
-      } catch {
-        /* skip */
-      }
-      continue;
-    }
-    if (key.startsWith(`${BASE_KEY}_`)) {
-      const suffix = key.slice(BASE_KEY.length + 1);
-      try {
-        const arr = JSON.parse(localStorage.getItem(key) || "[]") as Appointment[];
-        arr.forEach((a) =>
-          result.push({
-            ...a,
-            patientId: a.patientId ?? (suffix.length ? suffix : undefined),
-          })
-        );
-      } catch {
-        /* skip */
-      }
-    }
-  }
-  return result;
+  return clinicCache ?? [];
 }
 
-export function cancelAppointment(id: string): void {
-  const all = getAppointments();
-  saveAppointments(
-    all.map((a) =>
-      a.id === id ? { ...a, status: "cancelled" as AppointmentStatus } : a
-    )
-  );
+export async function cancelAppointment(id: string): Promise<void> {
+  const { error } = await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
+  if (error) throw error;
+  await refreshAppointmentsCache();
 }
 
-export function rescheduleAppointment(
+export async function rescheduleAppointment(
   id: string,
   updates: Pick<Appointment, "day" | "monthNum" | "month" | "year" | "time">
-): void {
-  const all = getAppointments();
-  saveAppointments(
-    all.map((a) =>
-      a.id === id
-        ? { ...a, ...updates, status: "scheduled" as AppointmentStatus }
-        : a
-    )
-  );
+): Promise<void> {
+  const { error } = await supabase
+    .from("appointments")
+    .update({
+      appointment_date: isoDateLocal(updates.year, updates.monthNum, updates.day),
+      appointment_time: updates.time,
+      status: "scheduled",
+    })
+    .eq("id", id);
+  if (error) throw error;
+  await refreshAppointmentsCache();
 }
 
 export function getNextAppointment(): Appointment | null {

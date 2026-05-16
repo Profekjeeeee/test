@@ -120,8 +120,9 @@ export default function TreatmentPlanPage() {
   };
 
   useEffect(() => {
-    initPlanSources();
-    refresh();
+    void initPlanSources().then(() => {
+      refresh();
+    });
 
     window.addEventListener("appointmentsUpdated", refresh);
     window.addEventListener("treatmentPlanUpdated", refresh);

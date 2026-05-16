@@ -7,8 +7,8 @@ import { ROUTES } from "@/lib/routes";
 import { getCurrentUserId } from "@/lib/auth";
 import {
   CHAT_UPDATED_EVENT,
-  DENTAL_MESSAGES_KEY,
-  SUPPORT_CHAT_POLL_MS,
+  hydrateDentalMessages,
+  subscribeDentalMessagesRealtime,
   getPatientBranchMessages,
   getPatientUnread,
   markPatientConversationRead,
@@ -53,21 +53,21 @@ export default function PatientSupportChatPage() {
   }, [uid, tab, refresh]);
 
   useEffect(() => {
-    refresh();
-    const onCustom = () => refresh();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
+    let unsub: (() => void) | undefined;
+
+    void (async () => {
+      await hydrateDentalMessages();
       refresh();
-    };
+      unsub = subscribeDentalMessagesRealtime(refresh);
+    })();
+
+    const onCustom = () => refresh();
     window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
-    window.addEventListener("storage", onStorage);
     window.addEventListener("appointmentsUpdated", onCustom);
-    const id = window.setInterval(refresh, SUPPORT_CHAT_POLL_MS);
     return () => {
+      unsub?.();
       window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
-      window.removeEventListener("storage", onStorage);
       window.removeEventListener("appointmentsUpdated", onCustom);
-      window.clearInterval(id);
     };
   }, [refresh]);
 
@@ -75,9 +75,9 @@ export default function PatientSupportChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!draft.trim()) return;
-    sendPatientMessage(tab, draft);
+    await sendPatientMessage(tab, draft);
     setDraft("");
     refresh();
     if (uid) markPatientConversationRead(uid, tab);

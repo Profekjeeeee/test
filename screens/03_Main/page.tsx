@@ -46,16 +46,15 @@ export default function MainPage() {
 
   useEffect(() => {
     setCurrentDateStr(formatCurrentDate());
-    initPlanSources();
-    setNextApt(getNextAppointment());
-    setUpcomingCount(getUpcomingCount());
+    void initPlanSources().then(() => {
+      setNextApt(getNextAppointment());
+      setUpcomingCount(getUpcomingCount());
+      setPlanStats(getMergedPlanStats());
+    });
 
     initBills();
     setPendingAmount(getTotalPending(getBills()));
 
-    setPlanStats(getMergedPlanStats());
-
-    // Load name from profile
     setFirstName(getProfile().firstName);
 
     const updateAppointments = () => {

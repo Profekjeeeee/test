@@ -83,13 +83,14 @@ export default function AppointmentsPage() {
   const { toastMessage, toastVisible, showToast } = useToast();
 
   useEffect(() => {
-    initAppointments();
-    setAppointments(getAppointments());
-    setBills(getBills());
+    void initAppointments().then(() => {
+      setAppointments(getAppointments());
+      setBills(getBills());
+    });
   }, []);
 
-  const handleCancel = (id: string) => {
-    cancelAppointment(id);
+  const handleCancel = async (id: string) => {
+    await cancelAppointment(id);
     const billRemoved = removeBillByAppointmentId(id);
     setAppointments(getAppointments());
     setBills(getBills());

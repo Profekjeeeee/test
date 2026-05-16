@@ -8,37 +8,50 @@ import { addDentalLog } from "@/lib/logger";
 import { getAppointments, getNextAppointment } from "@/lib/appointments";
 import type { ChatMessage } from "@/types";
 import type { Appointment } from "@/lib/appointments";
+import { supabase } from "@/lib/supabaseClient";
 
 export type { ChatMessage };
 
-/** Каналы на экране пациента: клиника | ТП | лечащий врач */
 export type PatientChatTab = "clinic" | "support" | "doctor";
 
 /** @deprecated alias — используйте PatientChatTab */
 export type SupportChatChannel = "clinic" | "support";
 
+/** Совместимость: раньше ключ localStorage; события чата теперь через Supabase + CHAT_UPDATED_EVENT */
 export const DENTAL_MESSAGES_KEY = "dental_messages";
 export const DENTAL_CHAT_UPDATED_EVENT = "dental_chat_updated";
-/** Совместимость со старыми импортами */
 export const CHAT_UPDATED_EVENT = DENTAL_CHAT_UPDATED_EVENT;
 
 const PATIENT_READS_KEY = "dental_chat_patient_read_v2";
 const STAFF_READS_KEY = "dental_chat_staff_read_v2";
 const SUPPORT_AUDIT_KEY = "dental_chat_support_audit";
-const MIGRATION_FLAG = "dental_messages_migrated_v1";
 
 const DEFAULT_ATTENDING_DOCTOR_PHONE = "79991112233";
 
-// ─── legacy (pre dental_messages) ─────────────────────────────────────────────
-
-interface LegacySupportMessage {
+interface DbMessageRow {
   id: string;
-  patientId: string;
-  channel: "clinic" | "support";
-  sender: "patient" | "staff";
+  sender_id: string;
+  recipient_id: string;
   body: string;
-  createdAt: string;
-  staffLabel?: string;
+  chat_type: string;
+  sender_role: string;
+  sender_name: string;
+  created_at: string;
+}
+
+let messagesCache: ChatMessage[] = [];
+
+function dbRowToChatMessage(row: DbMessageRow): ChatMessage {
+  return {
+    id: row.id,
+    senderId: row.sender_id,
+    senderRole: row.sender_role as ChatMessage["senderRole"],
+    senderName: row.sender_name,
+    recipientId: row.recipient_id,
+    text: row.body,
+    timestamp: new Date(row.created_at).getTime(),
+    chatType: row.chat_type as ChatMessage["chatType"],
+  };
 }
 
 function emitUpdated(): void {
@@ -46,94 +59,56 @@ function emitUpdated(): void {
   window.dispatchEvent(new Event(DENTAL_CHAT_UPDATED_EVENT));
 }
 
-function parseAll(raw: string | null): ChatMessage[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw) as ChatMessage[];
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
+/** Загрузить все сообщения из Supabase в память. */
+export async function hydrateDentalMessages(): Promise<void> {
+  const { data, error } = await supabase
+    .from("dental_messages")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("[supportChat]", error);
+    return;
   }
+  messagesCache = ((data ?? []) as DbMessageRow[]).map(dbRowToChatMessage);
 }
 
-function getAllRaw(): ChatMessage[] {
-  if (typeof window === "undefined") return [];
-  return parseAll(localStorage.getItem(DENTAL_MESSAGES_KEY));
-}
+/**
+ * Подписка на новые/изменённые строки в `dental_messages` (Supabase Realtime).
+ * После подключения вызывайте `hydrateDentalMessages()`.
+ */
+export function subscribeDentalMessagesRealtime(onReloaded: () => void): () => void {
+  const channel = supabase
+    .channel("dental_messages_postgres")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "dental_messages" },
+      () => {
+        void hydrateDentalMessages().then(() => {
+          emitUpdated();
+          onReloaded();
+        });
+      }
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "dental_messages" },
+      () => {
+        void hydrateDentalMessages().then(() => {
+          emitUpdated();
+          onReloaded();
+        });
+      }
+    )
+    .subscribe();
 
-function saveAll(messages: ChatMessage[]): void {
-  localStorage.setItem(DENTAL_MESSAGES_KEY, JSON.stringify(messages));
-}
-
-function legacyToNew(m: LegacySupportMessage): ChatMessage {
-  const ts = new Date(m.createdAt).getTime();
-  const isPatient = m.sender === "patient";
-  const recipientId = isPatient
-    ? m.channel === "clinic"
-      ? "clinic"
-      : "admin"
-    : m.patientId;
-  return {
-    id: m.id,
-    senderId: isPatient ? m.patientId : "emp_legacy_staff",
-    senderRole: isPatient ? "client" : "admin",
-    senderName: isPatient ? "Пациент" : (m.staffLabel ?? "Сотрудник"),
-    recipientId,
-    text: m.body,
-    timestamp: Number.isFinite(ts) ? ts : Date.now(),
-    chatType: m.channel === "clinic" ? "clinic" : "support",
+  return () => {
+    void supabase.removeChannel(channel);
   };
 }
 
-function migrateLegacyIfNeeded(): void {
-  if (typeof window === "undefined") return;
-  if (localStorage.getItem(MIGRATION_FLAG) === "1") return;
-
-  const existing = getAllRaw();
-  const byId = new Set(existing.map((m) => m.id));
-  const merged = [...existing];
-
-  try {
-    const clients = getDentalClients();
-    for (const c of clients) {
-      for (const ch of ["clinic", "support"] as const) {
-        const key = `dental_chat_${c.id}_${ch}`;
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const arr = JSON.parse(raw) as LegacySupportMessage[];
-        if (!Array.isArray(arr)) continue;
-        for (const m of arr) {
-          const next = legacyToNew(m);
-          if (!byId.has(next.id)) {
-            byId.add(next.id);
-            merged.push(next);
-          }
-        }
-      }
-    }
-    merged.sort((a, b) => a.timestamp - b.timestamp);
-    saveAll(merged);
-  } catch {
-    /* ignore */
-  }
-
-  localStorage.setItem(MIGRATION_FLAG, "1");
-}
-
-function ensureInitialized(): ChatMessage[] {
-  if (typeof window === "undefined") return [];
-  if (localStorage.getItem(DENTAL_MESSAGES_KEY) === null) {
-    localStorage.setItem(DENTAL_MESSAGES_KEY, JSON.stringify([]));
-  }
-  migrateLegacyIfNeeded();
-  return getAllRaw();
-}
-
 export function getAllMessages(): ChatMessage[] {
-  return ensureInitialized();
+  return messagesCache;
 }
-
-// ─── пациент: ветки ─────────────────────────────────────────────────────────
 
 export function patientReadKey(tab: PatientChatTab, doctorPhone?: string): string {
   if (tab === "doctor" && doctorPhone) return `${tab}|${doctorPhone}`;
@@ -147,7 +122,6 @@ function normalizeDoctorPhone(phone: string): string {
   return d;
 }
 
-/** Подбираем врача по записям; иначе дежурный терапевт Михайлова (79991112233). */
 export function resolveAttendingDoctor(): { doctorPhone: string; doctorName: string } {
   const employees = getDentalEmployees().filter((e) => e.role === "doctor");
   const fallback =
@@ -172,8 +146,7 @@ export function resolveAttendingDoctor(): { doctorPhone: string; doctorName: str
   }
 
   const all = getAppointments().filter((a) => a.status !== "cancelled");
-  const score = (a: Appointment): number =>
-    new Date(a.year, a.monthNum - 1, a.day).getTime();
+  const score = (a: Appointment): number => new Date(a.year, a.monthNum - 1, a.day).getTime();
 
   const sorted = [...all].sort((a, b) => score(b) - score(a));
   for (const a of sorted) {
@@ -187,7 +160,6 @@ export function resolveAttendingDoctor(): { doctorPhone: string; doctorName: str
   return { doctorPhone: DEFAULT_ATTENDING_DOCTOR_PHONE, doctorName: "Врач" };
 }
 
-/** Сообщения ветки для текущего пациента */
 export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
   const uid = getCurrentUserId();
   if (!uid) return [];
@@ -210,7 +182,6 @@ export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
           (m.senderRole === "admin" && m.recipientId === uid))
       );
     }
-    /** doctor tab */
     return (
       m.chatType === "doctor" &&
       ((m.senderId === uid && normalizeDoctorPhone(m.recipientId) === dPhone) ||
@@ -253,9 +224,7 @@ export function getSupportAuditLog(): SupportAuditEntry[] {
   }
 }
 
-// ─── reads / unread ───────────────────────────────────────────────────────────
-
-function getPatientReadMap(uid: string): Record<string, number> {
+function getPatientReadMap(): Record<string, number> {
   try {
     const raw = localStorage.getItem(PATIENT_READS_KEY);
     if (!raw) return {};
@@ -265,7 +234,7 @@ function getPatientReadMap(uid: string): Record<string, number> {
   }
 }
 
-function setPatientReadMap(uid: string, map: Record<string, number>): void {
+function setPatientReadMap(map: Record<string, number>): void {
   localStorage.setItem(PATIENT_READS_KEY, JSON.stringify(map));
 }
 
@@ -301,7 +270,6 @@ function lastUnreadFromPeer(
   return max;
 }
 
-/** Непрочитанное для пациента по вкладке */
 export function getPatientUnread(uid: string, tab: PatientChatTab): boolean {
   const all = getAllMessages();
   const doc = resolveAttendingDoctor();
@@ -326,7 +294,7 @@ export function getPatientUnread(uid: string, tab: PatientChatTab): boolean {
         (normalizeDoctorPhone(m.senderId) === dPhone && m.recipientId === uid))
     );
   });
-  const readMap = getPatientReadMap(uid);
+  const readMap = getPatientReadMap();
   const key = patientReadKey(tab, tab === "doctor" ? dPhone : undefined);
   const lastRead = readMap[key] ?? 0;
   return lastUnreadFromPeer(msgs, uid, true) > lastRead;
@@ -336,10 +304,10 @@ export function markPatientConversationRead(uid: string, tab: PatientChatTab): v
   if (typeof window === "undefined") return;
   const doc = resolveAttendingDoctor();
   const dPhone = normalizeDoctorPhone(doc.doctorPhone);
-  const map = getPatientReadMap(uid);
+  const map = getPatientReadMap();
   const key = patientReadKey(tab, tab === "doctor" ? dPhone : undefined);
   map[key] = Date.now();
-  setPatientReadMap(uid, map);
+  setPatientReadMap(map);
   emitUpdated();
 }
 
@@ -352,9 +320,10 @@ export function getStaffUnread(
   scope: "clinic" | "support" | "doctor_merge",
   doctorPhone?: string
 ): boolean {
-  const messages = scope === "doctor_merge"
-    ? getDoctorPatientThreadMessages(doctorPhone ?? "", patientId)
-    : getStaffBranchMessages(scope, patientId);
+  const messages =
+    scope === "doctor_merge"
+      ? getDoctorPatientThreadMessages(doctorPhone ?? "", patientId)
+      : getStaffBranchMessages(scope, patientId);
   const readMap = getStaffReadMap();
   const ck =
     scope === "doctor_merge"
@@ -380,25 +349,37 @@ export function markStaffConversationRead(
   emitUpdated();
 }
 
-// ─── append ───────────────────────────────────────────────────────────────────
-
-export function appendChatMessage(msg: Omit<ChatMessage, "id" | "timestamp">): ChatMessage {
-  ensureInitialized();
+export async function appendChatMessage(
+  msg: Omit<ChatMessage, "id" | "timestamp">
+): Promise<ChatMessage | null> {
   const full: ChatMessage = {
     ...msg,
     id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     timestamp: Date.now(),
   };
 
-  const all = getAllRaw();
-  all.push(full);
-  saveAll(all);
+  const { error } = await supabase.from("dental_messages").insert({
+    id: full.id,
+    sender_id: full.senderId,
+    recipient_id: full.recipientId,
+    body: full.text,
+    chat_type: full.chatType,
+    sender_role: full.senderRole,
+    sender_name: full.senderName,
+    created_at: new Date(full.timestamp).toISOString(),
+  });
+
+  if (error) {
+    console.error("[supportChat insert]", error);
+    return null;
+  }
+
+  await hydrateDentalMessages();
 
   if (full.chatType === "support") {
     appendSupportAudit({
       at: new Date(full.timestamp).toISOString(),
-      patientId:
-        full.senderRole === "client" ? full.senderId : full.recipientId,
+      patientId: full.senderRole === "client" ? full.senderId : full.recipientId,
       channel: "support",
       sender: full.senderRole === "client" ? "patient" : "staff",
       preview: full.text.slice(0, 280),
@@ -432,8 +413,10 @@ function clientSenderName(uid: string): string {
   return `${c.lastName} ${c.firstName}`.trim() || c.phone;
 }
 
-/** Сообщение от пациента (вкладка клиника / ТП / врач) */
-export function sendPatientMessage(tab: PatientChatTab, body: string): ChatMessage | null {
+export async function sendPatientMessage(
+  tab: PatientChatTab,
+  body: string
+): Promise<ChatMessage | null> {
   const uid = getCurrentUserId();
   if (!uid || typeof window === "undefined") return null;
   const text = body.trim();
@@ -473,12 +456,11 @@ export function sendPatientMessage(tab: PatientChatTab, body: string): ChatMessa
   });
 }
 
-/** Сообщение от админа клиенту (техподдержка или клиника) */
-export function sendAdminToPatient(params: {
+export async function sendAdminToPatient(params: {
   patientId: string;
   chatType: "support" | "clinic";
   body: string;
-}): ChatMessage | null {
+}): Promise<ChatMessage | null> {
   const session = getDentalSession();
   if (!session || session.role !== "admin") return null;
   const text = params.body.trim();
@@ -493,8 +475,10 @@ export function sendAdminToPatient(params: {
   });
 }
 
-/** Ответ врача или админа в ветке клиники */
-export function sendStaffToPatientClinic(patientId: string, body: string): ChatMessage | null {
+export async function sendStaffToPatientClinic(
+  patientId: string,
+  body: string
+): Promise<ChatMessage | null> {
   const session = getDentalSession();
   if (!session || (session.role !== "doctor" && session.role !== "admin")) return null;
   const text = body.trim();
@@ -510,12 +494,11 @@ export function sendStaffToPatientClinic(patientId: string, body: string): ChatM
   });
 }
 
-/** Личное сообщение врача пациенту */
-export function sendDoctorToPatientPersonal(
+export async function sendDoctorToPatientPersonal(
   doctorPhone: string,
   patientId: string,
   body: string
-): ChatMessage | null {
+): Promise<ChatMessage | null> {
   const session = getDentalSession();
   if (!session || session.role !== "doctor") return null;
   const text = body.trim();
@@ -531,12 +514,12 @@ export function sendDoctorToPatientPersonal(
 }
 
 /** @deprecated — использовать sendAdminToPatient / sendStaffToPatientClinic */
-export function sendStaffMessage(
+export async function sendStaffMessage(
   patientId: string,
   channel: SupportChatChannel,
   body: string,
   staffLabel: string
-): ChatMessage | null {
+): Promise<ChatMessage | null> {
   const session = getDentalSession();
   if (!session) return null;
   const chatType = channel === "clinic" ? "clinic" : "support";
@@ -560,9 +543,6 @@ export function sendStaffMessage(
   });
 }
 
-// ─── списки для сотрудников ──────────────────────────────────────────────────
-
-/** Сообщения одной ветки для модерации админом */
 export function getStaffBranchMessages(
   branch: "clinic" | "support",
   patientId: string
@@ -624,9 +604,7 @@ export interface StaffDialogPreview {
   unread: boolean;
 }
 
-export function getStaffDialogPreviews(
-  branch: "clinic" | "support"
-): StaffDialogPreview[] {
+export function getStaffDialogPreviews(branch: "clinic" | "support"): StaffDialogPreview[] {
   const clients = getDentalClients();
   const out: StaffDialogPreview[] = [];
 
@@ -652,7 +630,6 @@ export function getStaffDialogPreviews(
   return out;
 }
 
-/** Список диалогов для врача: клиника + личный чат по текущему номеру */
 export function getDoctorDialogPreviews(sessionPhone: string): StaffDialogPreview[] {
   const d = normalizeDoctorPhone(sessionPhone);
   const clients = getDentalClients();
@@ -680,7 +657,6 @@ export function getDoctorDialogPreviews(sessionPhone: string): StaffDialogPrevie
   return out;
 }
 
-/** Как отправить ответ из кабинета врача: приоритет по последнему сообщению пациента */
 export function inferDoctorReplyPreference(
   thread: ChatMessage[],
   doctorPhone: string
@@ -727,4 +703,5 @@ export function getSupportMessages(
   return tab === "clinic" ? clinicBranch() : supportBranch();
 }
 
-export const SUPPORT_CHAT_POLL_MS = 2500;
+/** Резервный интервал опроса (мало нужен при Realtime); оставлен для аудита localStorage. */
+export const SUPPORT_CHAT_POLL_MS = 60_000;
