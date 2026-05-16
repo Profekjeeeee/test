@@ -3,6 +3,7 @@ import {
   findClientByPhone,
   getCurrentUserId,
   getDentalClients,
+  getDentalEmployees,
   getDentalSession,
 } from "@/lib/auth";
 
@@ -69,7 +70,7 @@ interface AppointmentRow {
   appointment_date: string;
   appointment_time: string;
   status: string;
-  doctor_display_name: string;
+  doctor_display_name: string | null;
   specialty: string | null;
   service: string | null;
   price: number | string | null;
@@ -88,6 +89,13 @@ function rowToAppointment(row: AppointmentRow): Appointment {
   const monthNum = parts[1] ?? 1;
   const day = parts[2] ?? 1;
   const month = RU_MONTHS_SHORT[monthNum - 1] ?? "";
+  let doctor = row.doctor_display_name?.trim() ?? "";
+  if (!doctor && row.doctor_id) {
+    const emp = getDentalEmployees().find((e) => e.id === row.doctor_id);
+    if (emp) doctor = emp.fullName;
+  }
+  if (!doctor) doctor = "Врач";
+  const service = row.service?.trim() ? row.service : "Запись на приём";
   return {
     id: row.id,
     day,
@@ -95,9 +103,9 @@ function rowToAppointment(row: AppointmentRow): Appointment {
     month,
     year,
     time: row.appointment_time,
-    doctor: row.doctor_display_name,
+    doctor,
     specialty: row.specialty ?? "",
-    service: row.service ?? "",
+    service,
     price: row.price != null ? Number(row.price) : undefined,
     cabinet: row.cabinet ?? "",
     status: row.status as AppointmentStatus,
@@ -142,8 +150,14 @@ export function getUpcomingCount(): number {
   return getAppointments().filter((a) => isActiveUpcomingStatus(a.status)).length;
 }
 
-export type NewAppointmentInput = Omit<Appointment, "id" | "status"> & {
+/** Данные для вставки в `appointments`: id не передаём — генерируется в БД. */
+export type NewAppointmentInput = {
+  day: number;
+  monthNum: number;
+  year: number;
+  time: string;
   doctorId?: string | null;
+  patientId?: string | null;
   status?: AppointmentStatus;
 };
 
@@ -178,21 +192,14 @@ export async function addAppointment(apt: NewAppointmentInput): Promise<Appointm
   }
 
   const docId = apt.doctorId ?? null;
-  const doctorPhone = docId ? DOCTOR_BOOKING_ID_TO_PHONE[docId] ?? null : null;
   const status: AppointmentStatus = apt.status ?? "pending";
 
   const insertPayload = {
     client_id: patientId,
     doctor_id: docId,
-    doctor_phone: doctorPhone,
     appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
     appointment_time: apt.time,
     status,
-    doctor_display_name: apt.doctor,
-    specialty: apt.specialty || null,
-    service: apt.service || null,
-    price: apt.price ?? null,
-    cabinet: apt.cabinet || null,
   };
   const { data, error } = await supabase.from("appointments").insert(insertPayload).select("*").single();
   if (error) throw error;

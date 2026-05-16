@@ -11,14 +11,11 @@ import {
   addAppointment,
   rescheduleAppointment,
   refreshAppointmentsCache,
+  resolveClientIdForAppointment,
   type Appointment,
 } from "@/lib/appointments";
 import { addBillForAppointment } from "@/lib/bills";
 import { ROUTES } from "@/lib/routes";
-import {
-  DENTAL_USER_SESSION_STORAGE_KEY,
-  getDentalSession,
-} from "@/lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -460,7 +457,6 @@ function BookingContent() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showModal, setShowModal] = useState(false);
 
   const currentIdx = STEPS.findIndex((s) => s.id === step);
   const timeSlots = useMemo(() => generateTimeSlots(), []);
@@ -510,18 +506,8 @@ function BookingContent() {
     if (!selectedDay || !selectedTime) return;
     setLoading(true);
 
-    let session: { id?: string } = {};
-    try {
-      session = JSON.parse(
-        localStorage.getItem(DENTAL_USER_SESSION_STORAGE_KEY) || "{}"
-      ) as { id?: string };
-    } catch {
-      session = {};
-    }
-    const currentUser = getDentalSession();
-    const finalClientId = currentUser?.id || session.id;
-
-    if (!finalClientId) {
+    const clientId = await resolveClientIdForAppointment();
+    if (!clientId) {
       setLoading(false);
       alert(
         "Не удалось определить аккаунт. Пожалуйста, перезайдите в приложение."
@@ -534,46 +520,46 @@ function BookingContent() {
     const monthName = MONTHS_SHORT[now.getMonth()];
     const year = now.getFullYear();
 
+    const daySnap = selectedDay;
+    const timeSnap = selectedTime;
+    const kind = isRescheduling ? "reschedule" : "new";
+
     try {
       if (isRescheduling && appointmentId) {
         await rescheduleAppointment(appointmentId, {
-          day: selectedDay,
+          day: daySnap,
           monthNum,
           month: monthName,
           year,
-          time: selectedTime,
+          time: timeSnap,
         });
       } else {
         const serviceTitle = selectedService
           ? selectedService.title
           : `${selectedCategory ?? "Консультация"}`;
-        const doctorName = selectedDoctor?.name ?? "Врач не выбран";
-        const specialty = selectedDoctor?.speciality ?? "";
         const price = selectedService?.price ?? 0;
 
         const newApt = await addAppointment({
-          day: selectedDay,
+          day: daySnap,
           monthNum,
-          month: monthName,
           year,
-          time: selectedTime,
-          doctor: doctorName,
-          specialty,
-          service: `${selectedCategory}. ${serviceTitle}`,
-          price,
-          cabinet: "№ 5",
+          time: timeSnap,
           doctorId: selectedDoctorId,
-          patientId: finalClientId,
+          patientId: clientId,
         });
 
         addBillForAppointment(newApt.id, serviceTitle, price);
       }
 
-      setShowModal(true);
-      setTimeout(() => {
-        setShowModal(false);
-        router.push(ROUTES.clientHome);
-      }, 2500);
+      setSelectedDay(null);
+      setSelectedTime(null);
+      const q = new URLSearchParams({
+        kind,
+        day: String(daySnap),
+        month: String(monthNum),
+        time: timeSnap,
+      });
+      router.replace(`${ROUTES.bookingSuccess}?${q.toString()}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       alert("Ошибка записи: " + message);
@@ -975,57 +961,6 @@ function BookingContent() {
       </main>
 
       <BottomBar />
-
-      {/* Success modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center px-5 pb-10">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
-            onClick={() => {
-              setShowModal(false);
-              router.push(ROUTES.clientHome);
-            }}
-          />
-          <div className="relative w-full max-w-sm bg-white dark:bg-[#1E293B] rounded-[20px] p-6 shadow-xl animate-[slideUp_0.3s_ease-out]">
-            <div className="flex flex-col items-center text-center gap-3">
-              <div className="w-14 h-14 rounded-full bg-primary-light flex items-center justify-center">
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-primary">
-                  <path
-                    d="M6 14l5.5 5.5L22 8"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <div>
-                <p className="text-[17px] font-bold text-[#0F172A] dark:text-white">
-                  {isRescheduling ? "Запись перенесена!" : "Запись создана!"}
-                </p>
-                <p className="text-[14px] text-gray-500 mt-1">
-                  {selectedDay}{" "}
-                  {MONTHS_SHORT[new Date().getMonth()]} в {selectedTime}
-                </p>
-                {!isRescheduling && selectedService && (
-                  <p className="text-[13px] text-primary font-semibold mt-1">
-                    Счёт на {formatPrice(selectedService.price)} выставлен
-                  </p>
-                )}
-              </div>
-              <button
-                className="mt-1 w-full h-11 rounded-[10px] bg-primary text-white text-[14px] font-semibold active:opacity-80 transition-opacity"
-                onClick={() => {
-                  setShowModal(false);
-                  router.push(ROUTES.clientHome);
-                }}
-              >
-                На главную
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

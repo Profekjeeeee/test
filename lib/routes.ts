@@ -2,6 +2,7 @@
 export const ROUTES = {
   auth: "/auth",
   registration: "/registration",
+  bookingSuccess: "/booking/success",
   clientHome: "/screens/03_Main",
   adminDashboard: "/screens/admin/dashboard",
   adminMessages: "/screens/admin/messages",
