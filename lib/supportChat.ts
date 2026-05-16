@@ -41,7 +41,7 @@ interface DbMessageRow {
   id: string;
   sender_id: string;
   recipient_id: string;
-  body: string;
+  text: string;
   chat_type: string;
   sender_role: string;
   sender_name: string;
@@ -57,7 +57,7 @@ function dbRowToChatMessage(row: DbMessageRow): ChatMessage {
     senderRole: row.sender_role as ChatMessage["senderRole"],
     senderName: row.sender_name,
     recipientId: row.recipient_id,
-    text: row.body,
+    text: row.text,
     timestamp: new Date(row.created_at).getTime(),
     chatType: row.chat_type as ChatMessage["chatType"],
   };
@@ -68,10 +68,10 @@ function emitUpdated(): void {
   window.dispatchEvent(new Event(DENTAL_CHAT_UPDATED_EVENT));
 }
 
-/** Загрузить все сообщения из Supabase в память. */
+/** Загрузить все сообщения из Supabase (`chat_messages`) в память. */
 export async function hydrateDentalMessages(): Promise<void> {
   const { data, error } = await supabase
-    .from("dental_messages")
+    .from("chat_messages")
     .select("*")
     .order("created_at", { ascending: true });
   if (error) {
@@ -82,21 +82,21 @@ export async function hydrateDentalMessages(): Promise<void> {
 }
 
 /**
- * Подписка на новые/изменённые строки в `dental_messages` (Supabase Realtime).
+ * Подписка на новые/изменённые строки в `chat_messages` (Supabase Realtime).
  * После подключения вызывайте `hydrateDentalMessages()`.
  */
 export function subscribeDentalMessagesRealtime(onReloaded: () => void): () => void {
   const channel = supabase
-    .channel("chat_changes")
+    .channel("chat_messages_changes")
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "dental_messages" },
+      { event: "INSERT", schema: "public", table: "chat_messages" },
       (payload: { new?: unknown }) => {
         const row = payload.new as DbMessageRow | undefined;
         if (
           row &&
           typeof row.id === "string" &&
-          typeof row.body === "string" &&
+          typeof row.text === "string" &&
           typeof row.sender_id === "string"
         ) {
           const msg = dbRowToChatMessage(row);
@@ -114,7 +114,7 @@ export function subscribeDentalMessagesRealtime(onReloaded: () => void): () => v
     )
     .on(
       "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "dental_messages" },
+      { event: "UPDATE", schema: "public", table: "chat_messages" },
       () => {
         void hydrateDentalMessages().then(() => {
           emitUpdated();
@@ -381,13 +381,14 @@ export async function appendChatMessage(
     timestamp: Date.now(),
   };
 
-  const { error } = await supabase.from("dental_messages").insert({
+  // sender_id / recipient_id / text / sender_role — основные поля; chat_type и sender_name нужны для веток и отображения имён в UI.
+  const { error } = await supabase.from("chat_messages").insert({
     id: full.id,
     sender_id: full.senderId,
     recipient_id: full.recipientId,
-    body: full.text,
-    chat_type: full.chatType,
+    text: full.text,
     sender_role: full.senderRole,
+    chat_type: full.chatType,
     sender_name: full.senderName,
   });
 

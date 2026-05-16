@@ -88,7 +88,7 @@ export interface TreatmentPlan {
   updatedAt: string;
 }
 
-/** Сообщение чата клиники: данные из Supabase `dental_messages`. */
+/** Сообщение чата клиники: данные из Supabase `chat_messages`. */
 export interface ChatMessage {
   id: string;
   senderId: string;
