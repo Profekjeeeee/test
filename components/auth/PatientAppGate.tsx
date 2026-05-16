@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CURRENT_USER_STORAGE_KEY,
+  DENTAL_SESSION_CHANGED_EVENT,
   DENTAL_SESSION_STORAGE_KEY,
+  DENTAL_USER_SESSION_STORAGE_KEY,
   refreshDentalCaches,
   resolveHydratedSession,
   type DentalSession,
@@ -27,6 +29,12 @@ function matchesAnyPrefix(pathname: string, prefixes: readonly string[]): boolea
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+const SESSION_SYNC_STORAGE_KEYS = new Set([
+  DENTAL_SESSION_STORAGE_KEY,
+  CURRENT_USER_STORAGE_KEY,
+  DENTAL_USER_SESSION_STORAGE_KEY,
+]);
+
 export default function PatientAppGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -47,7 +55,14 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
 
     const onStorage = (e: StorageEvent) => {
       const k = e.key;
-      if (k !== null && k !== DENTAL_SESSION_STORAGE_KEY && k !== CURRENT_USER_STORAGE_KEY) return;
+      if (k !== null && !SESSION_SYNC_STORAGE_KEYS.has(k)) return;
+      void (async () => {
+        const session = await resolveHydratedSession();
+        if (!cancelled) setHydratedSession(session);
+      })();
+    };
+
+    const onDentalSessionChanged = (): void => {
       void (async () => {
         const session = await resolveHydratedSession();
         if (!cancelled) setHydratedSession(session);
@@ -55,11 +70,25 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
     };
 
     window.addEventListener("storage", onStorage);
+    window.addEventListener(DENTAL_SESSION_CHANGED_EVENT, onDentalSessionChanged);
     return () => {
       cancelled = true;
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener(DENTAL_SESSION_CHANGED_EVENT, onDentalSessionChanged);
     };
   }, []);
+
+  /** После логина в той же вкладке + смена URL: перечитать LS (без полного refresh кэшей). */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const session = await resolveHydratedSession();
+      if (!cancelled) setHydratedSession(session);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   /** Лог один раз после первого чтения сессии с клиента */
   useEffect(() => {

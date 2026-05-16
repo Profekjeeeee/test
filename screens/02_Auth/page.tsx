@@ -59,6 +59,14 @@ function clearAuthPhone(): void {
   }
 }
 
+/** После навигации: `storage` и смена step не должны мешать редиректу Next.js. */
+function scheduleClearAuthPhone(): void {
+  if (typeof window === "undefined") return;
+  window.setTimeout(() => {
+    clearAuthPhone();
+  }, 0);
+}
+
 /** Строки из dental_employees — поле имени как в lib/auth.ts (`name`). */
 function sessionFromEmployeeRow(row: Record<string, unknown>): {
   id: string;
@@ -222,6 +230,7 @@ export default function AuthPage() {
     if (employee) {
       console.log("[AUTH MASTER] Сотрудник найден:", employee);
       const s = sessionFromEmployeeRow(employee);
+      /** Шаг A: `dental_session` + `dental_user_session` { id, name, role, phone } — см. setDentalSession в lib/auth. */
       setDentalSession({
         id: s.id,
         role: s.role,
@@ -229,6 +238,7 @@ export default function AuthPage() {
         phone: s.phone,
         specialization: s.specialization,
       });
+      /** Шаг Б: AuthContext в проекте нет — PatientAppGate подписан на `dental_session_changed`. */
       addDentalLog(
         "INFO",
         s.role,
@@ -236,8 +246,8 @@ export default function AuthPage() {
         "auth_success_master_direct",
         `id=${s.id} | ${s.fullName}`
       );
-      clearAuthPhone();
-      router.replace(s.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet);
+      router.push(s.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet);
+      scheduleClearAuthPhone();
       return;
     }
 
@@ -301,12 +311,11 @@ export default function AuthPage() {
         setError("Некорректные данные клиента.");
         return;
       }
-      /** Сначала полная сессия в LS (dental_session + dental_user_session + currentUserId), затем кэш БД, потом очистка временного телефона и навигация. */
       applyLoggedInClientFromSupabaseRow(client);
       await refreshDentalCaches();
       addDentalLog("INFO", "client", cleanDbPhone, "auth_success_master_direct", `id=${cid}`);
-      clearAuthPhone();
       router.push(ROUTES.clientHome);
+      scheduleClearAuthPhone();
       return;
     }
 

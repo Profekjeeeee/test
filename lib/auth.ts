@@ -38,9 +38,11 @@ export interface DentalSession {
 }
 
 export const DENTAL_SESSION_STORAGE_KEY = "dental_session";
-/** Явная сессия пациента для UI/бронирования (дублирует ключевые поля клиента). */
+/** JSON в LS: { id, name, role, phone } — бронирование и защитник роутов. */
 export const DENTAL_USER_SESSION_STORAGE_KEY = "dental_user_session";
 export const CURRENT_USER_STORAGE_KEY = "currentUserId";
+/** После записи сессии в этой вкладке (StorageEvent здесь не приходит). */
+export const DENTAL_SESSION_CHANGED_EVENT = "dental_session_changed";
 
 /** Кэш списков для синхронных читателей (чат, календарь). Обновляется через refreshDentalCaches(). */
 let clientsCache: DentalClientRecord[] = [];
@@ -282,7 +284,21 @@ export async function updateClientFormulaTeeth(clientId: string, teeth: ToothSta
 }
 
 export function setDentalSession(session: DentalSession): void {
+  if (typeof window === "undefined") return;
   localStorage.setItem(DENTAL_SESSION_STORAGE_KEY, JSON.stringify(session));
+  try {
+    localStorage.setItem(
+      DENTAL_USER_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        id: session.id,
+        name: session.fullName,
+        role: session.role,
+        phone: session.phone,
+      })
+    );
+  } catch (err) {
+    console.warn("[auth] dental_user_session:", err);
+  }
   localStorage.setItem("isLoggedIn", "true");
   if (session.role === "admin") {
     localStorage.setItem("isAdmin", "true");
@@ -290,30 +306,12 @@ export function setDentalSession(session: DentalSession): void {
     localStorage.removeItem("isAdmin");
   }
   localStorage.setItem(CURRENT_USER_STORAGE_KEY, session.id);
-}
-
-function persistDentalUserSessionRecord(client: DentalClientRecord): void {
-  try {
-    localStorage.setItem(
-      DENTAL_USER_SESSION_STORAGE_KEY,
-      JSON.stringify({
-        id: client.id,
-        phone: client.phone,
-        firstName: client.firstName,
-        lastName: client.lastName,
-        email: client.email,
-        role: "client",
-      })
-    );
-  } catch (err) {
-    console.warn("[auth] persistDentalUserSessionRecord:", err);
-  }
+  window.dispatchEvent(new CustomEvent(DENTAL_SESSION_CHANGED_EVENT));
 }
 
 /** Синхронно залогинить пациента по строке из `dental_clients` (без ожидания кэша). */
 export function applyLoggedInClientFromSupabaseRow(row: Record<string, unknown>): void {
   const mapped = mapClientRow(row as Parameters<typeof mapClientRow>[0]);
-  persistDentalUserSessionRecord(mapped);
   setDentalSession({
     id: mapped.id,
     role: "client",
@@ -341,7 +339,6 @@ export async function resolveHydratedSession(): Promise<DentalSession | null> {
   await refreshDentalCaches();
   const client = getDentalClients().find((c) => c.id === uid);
   if (!client) return null;
-  persistDentalUserSessionRecord(client);
   const rebuilt: DentalSession = {
     id: client.id,
     role: "client",
@@ -361,7 +358,6 @@ export async function setCurrentUser(id: string): Promise<void> {
   await refreshDentalCaches();
   const client = getDentalClients().find((c) => c.id === id);
   if (client) {
-    persistDentalUserSessionRecord(client);
     setDentalSession({
       id: client.id,
       role: "client",
