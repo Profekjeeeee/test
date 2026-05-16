@@ -7,6 +7,7 @@ import { ROUTES } from "@/lib/routes";
 import { getCurrentUserId } from "@/lib/auth";
 import {
   CHAT_UPDATED_EVENT,
+  DENTAL_MESSAGES_KEY,
   SUPPORT_CHAT_POLL_MS,
   getPatientBranchMessages,
   getPatientUnread,
@@ -53,15 +54,19 @@ export default function PatientSupportChatPage() {
 
   useEffect(() => {
     refresh();
-    const onEvt = () => refresh();
-    window.addEventListener(CHAT_UPDATED_EVENT, onEvt);
-    window.addEventListener("storage", onEvt);
-    window.addEventListener("appointmentsUpdated", onEvt);
+    const onCustom = () => refresh();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
+      refresh();
+    };
+    window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("appointmentsUpdated", onCustom);
     const id = window.setInterval(refresh, SUPPORT_CHAT_POLL_MS);
     return () => {
-      window.removeEventListener(CHAT_UPDATED_EVENT, onEvt);
-      window.removeEventListener("storage", onEvt);
-      window.removeEventListener("appointmentsUpdated", onEvt);
+      window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("appointmentsUpdated", onCustom);
       window.clearInterval(id);
     };
   }, [refresh]);

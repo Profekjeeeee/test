@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CHAT_UPDATED_EVENT,
+  DENTAL_MESSAGES_KEY,
   SUPPORT_CHAT_POLL_MS,
   getDoctorDialogPreviews,
   getDoctorPatientThreadMessages,
@@ -20,7 +21,7 @@ import {
   type StaffDialogPreview,
   type SupportAuditEntry,
 } from "@/lib/supportChat";
-import { getDentalSession, logout, type DentalSession } from "@/lib/auth";
+import { logout, resolveHydratedSession, type DentalSession } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 
 function formatMsgTime(ts: number): string {
@@ -54,7 +55,7 @@ export default function StaffMessagesPage({ mode }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setSession(getDentalSession());
+    setSession(resolveHydratedSession());
   }, []);
 
   const channelFilter =
@@ -70,7 +71,7 @@ export default function StaffMessagesPage({ mode }: Props) {
 
   const refreshList = useCallback(() => {
     if (mode === "doctor") {
-      const s = getDentalSession();
+      const s = resolveHydratedSession();
       if (!s?.phone) {
         setPreviews([]);
         return;
@@ -89,11 +90,17 @@ export default function StaffMessagesPage({ mode }: Props) {
   useEffect(() => {
     if (mode === "admin" && adminSection === "audit") {
       refreshAudit();
-      const onEvt = () => refreshAudit();
-      window.addEventListener(CHAT_UPDATED_EVENT, onEvt);
+      const onCustom = () => refreshAudit();
+      const onStorage = (e: StorageEvent) => {
+        if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
+        refreshAudit();
+      };
+      window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
+      window.addEventListener("storage", onStorage);
       const id = window.setInterval(refreshAudit, SUPPORT_CHAT_POLL_MS);
       return () => {
-        window.removeEventListener(CHAT_UPDATED_EVENT, onEvt);
+        window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
+        window.removeEventListener("storage", onStorage);
         window.clearInterval(id);
       };
     }
@@ -101,13 +108,17 @@ export default function StaffMessagesPage({ mode }: Props) {
 
   useEffect(() => {
     refreshList();
-    const onEvt = () => refreshList();
-    window.addEventListener(CHAT_UPDATED_EVENT, onEvt);
-    window.addEventListener("storage", onEvt);
+    const onCustom = () => refreshList();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
+      refreshList();
+    };
+    window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
+    window.addEventListener("storage", onStorage);
     const id = window.setInterval(refreshList, SUPPORT_CHAT_POLL_MS);
     return () => {
-      window.removeEventListener(CHAT_UPDATED_EVENT, onEvt);
-      window.removeEventListener("storage", onEvt);
+      window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
+      window.removeEventListener("storage", onStorage);
       window.clearInterval(id);
     };
   }, [refreshList]);
@@ -129,13 +140,17 @@ export default function StaffMessagesPage({ mode }: Props) {
       markStaffConversationRead(selected.patientId, selected.scope);
     }
     refreshThread();
-    const onEvt = () => refreshThread();
-    window.addEventListener(CHAT_UPDATED_EVENT, onEvt);
-    window.addEventListener("storage", onEvt);
+    const onCustom = () => refreshThread();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== DENTAL_MESSAGES_KEY && e.key !== null) return;
+      refreshThread();
+    };
+    window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
+    window.addEventListener("storage", onStorage);
     const id = window.setInterval(refreshThread, SUPPORT_CHAT_POLL_MS);
     return () => {
-      window.removeEventListener(CHAT_UPDATED_EVENT, onEvt);
-      window.removeEventListener("storage", onEvt);
+      window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
+      window.removeEventListener("storage", onStorage);
       window.clearInterval(id);
     };
   }, [selected, refreshThread, session]);

@@ -13,6 +13,7 @@ import {
   normalizePhone,
 } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
+import { addDentalLog } from "@/lib/logger";
 
 const TEST_CODE = "1234";
 
@@ -34,6 +35,7 @@ export default function AuthPage() {
     const digits = phone.replace(/\D/g, "");
     if (digits.length < 11) {
       setError("Введите корректный номер телефона");
+      addDentalLog("WARN", "guest", "", "validation_phone", "Номер телефона слишком короткий");
       return;
     }
     setLoading(true);
@@ -46,10 +48,12 @@ export default function AuthPage() {
   const handleCodeSubmit = async () => {
     if (!code.trim()) {
       setError("Введите код из СМС");
+      addDentalLog("WARN", "guest", "", "validation_code_empty", "Пустой код подтверждения");
       return;
     }
     if (code !== TEST_CODE) {
       setError(`Неверный код. Подсказка: ${TEST_CODE}`);
+      addDentalLog("WARN", "guest", "", "validation_code_invalid", "Неверный код из СМС");
       return;
     }
     setLoading(true);
@@ -65,6 +69,13 @@ export default function AuthPage() {
         phone: employee.phone,
         specialization: employee.specialization,
       });
+      addDentalLog(
+        "INFO",
+        employee.role === "admin" ? "admin" : "doctor",
+        employee.id,
+        "login_success",
+        employee.role === "admin" ? "Вход администратора" : "Вход врача"
+      );
       setLoading(false);
       if (employee.role === "admin") {
         router.replace(ROUTES.adminDashboard);
@@ -77,6 +88,7 @@ export default function AuthPage() {
     const client = findClientByPhone(phone);
     if (client) {
       setCurrentUser(client.id);
+      addDentalLog("INFO", "client", client.id, "login_success", "Вход пациента");
       setLoading(false);
       router.replace(ROUTES.clientHome);
       return;

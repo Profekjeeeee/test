@@ -40,8 +40,8 @@ export interface DentalSession {
 const REGISTRY_KEY = "usersRegistry";
 const DENTAL_CLIENTS_KEY = "dental_clients";
 const DENTAL_EMPLOYEES_KEY = "dental_employees";
-const DENTAL_SESSION_KEY = "dental_session";
-const CURRENT_USER_KEY = "currentUserId";
+export const DENTAL_SESSION_STORAGE_KEY = "dental_session";
+export const CURRENT_USER_STORAGE_KEY = "currentUserId";
 
 const SEED_EMPLOYEES: DentalEmployeeRecord[] = [
   { id: "emp_admin", phone: "77777777777", role: "admin", fullName: "Системный Администратор" },
@@ -191,34 +191,54 @@ export function createUser(
 }
 
 export function setDentalSession(session: DentalSession): void {
-  localStorage.setItem(DENTAL_SESSION_KEY, JSON.stringify(session));
+  localStorage.setItem(DENTAL_SESSION_STORAGE_KEY, JSON.stringify(session));
   localStorage.setItem("isLoggedIn", "true");
   if (session.role === "admin") {
     localStorage.setItem("isAdmin", "true");
   } else {
     localStorage.removeItem("isAdmin");
   }
-  localStorage.setItem(CURRENT_USER_KEY, session.id);
+  localStorage.setItem(CURRENT_USER_STORAGE_KEY, session.id);
 }
 
 export function getDentalSession(): DentalSession | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(DENTAL_SESSION_KEY);
+    const raw = localStorage.getItem(DENTAL_SESSION_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as DentalSession) : null;
   } catch {
     return null;
   }
 }
 
+/** Починить сессию пациента, если есть currentUserId, но потерян JSON dental_session. */
+export function resolveHydratedSession(): DentalSession | null {
+  const existing = getDentalSession();
+  if (existing) return existing;
+  if (typeof window === "undefined") return null;
+  const uid = localStorage.getItem(CURRENT_USER_STORAGE_KEY);
+  if (!uid) return null;
+  ensureDentalClientsInitialized();
+  const client = getDentalClients().find((c) => c.id === uid);
+  if (!client) return null;
+  const rebuilt: DentalSession = {
+    id: client.id,
+    role: "client",
+    fullName: `${client.firstName} ${client.lastName}`.trim() || client.phone,
+    phone: client.phone,
+  };
+  localStorage.setItem(DENTAL_SESSION_STORAGE_KEY, JSON.stringify(rebuilt));
+  return rebuilt;
+}
+
 export function getCurrentUserId(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(CURRENT_USER_KEY);
+  return localStorage.getItem(CURRENT_USER_STORAGE_KEY);
 }
 
 export function setCurrentUser(id: string): void {
   ensureDentalClientsInitialized();
-  localStorage.setItem(CURRENT_USER_KEY, id);
+  localStorage.setItem(CURRENT_USER_STORAGE_KEY, id);
   localStorage.setItem("isLoggedIn", "true");
   localStorage.removeItem("isAdmin");
   const client = getDentalClients().find((c) => c.id === id);
@@ -233,10 +253,10 @@ export function setCurrentUser(id: string): void {
 }
 
 export function logout(): void {
-  localStorage.removeItem(CURRENT_USER_KEY);
+  localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
   localStorage.removeItem("isLoggedIn");
   localStorage.removeItem("isAdmin");
-  localStorage.removeItem(DENTAL_SESSION_KEY);
+  localStorage.removeItem(DENTAL_SESSION_STORAGE_KEY);
 }
 
 export const ADMIN_PHONE = "77777777777";

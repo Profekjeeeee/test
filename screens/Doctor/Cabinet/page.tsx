@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   logout,
-  getDentalSession,
+  resolveHydratedSession,
   type DentalSession,
   getDentalClients,
 } from "@/lib/auth";
@@ -42,7 +42,7 @@ export default function DoctorCabinetPage() {
   const [sheetPatientId, setSheetPatientId] = useState<string | null>(null);
 
   useEffect(() => {
-    setSession(getDentalSession());
+    setSession(resolveHydratedSession());
   }, []);
 
   useEffect(() => {
