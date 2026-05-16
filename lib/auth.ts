@@ -38,6 +38,8 @@ export interface DentalSession {
 }
 
 export const DENTAL_SESSION_STORAGE_KEY = "dental_session";
+/** Явная сессия пациента для UI/бронирования (дублирует ключевые поля клиента). */
+export const DENTAL_USER_SESSION_STORAGE_KEY = "dental_user_session";
 export const CURRENT_USER_STORAGE_KEY = "currentUserId";
 
 /** Кэш списков для синхронных читателей (чат, календарь). Обновляется через refreshDentalCaches(). */
@@ -290,6 +292,36 @@ export function setDentalSession(session: DentalSession): void {
   localStorage.setItem(CURRENT_USER_STORAGE_KEY, session.id);
 }
 
+function persistDentalUserSessionRecord(client: DentalClientRecord): void {
+  try {
+    localStorage.setItem(
+      DENTAL_USER_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        id: client.id,
+        phone: client.phone,
+        firstName: client.firstName,
+        lastName: client.lastName,
+        email: client.email,
+        role: "client",
+      })
+    );
+  } catch (err) {
+    console.warn("[auth] persistDentalUserSessionRecord:", err);
+  }
+}
+
+/** Синхронно залогинить пациента по строке из `dental_clients` (без ожидания кэша). */
+export function applyLoggedInClientFromSupabaseRow(row: Record<string, unknown>): void {
+  const mapped = mapClientRow(row as Parameters<typeof mapClientRow>[0]);
+  persistDentalUserSessionRecord(mapped);
+  setDentalSession({
+    id: mapped.id,
+    role: "client",
+    fullName: `${mapped.firstName} ${mapped.lastName}`.trim() || mapped.phone,
+    phone: mapped.phone,
+  });
+}
+
 export function getDentalSession(): DentalSession | null {
   if (typeof window === "undefined") return null;
   try {
@@ -309,6 +341,7 @@ export async function resolveHydratedSession(): Promise<DentalSession | null> {
   await refreshDentalCaches();
   const client = getDentalClients().find((c) => c.id === uid);
   if (!client) return null;
+  persistDentalUserSessionRecord(client);
   const rebuilt: DentalSession = {
     id: client.id,
     role: "client",
@@ -326,17 +359,19 @@ export function getCurrentUserId(): string | null {
 
 export async function setCurrentUser(id: string): Promise<void> {
   await refreshDentalCaches();
-  localStorage.setItem(CURRENT_USER_STORAGE_KEY, id);
-  localStorage.setItem("isLoggedIn", "true");
-  localStorage.removeItem("isAdmin");
   const client = getDentalClients().find((c) => c.id === id);
   if (client) {
+    persistDentalUserSessionRecord(client);
     setDentalSession({
       id: client.id,
       role: "client",
-      fullName: `${client.firstName} ${client.lastName}`.trim(),
+      fullName: `${client.firstName} ${client.lastName}`.trim() || client.phone,
       phone: client.phone,
     });
+  } else {
+    localStorage.setItem(CURRENT_USER_STORAGE_KEY, id);
+    localStorage.setItem("isLoggedIn", "true");
+    localStorage.removeItem("isAdmin");
   }
 }
 
@@ -345,6 +380,7 @@ export function logout(): void {
   localStorage.removeItem("isLoggedIn");
   localStorage.removeItem("isAdmin");
   localStorage.removeItem(DENTAL_SESSION_STORAGE_KEY);
+  localStorage.removeItem(DENTAL_USER_SESSION_STORAGE_KEY);
 }
 
 export const ADMIN_PHONE = "77777777777";

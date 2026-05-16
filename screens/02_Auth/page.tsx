@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
-  setCurrentUser,
+  applyLoggedInClientFromSupabaseRow,
+  refreshDentalCaches,
   setDentalSession,
   normalizePhone,
   phoneDigitsSuffixPattern,
@@ -300,10 +301,12 @@ export default function AuthPage() {
         setError("Некорректные данные клиента.");
         return;
       }
-      await setCurrentUser(cid);
+      /** Сначала полная сессия в LS (dental_session + dental_user_session + currentUserId), затем кэш БД, потом очистка временного телефона и навигация. */
+      applyLoggedInClientFromSupabaseRow(client);
+      await refreshDentalCaches();
       addDentalLog("INFO", "client", cleanDbPhone, "auth_success_master_direct", `id=${cid}`);
       clearAuthPhone();
-      router.replace(ROUTES.clientHome);
+      router.push(ROUTES.clientHome);
       return;
     }
 

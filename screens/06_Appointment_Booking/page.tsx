@@ -15,6 +15,10 @@ import {
 } from "@/lib/appointments";
 import { addBillForAppointment } from "@/lib/bills";
 import { ROUTES } from "@/lib/routes";
+import {
+  DENTAL_USER_SESSION_STORAGE_KEY,
+  getDentalSession,
+} from "@/lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -506,6 +510,25 @@ function BookingContent() {
     if (!selectedDay || !selectedTime) return;
     setLoading(true);
 
+    let session: { id?: string } = {};
+    try {
+      session = JSON.parse(
+        localStorage.getItem(DENTAL_USER_SESSION_STORAGE_KEY) || "{}"
+      ) as { id?: string };
+    } catch {
+      session = {};
+    }
+    const currentUser = getDentalSession();
+    const finalClientId = currentUser?.id || session.id;
+
+    if (!finalClientId) {
+      setLoading(false);
+      alert(
+        "Не удалось определить аккаунт. Пожалуйста, перезайдите в приложение."
+      );
+      return;
+    }
+
     const now = new Date();
     const monthNum = now.getMonth() + 1;
     const monthName = MONTHS_SHORT[now.getMonth()];
@@ -540,6 +563,7 @@ function BookingContent() {
           price,
           cabinet: "№ 5",
           doctorId: selectedDoctorId,
+          patientId: finalClientId,
         });
 
         addBillForAppointment(newApt.id, serviceTitle, price);

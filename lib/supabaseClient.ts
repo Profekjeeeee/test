@@ -1,19 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Клиент только из NEXT_PUBLIC_* (инлайнятся на клиенте из .env.local при dev/build).
- * Без плейсхолдеров — иначе запросы уходят с неверным ключом и дают 401.
+ * Env с билда (Vercel и т.д.) или захардкоженный fallback для прод-сборки без NEXT_PUBLIC_*.
  */
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://qjmevvoainaaosqnenlw.supabase.co";
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  "sb_publishable_tOyX7JwoZeEd0UagKD_fYQ_-jj9FzLF";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "🚨 КРИТИЧЕСКАЯ ОШИБКА: Ключи Supabase не найдены в .env.local! URL:",
-    supabaseUrl,
-    "KEY:",
-    supabaseAnonKey ? "Загружен" : "ПУСТО"
-  );
-}
-
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "");
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
