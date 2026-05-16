@@ -8,31 +8,32 @@ import { getCurrentUserId } from "@/lib/auth";
 import {
   CHAT_UPDATED_EVENT,
   SUPPORT_CHAT_POLL_MS,
-  type SupportChatChannel,
-  type SupportChatMessage,
+  getPatientBranchMessages,
   getPatientUnread,
-  getSupportMessages,
   markPatientConversationRead,
+  resolveAttendingDoctor,
   sendPatientMessage,
+  type PatientChatTab,
+  type ChatMessage,
 } from "@/lib/supportChat";
 
-function formatMsgTime(iso: string): string {
+function formatMsgTime(ts: number): string {
   try {
-    return new Date(iso).toLocaleString("ru-RU", {
+    return new Date(ts).toLocaleString("ru-RU", {
       day: "numeric",
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
     });
   } catch {
-    return iso;
+    return String(ts);
   }
 }
 
 export default function PatientSupportChatPage() {
   const [uid, setUid] = useState<string | null>(null);
-  const [channel, setChannel] = useState<SupportChatChannel>("clinic");
-  const [messages, setMessages] = useState<SupportChatMessage[]>([]);
+  const [tab, setTab] = useState<PatientChatTab>("clinic");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -41,25 +42,26 @@ export default function PatientSupportChatPage() {
   }, []);
 
   const refresh = useCallback(() => {
-    if (!uid) return;
-    setMessages(getSupportMessages(uid, channel));
-  }, [uid, channel]);
+    setMessages(getPatientBranchMessages(tab));
+  }, [tab]);
 
   useEffect(() => {
     refresh();
     if (!uid) return;
-    markPatientConversationRead(uid, channel);
-  }, [uid, channel, refresh]);
+    markPatientConversationRead(uid, tab);
+  }, [uid, tab, refresh]);
 
   useEffect(() => {
     refresh();
     const onEvt = () => refresh();
     window.addEventListener(CHAT_UPDATED_EVENT, onEvt);
     window.addEventListener("storage", onEvt);
+    window.addEventListener("appointmentsUpdated", onEvt);
     const id = window.setInterval(refresh, SUPPORT_CHAT_POLL_MS);
     return () => {
       window.removeEventListener(CHAT_UPDATED_EVENT, onEvt);
       window.removeEventListener("storage", onEvt);
+      window.removeEventListener("appointmentsUpdated", onEvt);
       window.clearInterval(id);
     };
   }, [refresh]);
@@ -70,14 +72,22 @@ export default function PatientSupportChatPage() {
 
   const handleSend = () => {
     if (!draft.trim()) return;
-    sendPatientMessage(channel, draft);
+    sendPatientMessage(tab, draft);
     setDraft("");
     refresh();
-    if (uid) markPatientConversationRead(uid, channel);
+    if (uid) markPatientConversationRead(uid, tab);
   };
 
-  const clinicUnread = Boolean(uid && channel !== "clinic" && getPatientUnread(uid, "clinic"));
-  const supportUnread = Boolean(uid && channel !== "support" && getPatientUnread(uid, "support"));
+  const clinicUnread = Boolean(uid && tab !== "clinic" && getPatientUnread(uid, "clinic"));
+  const supportUnread = Boolean(uid && tab !== "support" && getPatientUnread(uid, "support"));
+  const doctorUnread = Boolean(uid && tab !== "doctor" && getPatientUnread(uid, "doctor"));
+
+  const emptyHint =
+    tab === "clinic"
+      ? "Задайте вопрос по лечению, записи или состоянию — ответит администратор или ваш врач."
+      : tab === "support"
+        ? "Опишите проблему с приложением — её увидит технический администратор."
+        : "Напишите лечащему врачу — сообщение будет только ему и вам.";
 
   return (
     <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe flex flex-col">
@@ -107,14 +117,15 @@ export default function PatientSupportChatPage() {
             [
               { id: "clinic" as const, label: "Клиника", hint: clinicUnread },
               { id: "support" as const, label: "Техподдержка", hint: supportUnread },
+              { id: "doctor" as const, label: "Мой лечащий врач", hint: doctorUnread },
             ] as const
           ).map((t) => (
             <button
               key={t.id}
               type="button"
-              onClick={() => setChannel(t.id)}
-              className={`relative flex-1 py-2.5 rounded-[11px] text-[13px] font-semibold transition-all active:scale-95 ${
-                channel === t.id
+              onClick={() => setTab(t.id)}
+              className={`relative flex-1 py-2.5 rounded-[11px] text-[11px] font-semibold transition-all active:scale-95 leading-tight ${
+                tab === t.id
                   ? "bg-white dark:bg-slate-900 text-primary shadow-sm border border-gray-100 dark:border-slate-700"
                   : "text-secondary"
               }`}
@@ -129,6 +140,15 @@ export default function PatientSupportChatPage() {
             </button>
           ))}
         </div>
+
+        {tab === "doctor" ? (
+          <p className="text-[13px] text-secondary mt-3">
+            Чат с врачом:{" "}
+            <span className="font-semibold text-[#0F172A] dark:text-white">
+              {resolveAttendingDoctor().doctorName}
+            </span>
+          </p>
+        ) : null}
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 pb-36">
@@ -141,15 +161,11 @@ export default function PatientSupportChatPage() {
             <p className="text-[14px] text-[#0F172A] dark:text-white font-medium mb-1">
               Пока нет сообщений
             </p>
-            <p className="text-[13px] text-secondary leading-snug">
-              {channel === "clinic"
-                ? "Задайте вопрос по лечению, записи или состоянию — ответит администратор или ваш врач."
-                : "Опишите проблему с приложением — её увидит технический администратор."}
-            </p>
+            <p className="text-[13px] text-secondary leading-snug">{emptyHint}</p>
           </div>
         ) : (
           messages.map((m) => {
-            const mine = m.sender === "patient";
+            const mine = m.senderRole === "client" && m.senderId === uid;
             return (
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div
@@ -160,12 +176,10 @@ export default function PatientSupportChatPage() {
                   }`}
                 >
                   {!mine ? (
-                    <p className="text-[11px] font-semibold text-primary mb-1">
-                      {m.staffLabel ?? "Клиника"}
-                    </p>
+                    <p className="text-[11px] font-semibold text-primary mb-1">{m.senderName}</p>
                   ) : null}
-                  <p className="text-[14px] whitespace-pre-wrap leading-snug">{m.body}</p>
-                  <p className="text-[10px] text-secondary mt-1.5 tabular-nums">{formatMsgTime(m.createdAt)}</p>
+                  <p className="text-[14px] whitespace-pre-wrap leading-snug">{m.text}</p>
+                  <p className="text-[10px] text-secondary mt-1.5 tabular-nums">{formatMsgTime(m.timestamp)}</p>
                 </div>
               </div>
             );

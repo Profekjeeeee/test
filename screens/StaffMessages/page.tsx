@@ -6,33 +6,33 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CHAT_UPDATED_EVENT,
   SUPPORT_CHAT_POLL_MS,
-  type SupportChatChannel,
-  type StaffDialogPreview,
-  type SupportChatMessage,
+  getDoctorDialogPreviews,
+  getDoctorPatientThreadMessages,
+  getStaffBranchMessages,
   getStaffDialogPreviews,
   getSupportAuditLog,
-  getSupportMessages,
+  inferDoctorReplyPreference,
   markStaffConversationRead,
-  sendStaffMessage,
+  sendAdminToPatient,
+  sendDoctorToPatientPersonal,
+  sendStaffToPatientClinic,
+  type ChatMessage,
+  type StaffDialogPreview,
   type SupportAuditEntry,
 } from "@/lib/supportChat";
-import {
-  getDentalSession,
-  logout,
-  type DentalSession,
-} from "@/lib/auth";
+import { getDentalSession, logout, type DentalSession } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 
-function formatMsgTime(iso: string): string {
+function formatMsgTime(ts: number): string {
   try {
-    return new Date(iso).toLocaleString("ru-RU", {
+    return new Date(ts).toLocaleString("ru-RU", {
       day: "numeric",
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
     });
   } catch {
-    return iso;
+    return String(ts);
   }
 }
 
@@ -45,12 +45,11 @@ interface Props {
 export default function StaffMessagesPage({ mode }: Props) {
   const router = useRouter();
   const [session, setSession] = useState<DentalSession | null>(null);
-  const [adminSection, setAdminSection] = useState<"clinic" | "support" | "audit">("clinic");
-  const [doctorChannel] = useState<SupportChatChannel>("clinic");
+  const [adminSection, setAdminSection] = useState<"clinic" | "support" | "audit">("support");
   const [previews, setPreviews] = useState<StaffDialogPreview[]>([]);
   const [audit, setAudit] = useState<SupportAuditEntry[]>([]);
   const [selected, setSelected] = useState<StaffDialogPreview | null>(null);
-  const [thread, setThread] = useState<SupportChatMessage[]>([]);
+  const [thread, setThread] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -58,17 +57,30 @@ export default function StaffMessagesPage({ mode }: Props) {
     setSession(getDentalSession());
   }, []);
 
-  const channelFilter: SupportChatChannel | null =
-    mode === "doctor" ? doctorChannel : adminSection === "audit" ? null : adminSection;
+  const channelFilter =
+    mode === "doctor"
+      ? ("doctor_merge" as const)
+      : adminSection === "audit"
+        ? null
+        : adminSection;
 
   useEffect(() => {
     setSelected(null);
   }, [channelFilter, adminSection]);
 
   const refreshList = useCallback(() => {
-    if (!channelFilter) return;
+    if (mode === "doctor") {
+      const s = getDentalSession();
+      if (!s?.phone) {
+        setPreviews([]);
+        return;
+      }
+      setPreviews(getDoctorDialogPreviews(s.phone));
+      return;
+    }
+    if (!channelFilter || channelFilter === "doctor_merge") return;
     setPreviews(getStaffDialogPreviews(channelFilter));
-  }, [channelFilter]);
+  }, [channelFilter, mode]);
 
   const refreshAudit = useCallback(() => {
     setAudit([...getSupportAuditLog()].reverse());
@@ -101,13 +113,21 @@ export default function StaffMessagesPage({ mode }: Props) {
   }, [refreshList]);
 
   const refreshThread = useCallback(() => {
-    if (!selected) return;
-    setThread(getSupportMessages(selected.patientId, selected.channel));
-  }, [selected]);
+    if (!selected || !session) return;
+    if (selected.scope === "doctor_merge") {
+      setThread(getDoctorPatientThreadMessages(session.phone, selected.patientId));
+      return;
+    }
+    setThread(getStaffBranchMessages(selected.scope, selected.patientId));
+  }, [selected, session]);
 
   useEffect(() => {
-    if (!selected) return;
-    markStaffConversationRead(selected.patientId, selected.channel);
+    if (!selected || !session) return;
+    if (selected.scope === "doctor_merge") {
+      markStaffConversationRead(selected.patientId, "doctor_merge", session.phone);
+    } else {
+      markStaffConversationRead(selected.patientId, selected.scope);
+    }
     refreshThread();
     const onEvt = () => refreshThread();
     window.addEventListener(CHAT_UPDATED_EVENT, onEvt);
@@ -118,21 +138,38 @@ export default function StaffMessagesPage({ mode }: Props) {
       window.removeEventListener("storage", onEvt);
       window.clearInterval(id);
     };
-  }, [selected, refreshThread]);
+  }, [selected, refreshThread, session]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread.length]);
 
-  const staffLabel = session?.fullName?.trim() || "Сотрудник";
-
   const handleSendStaff = () => {
     if (!selected || !draft.trim()) return;
-    sendStaffMessage(selected.patientId, selected.channel, draft, staffLabel);
+
+    if (mode === "admin") {
+      if (selected.scope === "clinic") {
+        sendAdminToPatient({ patientId: selected.patientId, chatType: "clinic", body: draft });
+      } else {
+        sendAdminToPatient({ patientId: selected.patientId, chatType: "support", body: draft });
+      }
+    } else if (session) {
+      const pref = inferDoctorReplyPreference(thread, session.phone);
+      if (pref === "doctor") {
+        sendDoctorToPatientPersonal(session.phone, selected.patientId, draft);
+      } else {
+        sendStaffToPatientClinic(selected.patientId, draft);
+      }
+    }
+
     setDraft("");
     refreshThread();
     refreshList();
-    markStaffConversationRead(selected.patientId, selected.channel);
+    if (selected.scope === "doctor_merge" && session) {
+      markStaffConversationRead(selected.patientId, "doctor_merge", session.phone);
+    } else if (selected.scope !== "doctor_merge") {
+      markStaffConversationRead(selected.patientId, selected.scope);
+    }
   };
 
   const handleLogout = () => {
@@ -148,6 +185,28 @@ export default function StaffMessagesPage({ mode }: Props) {
     () => previews.reduce((n, p) => n + (p.unread ? 1 : 0), 0),
     [previews]
   );
+
+  const subtitleForDoctor = selected?.scope === "doctor_merge" && session ? (
+    <span className="text-[11px] text-secondary block mt-1">
+      Ответ по ветке:{" "}
+      <span className="font-semibold text-[#0F172A] dark:text-white">
+        {inferDoctorReplyPreference(thread, session.phone) === "doctor" ? "личный чат с врачом" : "чат клиники"}
+      </span>{" "}
+      (по последнему сообщению пациента)
+    </span>
+  ) : null;
+
+  const threadSubtitle =
+    selected && mode === "admin" ? (
+      <p className="text-[11px] font-bold uppercase tracking-widest text-secondary">
+        {selected.scope === "clinic" ? "Клиника" : "Техподдержка"}
+      </p>
+    ) : (
+      <>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-secondary">Объединённый чат</p>
+        {subtitleForDoctor}
+      </>
+    );
 
   return (
     <main
@@ -173,14 +232,18 @@ export default function StaffMessagesPage({ mode }: Props) {
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-widest text-secondary mb-1">{title}</p>
                   <h1 className="text-[22px] font-bold text-[#0F172A] dark:text-white leading-tight">
-                    Диалоги
+                    {mode === "admin" ? "Диалоги" : "Клиника и личные вопросы"}
                   </h1>
                   {unreadTotal > 0 ? (
                     <p className="text-[13px] text-primary mt-1 font-semibold">
                       Непрочитано: {unreadTotal}
                     </p>
                   ) : (
-                    <p className="text-[13px] text-secondary mt-1">Активные переписки с пациентами</p>
+                    <p className="text-[13px] text-secondary mt-1">
+                      {mode === "admin"
+                        ? "Лог техподдержки и общий чат клиники"
+                        : "Общие вопросы клинике и личные сообщения вашим пациентам"}
+                    </p>
                   )}
                 </div>
               </div>
@@ -197,8 +260,8 @@ export default function StaffMessagesPage({ mode }: Props) {
               <div className="flex rounded-[14px] bg-gray-100 dark:bg-slate-800 p-1 gap-1 mb-4">
                 {(
                   [
-                    { id: "clinic" as const, label: "Клиника" },
                     { id: "support" as const, label: "Техподдержка" },
+                    { id: "clinic" as const, label: "Клиника" },
                     { id: "audit" as const, label: "Журнал ТП" },
                   ] as const
                 ).map((t) => (
@@ -206,7 +269,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                     key={t.id}
                     type="button"
                     onClick={() => setAdminSection(t.id)}
-                    className={`flex-1 py-2 rounded-[11px] text-[12px] font-semibold transition-all active:scale-95 ${
+                    className={`flex-1 py-2 rounded-[11px] text-[11px] font-semibold transition-all active:scale-95 ${
                       adminSection === t.id
                         ? "bg-white dark:bg-slate-900 text-primary shadow-sm border border-gray-100 dark:border-slate-700"
                         : "text-secondary"
@@ -218,7 +281,8 @@ export default function StaffMessagesPage({ mode }: Props) {
               </div>
             ) : (
               <p className="text-[13px] text-secondary mb-4 rounded-[14px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
-                Канал «Клиника»: вопросы по лечению и записи. Канал техподдержки доступен в админ-панели.
+                Здесь ветки «клиника» и личный чат с пациентом (к вашему номеру). Ответ автоматически уходит туда же,
+                где пациент написал последним.
               </p>
             )}
 
@@ -235,7 +299,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                       className="rounded-[14px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3"
                     >
                       <div className="flex justify-between gap-2 text-[11px] text-secondary mb-1">
-                        <span>{formatMsgTime(row.at)}</span>
+                        <span>{formatMsgTime(new Date(row.at).getTime())}</span>
                         <span className="font-mono text-[10px] opacity-80">{row.patientId}</span>
                       </div>
                       <p className="text-[11px] font-bold text-primary mb-0.5">
@@ -254,7 +318,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                   </li>
                 ) : (
                   previews.map((p) => (
-                    <li key={`${p.patientId}_${p.channel}`}>
+                    <li key={`${p.patientId}_${p.scope}`}>
                       <button
                         type="button"
                         onClick={() => setSelected(p)}
@@ -274,12 +338,14 @@ export default function StaffMessagesPage({ mode }: Props) {
                           </div>
                           <p className="text-[12px] text-secondary truncate mt-0.5">
                             {p.lastMessage
-                              ? `${p.lastMessage.sender === "patient" ? "Пациент: " : ""}${p.lastMessage.body}`
+                              ? `${
+                                  p.lastMessage.senderRole === "client" ? "Пациент: " : ""
+                                }${p.lastMessage.text}`
                               : "—"}
                           </p>
                           {p.lastMessage ? (
                             <p className="text-[10px] text-secondary mt-1 tabular-nums">
-                              {formatMsgTime(p.lastMessage.createdAt)}
+                              {formatMsgTime(p.lastMessage.timestamp)}
                             </p>
                           ) : null}
                         </div>
@@ -292,14 +358,14 @@ export default function StaffMessagesPage({ mode }: Props) {
           </>
         ) : (
           <>
-            <header className="flex items-center gap-2 mb-4">
+            <header className="flex items-start gap-2 mb-4">
               <button
                 type="button"
                 onClick={() => {
                   setSelected(null);
                   refreshList();
                 }}
-                className="w-10 h-10 rounded-[12px] border border-gray-200 dark:border-slate-600 flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                className="w-10 h-10 rounded-[12px] border border-gray-200 dark:border-slate-600 flex items-center justify-center shrink-0 mt-0.5 active:scale-95 transition-transform"
                 aria-label="К списку"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
@@ -307,9 +373,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                 </svg>
               </button>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-secondary">
-                  {selected.channel === "clinic" ? "Клиника" : "Техподдержка"}
-                </p>
+                {threadSubtitle}
                 <h1 className="text-[18px] font-bold text-[#0F172A] dark:text-white truncate">
                   {selected.patientName}
                 </h1>
@@ -318,23 +382,32 @@ export default function StaffMessagesPage({ mode }: Props) {
 
             <div className="rounded-[16px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 min-h-[280px] max-h-[52vh] overflow-y-auto px-3 py-3 space-y-3 mb-3">
               {thread.map((m) => {
-                const staffSide = m.sender === "staff";
+                const isStaffSide = m.senderRole === "admin" || m.senderRole === "doctor";
                 return (
-                  <div key={m.id} className={`flex ${staffSide ? "justify-end" : "justify-start"}`}>
+                  <div key={m.id} className={`flex ${isStaffSide ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[88%] rounded-[14px] px-3.5 py-2.5 border ${
-                        staffSide
+                        isStaffSide
                           ? "bg-primary-light dark:bg-[#1A3D3F] border-primary/25 text-[#0F172A] dark:text-white"
                           : "bg-[#F8FAFB] dark:bg-slate-950 border-[#E2E8F0] dark:border-slate-700"
                       }`}
                     >
-                      {staffSide ? (
-                        <p className="text-[11px] font-semibold text-primary mb-1">{m.staffLabel ?? "Сотрудник"}</p>
+                      {isStaffSide ? (
+                        <p className="text-[10px] font-semibold text-secondary mb-0.5 uppercase tracking-wide">
+                          {m.chatType === "support"
+                            ? "ТП"
+                            : m.chatType === "doctor"
+                              ? "Врач (личное)"
+                              : "Клиника"}
+                        </p>
+                      ) : null}
+                      {isStaffSide ? (
+                        <p className="text-[11px] font-semibold text-primary mb-1">{m.senderName}</p>
                       ) : (
                         <p className="text-[11px] font-semibold text-secondary mb-1">Пациент</p>
                       )}
-                      <p className="text-[14px] whitespace-pre-wrap leading-snug text-[#0F172A] dark:text-white">{m.body}</p>
-                      <p className="text-[10px] text-secondary mt-1 tabular-nums">{formatMsgTime(m.createdAt)}</p>
+                      <p className="text-[14px] whitespace-pre-wrap leading-snug text-[#0F172A] dark:text-white">{m.text}</p>
+                      <p className="text-[10px] text-secondary mt-1 tabular-nums">{formatMsgTime(m.timestamp)}</p>
                     </div>
                   </div>
                 );
