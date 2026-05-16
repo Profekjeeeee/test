@@ -87,12 +87,30 @@ export function normalizePhone(raw: string): string {
   return digits;
 }
 
+/** Паттерн для `.ilike('phone', …)`: совпадение по последним 10 цифрам (формат в БД может отличаться). */
+export function phoneDigitsSuffixPattern(digits: string): string {
+  const d = digits.replace(/\D/g, "");
+  return `%${d.slice(-10)}`;
+}
+
 async function supabaseSelectEmployeeByPhone(cleanPhone: string) {
-  return supabase.from("dental_employees").select("*").eq("phone", cleanPhone).maybeSingle();
+  const pattern = phoneDigitsSuffixPattern(cleanPhone);
+  return supabase
+    .from("dental_employees")
+    .select("*")
+    .ilike("phone", pattern)
+    .limit(1)
+    .maybeSingle();
 }
 
 async function supabaseSelectClientByPhone(cleanPhone: string) {
-  return supabase.from("dental_clients").select("*").eq("phone", cleanPhone).maybeSingle();
+  const pattern = phoneDigitsSuffixPattern(cleanPhone);
+  return supabase
+    .from("dental_clients")
+    .select("*")
+    .ilike("phone", pattern)
+    .limit(1)
+    .maybeSingle();
 }
 
 function formatPostgrestError(error: { message: string; code?: string; details?: string }): string {

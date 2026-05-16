@@ -1,12 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * На билде / SSR переменные могут быть пустыми — подставляем заглушки, чтобы не падала статическая генерация.
- * В рантайме должны быть заданы NEXT_PUBLIC_SUPABASE_URL и NEXT_PUBLIC_SUPABASE_ANON_KEY в .env.local.
+ * Клиент только из NEXT_PUBLIC_* (инлайнятся на клиенте из .env.local при dev/build).
+ * Без плейсхолдеров — иначе запросы уходят с неверным ключом и дают 401.
  */
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.local";
-const key =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.build-placeholder.invalid";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(url, key);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error(
+    "🚨 КРИТИЧЕСКАЯ ОШИБКА: Ключи Supabase не найдены в .env.local! URL:",
+    supabaseUrl,
+    "KEY:",
+    supabaseAnonKey ? "Загружен" : "ПУСТО"
+  );
+}
+
+export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "");
