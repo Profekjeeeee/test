@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -9,8 +9,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { ROUTES } from "@/lib/routes";
 import { addDentalLog } from "@/lib/logger";
 
-/** Сквозной демо-код. */
-const MASTER_SMS_CODE = "1234";
+/** Длина поля OTP в UI (maxLength инпута). */
+const OTP_INPUT_MAX_LENGTH = 6;
+
+/** Сквозные демо-коды: 4 или 6 цифр под длину поля. */
+const MASTER_SMS_CODES = new Set(["1234", "123456"]);
+
+function isMasterSmsCode(digits: string): boolean {
+  return MASTER_SMS_CODES.has(digits);
+}
 
 /** Бэкап нормализованного номера между шагами (переживает ремоунт). */
 const TEMP_AUTH_PHONE_KEY = "temp_auth_phone";
@@ -20,7 +27,7 @@ const SUPABASE_EXPECT_ONE_ROW_ERRORS = new Set(["PGRST116", "PGRST117"]);
 
 /** Нормализация живого инпута OTP (до String() в verify). */
 function normalizeSmsCodeInput(raw: string): string {
-  return raw.normalize("NFC").replace(/\D/g, "").slice(0, 12);
+  return raw.normalize("NFC").replace(/\D/g, "").slice(0, OTP_INPUT_MAX_LENGTH);
 }
 
 function persistTempAuthPhone(cleanPhone: string): void {
@@ -80,6 +87,8 @@ export default function AuthPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [demoBypassNotice, setDemoBypassNotice] = useState(false);
+  const bypassInFlightRef = useRef(false);
 
   /** Восстановление после ремоунта Strict Mode и т.п. */
   useEffect(() => {
@@ -125,180 +134,180 @@ export default function AuthPage() {
     }
   };
 
-  /** Проверка кода: блокировка submit + «бронебойный» мастер-байпас. */
-  const handleVerify = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const enteredCode: unknown = code;
-    const normalizedCode = String(enteredCode).replace(/\D/g, "");
-
-    const statePhone = authCleanPhone;
-
-    console.log("=== AUTH DEBUG ===");
-    console.log("Введенный код (сырой):", enteredCode);
-    console.log("Код (нормализованный):", normalizedCode);
-    console.log("Телефон из стейта:", statePhone);
-
-    let lsPhone = "";
-    try {
-      lsPhone = localStorage.getItem(TEMP_AUTH_PHONE_KEY) ?? "";
-    } catch (storageErr) {
-      console.error("[AUTH] chrome localStorage недоступен:", storageErr);
+  const resolveCleanPhoneForMaster = (): string | null => {
+    const activePhone = authCleanPhone || readTempAuthPhone();
+    if (!activePhone) {
+      console.error("Телефон потерян! Невозможно проверить роль.");
+      alert("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
+      addDentalLog("ERROR", "guest", "", "auth_master_phone_lost", "temp_auth_phone и стейт пусты");
+      return null;
     }
+    const cleanDbPhone = normalizePhone(activePhone);
+    if (cleanDbPhone.length < 11) {
+      setError("Введите номер телефона на прошлом шаге ещё раз.");
+      addDentalLog("WARN", "guest", "", "auth_master_phone_short", cleanDbPhone);
+      return null;
+    }
+    return cleanDbPhone;
+  };
 
-    let activePhone = statePhone || lsPhone;
+  /** Общая логика мастер-кода (Supabase + редирект), без управления loading/ref. */
+  const executeMasterAuth = async (cleanDbPhone: string): Promise<void> => {
+    try {
+      console.log("[AUTH MASTER] Ищем сотрудника в БД...", { cleanDbPhone });
 
-    console.log("Активный телефон для БД:", activePhone || "(пусто)");
-    console.log("[AUTH][DEBUG] temp_auth_phone только из LS:", lsPhone || "(нет)");
-    console.log("[AUTH][DEBUG] typeof code из React state:", typeof code);
+      const { data: employee, error: empErr } = await supabase
+        .from("dental_employees")
+        .select("*")
+        .eq("phone", cleanDbPhone)
+        .single();
 
-    /* Жесткий Bypass — до любых «неверный код». */
-    if (normalizedCode === MASTER_SMS_CODE) {
-      e.preventDefault();
+      console.log("[AUTH MASTER] Ответ dental_employees:", {
+        employee: employee ?? null,
+        empErr: empErr
+          ? { message: empErr.message, code: empErr.code, details: empErr.details }
+          : null,
+      });
 
-      activePhone = statePhone || (typeof window !== "undefined" ? lsPhone || readTempAuthPhone() : "");
-
-      console.log("[AUTH MASTER] финальный активный номер перед БД:", activePhone || "(пусто)");
-
-      if (!activePhone) {
-        console.error("Телефон потерян! Невозможно проверить роль.");
-        alert("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
-        addDentalLog("ERROR", "guest", "", "auth_master_phone_lost", "temp_auth_phone и стейт пусты");
-        return;
-      }
-
-      const cleanDbPhone = normalizePhone(activePhone);
-
-      console.log("[AUTH MASTER] после normalizePhone:", cleanDbPhone);
-
-      setLoading(true);
-      setError("");
-
-      try {
-        console.log("[AUTH MASTER] Ищем сотрудника в БД...", { cleanDbPhone });
-
-        const { data: employee, error: empErr } = await supabase
-          .from("dental_employees")
-          .select("*")
-          .eq("phone", cleanDbPhone)
-          .single();
-
-        console.log("[AUTH MASTER] Ответ dental_employees:", {
-          employee: employee ?? null,
-          empErr: empErr
-            ? { message: empErr.message, code: empErr.code, details: empErr.details }
-            : null,
-        });
-
-        if (
-          empErr &&
-          !SUPABASE_EXPECT_ONE_ROW_ERRORS.has(empErr.code ?? "")
-        ) {
-          console.error("[AUTH MASTER] Ошибка Supabase dental_employees (не «нет строки»):", empErr);
-          setError("Не удалось проверить номер. Попробуйте позже.");
-          addDentalLog(
-            "ERROR",
-            "guest",
-            "",
-            "auth_master_emp_failed",
-            `${empErr.message} [${empErr.code}]`
-          );
-          return;
-        }
-
-        if (employee) {
-          console.log("[AUTH MASTER] Сотрудник найден:", employee);
-          const s = sessionFromEmployeeRow(employee as Record<string, unknown>);
-          setDentalSession({
-            id: s.id,
-            role: s.role,
-            fullName: s.fullName,
-            phone: s.phone,
-            specialization: s.specialization,
-          });
-          addDentalLog(
-            "INFO",
-            s.role,
-            cleanDbPhone,
-            "auth_success_master_direct",
-            `id=${s.id} | ${s.fullName}`
-          );
-          clearTempAuthPhone();
-          router.replace(s.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet);
-          return;
-        }
-
-        console.log("[AUTH MASTER] Сотрудник не найден. Ищем клиента в БД...");
-
-        const { data: client, error: cliErr } = await supabase
-          .from("dental_clients")
-          .select("*")
-          .eq("phone", cleanDbPhone)
-          .single();
-
-        console.log("[AUTH MASTER] Ответ dental_clients:", {
-          client: client ?? null,
-          cliErr: cliErr
-            ? { message: cliErr.message, code: cliErr.code, details: cliErr.details }
-            : null,
-        });
-
-        if (
-          cliErr &&
-          !SUPABASE_EXPECT_ONE_ROW_ERRORS.has(cliErr.code ?? "")
-        ) {
-          console.error("[AUTH MASTER] Ошибка Supabase dental_clients (не «нет строки»):", cliErr);
-          setError("Не удалось проверить номер. Попробуйте позже.");
-          addDentalLog(
-            "ERROR",
-            "guest",
-            "",
-            "auth_master_client_failed",
-            `${cliErr.message} [${cliErr.code}]`
-          );
-          return;
-        }
-
-        if (client) {
-          console.log("[AUTH MASTER] Клиент найден:", client);
-          const cid = String((client as { id?: unknown }).id ?? "");
-          if (!cid) {
-            console.error("[AUTH MASTER] В ответе нет client.id:", client);
-            setError("Некорректные данные клиента.");
-            return;
-          }
-          await setCurrentUser(cid);
-          addDentalLog("INFO", "client", cleanDbPhone, "auth_success_master_direct", `id=${cid}`);
-          clearTempAuthPhone();
-          router.replace(ROUTES.clientHome);
-          return;
-        }
-
-        console.log("[AUTH MASTER] Номер не найден. Переход к регистрации.");
-        addDentalLog(
-          "INFO",
-          "guest",
-          "",
-          "auth_master_new_client_redirect",
-          `cleanPhone=${cleanDbPhone}`
-        );
-        clearTempAuthPhone();
-        router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(cleanDbPhone)}`);
-        return;
-      } catch (err) {
-        console.error("Критическая ошибка при обращении к Supabase:", err);
+      if (empErr && !SUPABASE_EXPECT_ONE_ROW_ERRORS.has(empErr.code ?? "")) {
+        console.error("[AUTH MASTER] Ошибка Supabase dental_employees (не «нет строки»):", empErr);
+        setError("Не удалось проверить номер. Попробуйте позже.");
         addDentalLog(
           "ERROR",
           "guest",
           "",
-          "auth_master_exception",
-          err instanceof Error ? err.message : String(err)
+          "auth_master_emp_failed",
+          `${empErr.message} [${empErr.code}]`
         );
-        setError("Ошибка при входе. Попробуйте позже.");
-      } finally {
-        setLoading(false);
+        return;
       }
-      /* Гарантируем, что обычная валидация кода не выполняется после мастер-байпаса */
+
+      if (employee) {
+        console.log("[AUTH MASTER] Сотрудник найден:", employee);
+        const s = sessionFromEmployeeRow(employee as Record<string, unknown>);
+        setDentalSession({
+          id: s.id,
+          role: s.role,
+          fullName: s.fullName,
+          phone: s.phone,
+          specialization: s.specialization,
+        });
+        addDentalLog(
+          "INFO",
+          s.role,
+          cleanDbPhone,
+          "auth_success_master_direct",
+          `id=${s.id} | ${s.fullName}`
+        );
+        clearTempAuthPhone();
+        router.replace(s.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet);
+        return;
+      }
+
+      console.log("[AUTH MASTER] Сотрудник не найден. Ищем клиента в БД...");
+
+      const { data: client, error: cliErr } = await supabase
+        .from("dental_clients")
+        .select("*")
+        .eq("phone", cleanDbPhone)
+        .single();
+
+      console.log("[AUTH MASTER] Ответ dental_clients:", {
+        client: client ?? null,
+        cliErr: cliErr
+          ? { message: cliErr.message, code: cliErr.code, details: cliErr.details }
+          : null,
+      });
+
+      if (cliErr && !SUPABASE_EXPECT_ONE_ROW_ERRORS.has(cliErr.code ?? "")) {
+        console.error("[AUTH MASTER] Ошибка Supabase dental_clients (не «нет строки»):", cliErr);
+        setError("Не удалось проверить номер. Попробуйте позже.");
+        addDentalLog(
+          "ERROR",
+          "guest",
+          "",
+          "auth_master_client_failed",
+          `${cliErr.message} [${cliErr.code}]`
+        );
+        return;
+      }
+
+      if (client) {
+        console.log("[AUTH MASTER] Клиент найден:", client);
+        const cid = String((client as { id?: unknown }).id ?? "");
+        if (!cid) {
+          console.error("[AUTH MASTER] В ответе нет client.id:", client);
+          setError("Некорректные данные клиента.");
+          return;
+        }
+        await setCurrentUser(cid);
+        addDentalLog("INFO", "client", cleanDbPhone, "auth_success_master_direct", `id=${cid}`);
+        clearTempAuthPhone();
+        router.replace(ROUTES.clientHome);
+        return;
+      }
+
+      console.log("[AUTH MASTER] Номер не найден. Переход к регистрации.");
+      addDentalLog(
+        "INFO",
+        "guest",
+        "",
+        "auth_master_new_client_redirect",
+        `cleanPhone=${cleanDbPhone}`
+      );
+      clearTempAuthPhone();
+      router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(cleanDbPhone)}`);
+    } catch (err) {
+      console.error("Критическая ошибка при обращении к Supabase:", err);
+      addDentalLog(
+        "ERROR",
+        "guest",
+        "",
+        "auth_master_exception",
+        err instanceof Error ? err.message : String(err)
+      );
+      setError("Ошибка при входе. Попробуйте позже.");
+    }
+  };
+
+  const runMasterAuthSession = async (options: { instantUi: boolean }): Promise<void> => {
+    if (bypassInFlightRef.current) return;
+    const cleanDbPhone = resolveCleanPhoneForMaster();
+    if (!cleanDbPhone) return;
+
+    bypassInFlightRef.current = true;
+    if (options.instantUi) {
+      console.log("🔥 INSTANT BYPASS TRIGGERED 🔥");
+      setDemoBypassNotice(true);
+    }
+    setLoading(true);
+    setError("");
+
+    try {
+      await executeMasterAuth(cleanDbPhone);
+    } finally {
+      setLoading(false);
+      bypassInFlightRef.current = false;
+      setDemoBypassNotice(false);
+    }
+  };
+
+  /** Проверка кода: мастер-код — тот же пайплайн, что и мгновенный onChange (кнопка необязательна). */
+  const handleVerify = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const enteredCode: unknown = code;
+    const normalizedCode = String(enteredCode)
+      .replace(/\D/g, "")
+      .slice(0, OTP_INPUT_MAX_LENGTH);
+
+    console.log("=== AUTH DEBUG ===");
+    console.log("Введенный код (сырой):", enteredCode);
+    console.log("Код (нормализованный):", normalizedCode);
+    console.log("Телефон из стейта:", authCleanPhone);
+
+    if (isMasterSmsCode(normalizedCode)) {
+      await runMasterAuthSession({ instantUi: false });
       return;
     }
 
@@ -314,7 +323,7 @@ export default function AuthPage() {
       return;
     }
 
-    setError(`Неверный код. Демо-код: ${MASTER_SMS_CODE}`);
+    setError("Неверный код. Демо: 1234 или 123456");
     addDentalLog(
       "WARN",
       "guest",
@@ -344,7 +353,7 @@ export default function AuthPage() {
         <p className="text-[15px] text-secondary mt-2 leading-relaxed">
           {step === "phone"
             ? "Один номер для пациентов и сотрудников клиники — после СМС вы попадёте в нужный раздел."
-            : `Отправили 4-значный код на\u00a0${phone}`}
+            : `Код отправлен на\u00a0${phone} (демо: до 6 цифр)`}
         </p>
         {step === "phone" && (
           <div className="flex flex-wrap gap-2 mt-4">
@@ -375,8 +384,10 @@ export default function AuthPage() {
             inputMode="tel"
           />
           <p className="text-[12px] text-secondary -mt-2">
-            Демо: код{" "}
-            <span className="font-mono text-[#0F172A] dark:text-white">{MASTER_SMS_CODE}</span>
+            Демо:{" "}
+            <span className="font-mono text-[#0F172A] dark:text-white">1234</span>
+            {" или "}
+            <span className="font-mono text-[#0F172A] dark:text-white">123456</span>
             {digitLen >= 11 ? (
               <>
                 {" · "}
@@ -391,17 +402,26 @@ export default function AuthPage() {
         </form>
       ) : (
         <form className="flex flex-col gap-5" onSubmit={handleVerify}>
+          {demoBypassNotice ? (
+            <p className="text-[13px] font-semibold text-[#A1D6D7] dark:text-[#A1D6D7] text-center animate-pulse">
+              Вход по демо-коду...
+            </p>
+          ) : null}
           <Input
             label="Код подтверждения"
             type="text"
             inputMode="numeric"
             autoComplete="one-time-code"
-            placeholder="• • • •"
-            maxLength={6}
+            placeholder={Array.from({ length: OTP_INPUT_MAX_LENGTH }, () => "•").join(" ")}
+            maxLength={OTP_INPUT_MAX_LENGTH}
             value={code}
             onChange={(e) => {
-              setCode(normalizeSmsCodeInput(e.target.value));
+              const next = normalizeSmsCodeInput(e.target.value);
+              setCode(next);
               setError("");
+              if (isMasterSmsCode(next)) {
+                void runMasterAuthSession({ instantUi: true });
+              }
             }}
             error={error}
           />
@@ -412,6 +432,8 @@ export default function AuthPage() {
             className="text-[13px] text-gray-400 text-center active:scale-95 transition-transform"
             type="button"
             onClick={() => {
+              bypassInFlightRef.current = false;
+              setDemoBypassNotice(false);
               setStep("phone");
               clearTempAuthPhone();
               setAuthCleanPhone("");
