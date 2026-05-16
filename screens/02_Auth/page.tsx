@@ -315,7 +315,7 @@ export default function AuthPage() {
       "auth_master_new_client_redirect",
       `cleanPhone=${cleanDbPhone}`
     );
-    clearAuthPhone();
+    /** Не очищаем auth_phone здесь — номер нужен до завершения регистрации (см. screens/02_Registration). */
     router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(cleanDbPhone)}`);
   };
 

@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createUser, setCurrentUser } from "@/lib/auth";
+import { createUser, normalizePhone, setCurrentUser } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 import { saveProfile } from "@/lib/userProfile";
 
 const NAME_RE = /^[а-яёА-ЯЁa-zA-Z][а-яёА-ЯЁa-zA-Z\s-]{1,}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Ключ совпадает с `screens/02_Auth/page.tsx`; хранится до успешной регистрации. */
+const AUTH_PHONE_STORAGE_KEY = "auth_phone";
 
 interface FormState {
   firstName: string;
@@ -32,15 +35,29 @@ function validate(form: FormState): FormErrors {
 export default function RegistrationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const phone = searchParams.get("phone") ?? "";
+  const phoneParam = searchParams.get("phone") ?? "";
+
+  /** Номер из query или из `auth_phone` (пока не очищен на шаге успешной регистрации). */
+  const [savedPhone, setSavedPhone] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>({ firstName: "", lastName: "", email: "" });
   const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!phone) router.replace("/auth");
-  }, [phone, router]);
+    let stored = "";
+    try {
+      stored = localStorage.getItem(AUTH_PHONE_STORAGE_KEY) ?? "";
+    } catch {
+      /* noop */
+    }
+    const normalized = normalizePhone(phoneParam || stored);
+    if (!normalized || normalized.length < 11) {
+      router.replace(ROUTES.auth);
+      return;
+    }
+    setSavedPhone(normalized);
+  }, [phoneParam, router]);
 
   const errors = validate(form);
   const hasErrors = Object.keys(errors).length > 0;
@@ -53,29 +70,59 @@ export default function RegistrationPage() {
   const handleSubmit = async () => {
     setTouched({ firstName: true, lastName: true, email: true });
     if (hasErrors) return;
+    const phoneForDb = savedPhone ?? "";
+    if (!phoneForDb) {
+      setTouched({ firstName: true, lastName: true, email: true });
+      router.replace(ROUTES.auth);
+      return;
+    }
 
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      // insert в dental_clients делает createUser: { phone, name, role: 'client' }
+      const user = await createUser(phoneForDb, {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+      });
 
-    const user = await createUser(phone, {
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      email: form.email.trim(),
-    });
+      await setCurrentUser(user.id);
 
-    await setCurrentUser(user.id);
+      saveProfile({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        phone: phoneForDb,
+        email: form.email.trim(),
+      });
 
-    saveProfile({
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      phone,
-      email: form.email.trim(),
-    });
+      router.replace(ROUTES.clientHome);
 
-    router.replace(ROUTES.clientHome);
+      try {
+        localStorage.removeItem(AUTH_PHONE_STORAGE_KEY);
+        console.log("[AUTH] очищен auth_phone после регистрации");
+      } catch {
+        /* noop */
+      }
+    } catch (err: unknown) {
+      const message =
+        err &&
+        typeof err === "object" &&
+        "message" in err &&
+        typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      alert(`Ошибка базы данных: ${message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const saveDisabled = saving || (Object.keys(touched).length === 3 && hasErrors);
+  const saveDisabled =
+    saving ||
+    savedPhone === null ||
+    (Object.keys(touched).length === 3 && hasErrors);
 
   return (
     <main
@@ -107,7 +154,7 @@ export default function RegistrationPage() {
           </label>
           <input
             type="tel"
-            value={phone}
+            value={savedPhone ?? ""}
             readOnly
             className="h-12 px-4 text-[15px] font-medium rounded-[8px] border-[1.5px] border-[#E2E8F0] bg-[#F1F5F9] text-[#94A3B8] dark:bg-[#1E293B] dark:border-[#334155] dark:text-slate-500 cursor-not-allowed outline-none"
             style={{ fontFamily: "Manrope, sans-serif" }}
@@ -144,7 +191,8 @@ export default function RegistrationPage() {
         />
 
         <button
-          onClick={handleSubmit}
+          type="button"
+          onClick={() => void handleSubmit()}
           disabled={saveDisabled}
           className="mt-2 w-full h-12 rounded-[12px] text-[15px] font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all"
           style={{
@@ -162,7 +210,7 @@ export default function RegistrationPage() {
               Создаём профиль...
             </>
           ) : (
-            "Готово"
+            "Создать профиль"
           )}
         </button>
       </div>

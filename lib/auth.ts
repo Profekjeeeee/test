@@ -63,18 +63,28 @@ function mapEmployeeRow(row: {
 function mapClientRow(row: {
   id: string;
   phone: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  formula_teeth: unknown;
+  first_name?: string | null;
+  last_name?: string | null;
+  /** Новая схема Supabase: одно поле ФИО вместо first_name / last_name */
+  name?: string | null;
+  email?: string | null;
+  formula_teeth?: unknown | null;
 }): DentalClientRecord {
   const ft = row.formula_teeth;
+  let firstName = row.first_name ?? "";
+  let lastName = row.last_name ?? "";
+  const singleName = row.name != null ? String(row.name).trim() : "";
+  if (!firstName && !lastName && singleName) {
+    const parts = singleName.split(/\s+/).filter(Boolean);
+    firstName = parts[0] ?? "";
+    lastName = parts.slice(1).join(" ");
+  }
   return {
     id: row.id,
     phone: row.phone,
     role: "client",
-    firstName: row.first_name ?? "",
-    lastName: row.last_name ?? "",
+    firstName,
+    lastName,
     email: row.email ?? "",
     formulaTeeth: Array.isArray(ft) ? (ft as ToothStatus[]) : undefined,
   };
@@ -220,38 +230,36 @@ export async function findUserByPhone(phone: string): Promise<RegisteredUser | n
   };
 }
 
+/** Регистрация пациента: в БД уходит только phone (цифры), name (ФИО), role — без лишних полей. */
 export async function createUser(
   phone: string,
   profile: { firstName: string; lastName: string; email: string }
 ): Promise<RegisteredUser> {
-  const user: RegisteredUser = {
-    id: `u_${Date.now()}`,
-    phone: normalizePhone(phone),
-    firstName: profile.firstName,
-    lastName: profile.lastName,
-    email: profile.email,
-  };
-  const { error } = await supabase.from("dental_clients").insert({
-    id: user.id,
-    phone: user.phone,
-    role: "client",
-    first_name: user.firstName,
-    last_name: user.lastName,
-    email: user.email,
-  });
-  if (error) throw error;
-  clientsCache = [
-    ...clientsCache.filter((c) => c.id !== user.id),
-    {
-      id: user.id,
-      phone: user.phone,
+  const cleanPhone = normalizePhone(phone);
+  const fullName = `${profile.firstName.trim()} ${profile.lastName.trim()}`.trim();
+
+  const { data, error } = await supabase
+    .from("dental_clients")
+    .insert({
+      phone: cleanPhone,
+      name: fullName,
       role: "client",
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-    },
-  ];
-  return user;
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  const mapped = mapClientRow(data as Parameters<typeof mapClientRow>[0]);
+  clientsCache = [...clientsCache.filter((c) => c.id !== mapped.id), mapped];
+
+  return {
+    id: mapped.id,
+    phone: mapped.phone,
+    firstName: profile.firstName.trim(),
+    lastName: profile.lastName.trim(),
+    email: profile.email.trim(),
+  };
 }
 
 export async function updateClientFormulaTeeth(clientId: string, teeth: ToothStatus[]): Promise<void> {
