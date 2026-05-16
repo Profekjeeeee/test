@@ -11,7 +11,7 @@ import {
   addAppointment,
   rescheduleAppointment,
   refreshAppointmentsCache,
-  resolveClientIdForAppointment,
+  resolveClientPhoneForAppointment,
   type Appointment,
 } from "@/lib/appointments";
 import { addBillForAppointment } from "@/lib/bills";
@@ -506,8 +506,8 @@ function BookingContent() {
     if (!selectedDay || !selectedTime) return;
     setLoading(true);
 
-    const clientId = await resolveClientIdForAppointment();
-    if (!clientId) {
+    const clientPhone = resolveClientPhoneForAppointment();
+    if (!clientPhone) {
       setLoading(false);
       alert(
         "Не удалось определить аккаунт. Пожалуйста, перезайдите в приложение."
@@ -544,8 +544,8 @@ function BookingContent() {
           monthNum,
           year,
           time: timeSnap,
-          doctorId: selectedDoctorId,
-          patientId: clientId,
+          doctorName: selectedDoctor?.name ?? "Врач не выбран",
+          clientPhone,
         });
 
         addBillForAppointment(newApt.id, serviceTitle, price);

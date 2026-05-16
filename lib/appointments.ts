@@ -1,10 +1,12 @@
 import { supabase } from "@/lib/supabaseClient";
 import {
+  DENTAL_USER_SESSION_STORAGE_KEY,
   findClientByPhone,
   getCurrentUserId,
   getDentalClients,
   getDentalEmployees,
   getDentalSession,
+  normalizePhone,
 } from "@/lib/auth";
 
 export type AppointmentStatus =
@@ -66,6 +68,7 @@ interface AppointmentRow {
   id: string;
   client_id: string | null;
   doctor_id: string | null;
+  doctor_name: string | null;
   doctor_phone: string | null;
   appointment_date: string;
   appointment_time: string;
@@ -89,7 +92,10 @@ function rowToAppointment(row: AppointmentRow): Appointment {
   const monthNum = parts[1] ?? 1;
   const day = parts[2] ?? 1;
   const month = RU_MONTHS_SHORT[monthNum - 1] ?? "";
-  let doctor = row.doctor_display_name?.trim() ?? "";
+  let doctor =
+    row.doctor_name?.trim() ||
+    row.doctor_display_name?.trim() ||
+    "";
   if (!doctor && row.doctor_id) {
     const emp = getDentalEmployees().find((e) => e.id === row.doctor_id);
     if (emp) doctor = emp.fullName;
@@ -137,9 +143,36 @@ export async function initAppointments(): Promise<void> {
 
 export function getAppointments(): Appointment[] {
   const uid = getCurrentUserId();
+  const session = getDentalSession();
   const all = clinicCache ?? [];
-  if (!uid) return [];
-  return all.filter((a) => a.patientId === uid);
+
+  const phoneCandidates = new Set<string>();
+  if (session?.phone) {
+    const p = normalizePhone(session.phone);
+    if (p.length >= 10) phoneCandidates.add(p);
+  }
+  if (uid) {
+    const c = getDentalClients().find((x) => x.id === uid);
+    if (c?.phone) {
+      const p = normalizePhone(c.phone);
+      if (p.length >= 10) phoneCandidates.add(p);
+    }
+    const uidDigits = uid.replace(/\D/g, "");
+    if (uidDigits.length >= 10) phoneCandidates.add(normalizePhone(uid));
+  }
+
+  if (!uid && phoneCandidates.size === 0) return [];
+
+  return all.filter((a) => {
+    const pid = a.patientId;
+    if (!pid) return false;
+    if (uid && pid === uid) return true;
+    const pNorm = normalizePhone(String(pid));
+    for (const ph of phoneCandidates) {
+      if (ph === pNorm) return true;
+    }
+    return false;
+  });
 }
 
 function isActiveUpcomingStatus(s: AppointmentStatus): boolean {
@@ -150,14 +183,15 @@ export function getUpcomingCount(): number {
   return getAppointments().filter((a) => isActiveUpcomingStatus(a.status)).length;
 }
 
-/** Данные для вставки в `appointments`: id не передаём — генерируется в БД. */
+/** Данные для вставки в `appointments`: без `id` — идентификатор выдаёт Supabase/БД. */
 export type NewAppointmentInput = {
   day: number;
   monthNum: number;
   year: number;
   time: string;
-  doctorId?: string | null;
-  patientId?: string | null;
+  doctorName: string;
+  /** Явный телефон для `client_id`; иначе берётся из сессии / localStorage. */
+  clientPhone?: string | null;
   status?: AppointmentStatus;
 };
 
@@ -185,23 +219,62 @@ export async function resolveClientIdForAppointment(): Promise<string | null> {
   return null;
 }
 
+/** Телефон для `appointments.client_id` — из сессии, `dental_user_session` или кэша клиента. */
+export function resolveClientPhoneForAppointment(): string | null {
+  if (typeof window === "undefined") return null;
+  const session = getDentalSession();
+  if (session?.phone) {
+    const p = normalizePhone(session.phone);
+    if (p.length >= 10) return p;
+  }
+  try {
+    const raw = localStorage.getItem(DENTAL_USER_SESSION_STORAGE_KEY);
+    if (raw) {
+      const j = JSON.parse(raw) as { phone?: string };
+      if (j.phone) {
+        const p = normalizePhone(j.phone);
+        if (p.length >= 10) return p;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  const uid = getCurrentUserId();
+  if (uid) {
+    const fromCache = getDentalClients().find((c) => c.id === uid);
+    if (fromCache?.phone) {
+      const p = normalizePhone(fromCache.phone);
+      if (p.length >= 10) return p;
+    }
+    const digits = uid.replace(/\D/g, "");
+    if (digits.length >= 10) return normalizePhone(uid);
+  }
+  return null;
+}
+
 export async function addAppointment(apt: NewAppointmentInput): Promise<Appointment> {
-  const patientId = apt.patientId ?? (await resolveClientIdForAppointment());
-  if (!patientId) {
+  const phone = apt.clientPhone ?? resolveClientPhoneForAppointment();
+  if (!phone || phone.length < 10) {
     throw new Error("Не удалось определить пациента. Войдите в аккаунт или обновите страницу.");
   }
 
-  const docId = apt.doctorId ?? null;
   const status: AppointmentStatus = apt.status ?? "pending";
+  const name = apt.doctorName.trim() || "Врач";
 
-  const insertPayload = {
-    client_id: patientId,
-    doctor_id: docId,
-    appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
-    appointment_time: apt.time,
-    status,
-  };
-  const { data, error } = await supabase.from("appointments").insert(insertPayload).select("*").single();
+  const { data, error } = await supabase
+    .from("appointments")
+    .insert([
+      {
+        client_id: phone,
+        doctor_name: name,
+        appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
+        appointment_time: apt.time,
+        status,
+      },
+    ])
+    .select("*")
+    .single();
+
   if (error) throw error;
   await refreshAppointmentsCache();
   return rowToAppointment(data as AppointmentRow);
