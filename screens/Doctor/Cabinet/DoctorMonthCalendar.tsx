@@ -1,5 +1,7 @@
 "use client";
 
+import { formatRuMonthYearTitleFromDate } from "@/lib/doctorSchedule";
+
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 function monthMatrix(year: number, month: number): (number | null)[] {
@@ -17,6 +19,8 @@ function monthMatrix(year: number, month: number): (number | null)[] {
 interface DoctorMonthCalendarProps {
   viewMonth: Date;
   selectedDate: Date;
+  /** null до клиентского маунта — без подсветки «сегодня», совпадает с SSR и гидратацией */
+  clientNow?: Date | null;
   daysWithAppointments: Set<number>;
   onSelectDay: (day: number) => void;
   onPrevMonth: () => void;
@@ -26,6 +30,7 @@ interface DoctorMonthCalendarProps {
 export default function DoctorMonthCalendar({
   viewMonth,
   selectedDate,
+  clientNow,
   daysWithAppointments,
   onSelectDay,
   onPrevMonth,
@@ -34,8 +39,7 @@ export default function DoctorMonthCalendar({
   const y = viewMonth.getFullYear();
   const m = viewMonth.getMonth();
   const cells = monthMatrix(y, m);
-  const title = viewMonth.toLocaleString("ru-RU", { month: "long", year: "numeric" });
-  const titleCap = title.charAt(0).toUpperCase() + title.slice(1);
+  const titleCap = formatRuMonthYearTitleFromDate(viewMonth);
 
   const isSelected = (day: number) =>
     selectedDate.getFullYear() === y &&
@@ -43,29 +47,29 @@ export default function DoctorMonthCalendar({
     selectedDate.getDate() === day;
 
   const isToday = (day: number) => {
-    const t = new Date();
-    return t.getFullYear() === y && t.getMonth() === m && t.getDate() === day;
+    if (!clientNow) return false;
+    return clientNow.getFullYear() === y && clientNow.getMonth() === m && clientNow.getDate() === day;
   };
 
   return (
     <div
-      className="rounded-2xl border border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900 p-4"
+      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)]"
       style={{ fontFamily: "Manrope, sans-serif" }}
     >
       <div className="flex items-center justify-between mb-4">
         <button
           type="button"
           onClick={onPrevMonth}
-          className="w-9 h-9 rounded-xl border border-[#E2E8F0] dark:border-slate-700 text-secondary flex items-center justify-center active:scale-95 transition-transform"
+          className="interactive-press-sm w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface"
           aria-label="Предыдущий месяц"
         >
           ‹
         </button>
-        <p className="text-[15px] font-bold text-[#0F172A] dark:text-white capitalize">{titleCap}</p>
+        <p className="text-[15px] font-bold text-[#0F172A] dark:text-white">{titleCap}</p>
         <button
           type="button"
           onClick={onNextMonth}
-          className="w-9 h-9 rounded-xl border border-[#E2E8F0] dark:border-slate-700 text-secondary flex items-center justify-center active:scale-95 transition-transform"
+          className="interactive-press-sm w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface"
           aria-label="Следующий месяц"
         >
           ›
@@ -94,19 +98,19 @@ export default function DoctorMonthCalendar({
               key={day}
               type="button"
               onClick={() => onSelectDay(day)}
-              className={`relative h-9 rounded-xl text-[13px] font-semibold flex flex-col items-center justify-center transition-colors active:scale-95 ${
+              className={`relative h-9 rounded-xl text-[13px] font-semibold flex flex-col items-center justify-center transition-all duration-150 ease-out active:scale-95 border ${
                 selected
-                  ? "bg-[#A1D6D7] text-[#0F172A]"
+                  ? "bg-primary text-white border-primary"
                   : today
-                    ? "border border-[#A1D6D7]/80 text-[#0F172A] dark:text-white"
-                    : "text-[#0F172A] dark:text-white hover:bg-[#F8FAFB] dark:hover:bg-slate-800"
+                    ? "border-primary/80 text-[#0F172A] dark:text-white bg-white dark:bg-slate-900"
+                    : "border-slate-200 dark:border-slate-700 text-[#0F172A] dark:text-white bg-white dark:bg-slate-900 hover:bg-surface dark:hover:bg-slate-800"
               }`}
             >
               <span>{day}</span>
               {hasDot && (
                 <span
                   className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${
-                    selected ? "bg-[#0F172A]/50" : "bg-[#A1D6D7]"
+                    selected ? "bg-white/50" : "bg-primary"
                   }`}
                 />
               )}

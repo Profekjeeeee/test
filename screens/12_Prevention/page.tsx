@@ -3,6 +3,8 @@
 import Header from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import BottomBar from "@/components/layout/BottomBar";
+import { useClientNow } from "@/hooks/useClientNow";
+import { formatRuNumericLongDateStable } from "@/lib/doctorSchedule";
 
 function IconBrush() {
   return (
@@ -62,12 +64,28 @@ function addMonths(date: Date, months: number): Date {
   return d;
 }
 
-function formatRuDate(d: Date): string {
-  return d.toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+function PreventionSkeleton() {
+  return (
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe" aria-busy>
+      <Header title="Профилактика" />
+      <main className="px-6 py-4 flex flex-col gap-4">
+        <Card>
+          <div className="h-24 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 animate-pulse" />
+        </Card>
+        <Card>
+          <div className="h-32 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 animate-pulse" />
+        </Card>
+      </main>
+      <BottomBar />
+    </div>
+  );
 }
 
 export default function PreventionPage() {
-  const today = new Date();
+  const clock = useClientNow();
+  if (!clock) return <PreventionSkeleton />;
+
+  const today = clock;
   const lastVisit = addMonths(today, -6);
   const nextVisit = addMonths(today, 6);
   const hygienistVisit = addMonths(today, 6);
@@ -76,7 +94,7 @@ export default function PreventionPage() {
   const progress = Math.round(((180 - daysUntil) / 180) * 100);
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <Header title="Профилактика" />
 
       <main className="px-6 py-4 flex flex-col gap-4">
@@ -90,7 +108,7 @@ export default function PreventionPage() {
               {daysUntil}{" "}
               <span className="text-[16px] font-medium text-gray-400">дней</span>
             </p>
-            <p className="text-[14px] text-gray-400">{formatRuDate(nextVisit)}</p>
+            <p className="text-[14px] text-gray-400">{formatRuNumericLongDateStable(nextVisit)}</p>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
@@ -136,11 +154,11 @@ export default function PreventionPage() {
             Плановые осмотры
           </p>
           {[
-            { label: "Последний осмотр", date: formatRuDate(lastVisit) },
-            { label: "Следующий осмотр", date: formatRuDate(nextVisit), upcoming: true },
-            { label: "Чистка (гигиенист)", date: formatRuDate(hygienistVisit), upcoming: true },
+            { label: "Последний осмотр", date: formatRuNumericLongDateStable(lastVisit) },
+            { label: "Следующий осмотр", date: formatRuNumericLongDateStable(nextVisit), upcoming: true },
+            { label: "Чистка (гигиенист)", date: formatRuNumericLongDateStable(hygienistVisit), upcoming: true },
           ].map((item, i) => (
-            <div key={i} className="flex justify-between py-2 border-b border-gray-100 last:border-0">
+            <div key={i} className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700 last:border-0">
               <p className="text-[14px] text-gray-500">{item.label}</p>
               <p
                 className={`text-[14px] font-semibold ${

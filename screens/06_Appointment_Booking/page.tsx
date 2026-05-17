@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/appointments";
 import { addBillForAppointment } from "@/lib/bills";
 import { ROUTES } from "@/lib/routes";
+import { useClientNow } from "@/hooks/useClientNow";
+import { formatRuMonthYearTitleFromDate } from "@/lib/doctorSchedule";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -310,7 +312,16 @@ function generateTimeSlots(): string[] {
 }
 
 function formatPrice(price: number): string {
-  return price.toLocaleString("ru-RU") + " ₽";
+  const n = Math.max(0, Math.round(price));
+  const raw = String(n);
+  const parts: string[] = [];
+  let i = raw.length;
+  while (i > 0) {
+    const start = Math.max(0, i - 3);
+    parts.unshift(raw.slice(start, i));
+    i = start;
+  }
+  return `${parts.join(" ")} ₽`;
 }
 
 const MONTHS_SHORT = [
@@ -408,14 +419,20 @@ const MONTHS_GENITIVE = [
   "июля","августа","сентября","октября","ноября","декабря",
 ];
 
+function formatSuccessSubtitle(day: number, monthNum: number, time: string): string {
+  const month = MONTHS_GENITIVE[monthNum - 1] ?? "";
+  return `${day} ${month} в ${time}`;
+}
+
+/** Демо-слот без `new Date()`: SSR и браузер отдают одну и ту же разметку. */
 function makeDefaultCurrent(): Appointment {
-  const now = new Date();
+  const monthIdx = 4;
   return {
     id: "1",
     day: 9,
-    monthNum: now.getMonth() + 1,
-    month: MONTHS_GENITIVE[now.getMonth()],
-    year: now.getFullYear(),
+    monthNum: monthIdx + 1,
+    month: MONTHS_GENITIVE[monthIdx] ?? "",
+    year: 2026,
     time: "10:30",
     doctor: "Михайлова А.В.",
     specialty: "Терапевт",
@@ -429,7 +446,7 @@ function makeDefaultCurrent(): Appointment {
 
 export default function BookingPage() {
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-surface dark:bg-slate-950" />}>
+    <Suspense fallback={<div className="min-h-dvh bg-surface dark:bg-app-canvas" />}>
       <BookingContent />
     </Suspense>
   );
@@ -457,6 +474,13 @@ function BookingContent() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [successModal, setSuccessModal] = useState<{
+    kind: "new" | "reschedule";
+    subtitle: string;
+  } | null>(null);
+  const [successModalEntered, setSuccessModalEntered] = useState(false);
+
+  const clientClock = useClientNow();
 
   const currentIdx = STEPS.findIndex((s) => s.id === step);
   const timeSlots = useMemo(() => generateTimeSlots(), []);
@@ -494,6 +518,15 @@ function BookingContent() {
     }
   }, [isRescheduling, appointmentId]);
 
+  useEffect(() => {
+    if (!successModal) {
+      setSuccessModalEntered(false);
+      return;
+    }
+    const raf = requestAnimationFrame(() => setSuccessModalEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, [successModal]);
+
   const handleBack = () => {
     if (isRescheduling || currentIdx === 0) {
       router.back();
@@ -522,7 +555,6 @@ function BookingContent() {
 
     const daySnap = selectedDay;
     const timeSnap = selectedTime;
-    const kind = isRescheduling ? "reschedule" : "new";
 
     try {
       if (isRescheduling && appointmentId) {
@@ -533,6 +565,13 @@ function BookingContent() {
           year,
           time: timeSnap,
         });
+        await refreshAppointmentsCache();
+        const all = getAppointments();
+        const updated = all.find((a) => a.id === appointmentId);
+        if (updated) setCurrentAppointment(updated);
+        setSelectedDay(null);
+        setSelectedTime(null);
+        setStep("date");
       } else {
         const serviceTitle = selectedService
           ? selectedService.title
@@ -549,17 +588,19 @@ function BookingContent() {
         });
 
         addBillForAppointment(newApt.id, serviceTitle, price);
+
+        setSelectedCategory(null);
+        setSelectedDoctorId(null);
+        setSelectedServiceId(null);
+        setSelectedDay(null);
+        setSelectedTime(null);
+        setStep("category");
       }
 
-      setSelectedDay(null);
-      setSelectedTime(null);
-      const q = new URLSearchParams({
-        kind,
-        day: String(daySnap),
-        month: String(monthNum),
-        time: timeSnap,
+      setSuccessModal({
+        kind: isRescheduling ? "reschedule" : "new",
+        subtitle: formatSuccessSubtitle(daySnap, monthNum, timeSnap),
       });
-      router.replace(`${ROUTES.bookingSuccess}?${q.toString()}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       alert("Ошибка записи: " + message);
@@ -569,14 +610,16 @@ function BookingContent() {
   };
 
   const confirmDate =
-    selectedDay && selectedTime
-      ? `${selectedDay} ${MONTHS_SHORT[(new Date().getMonth())]} ${new Date().getFullYear()}, ${selectedTime}`
+    selectedDay && selectedTime && clientClock
+      ? `${selectedDay} ${MONTHS_SHORT[clientClock.getMonth()]} ${clientClock.getFullYear()}, ${selectedTime}`
+      : selectedDay && selectedTime
+      ? `${selectedDay} · ${selectedTime}`
       : selectedDay
       ? `${selectedDay} — выберите время`
       : "Не выбрано";
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-slate-50 dark:bg-app-canvas pb-safe transition-colors duration-150">
       <Header
         title={isRescheduling ? "Перенос записи" : "Запись на приём"}
         showBack
@@ -629,7 +672,7 @@ function BookingContent() {
               <Card
                 key={cat}
                 bordered
-                className={`cursor-pointer transition-colors active:scale-[0.98] ${
+                className={`cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)] transition-all duration-150 ease-out active:scale-[0.98] ${
                   selectedCategory === cat
                     ? "border-primary bg-primary-light"
                     : ""
@@ -672,7 +715,7 @@ function BookingContent() {
               <Card
                 key={doc.id}
                 bordered
-                className={`cursor-pointer transition-colors active:scale-[0.98] ${
+                className={`cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)] transition-all duration-150 ease-out active:scale-[0.98] ${
                   selectedDoctorId === doc.id
                     ? "border-primary bg-primary-light"
                     : ""
@@ -732,7 +775,7 @@ function BookingContent() {
               <Card
                 key={svc.id}
                 bordered
-                className={`cursor-pointer transition-colors active:scale-[0.98] ${
+                className={`cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)] transition-all duration-150 ease-out active:scale-[0.98] ${
                   selectedServiceId === svc.id
                     ? "border-primary bg-primary-light"
                     : ""
@@ -776,50 +819,56 @@ function BookingContent() {
               )}
             </div>
 
-            <Card>
-              <p className="text-[15px] font-semibold dark:text-white mb-3">
-                {new Date().toLocaleString("ru-RU", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </p>
-              <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-gray-400 mb-2">
-                {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
-                  <span key={d}>{d}</span>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
-                  const today = new Date().getDate();
-                  const isPast = day < today;
-                  return (
-                    <button
-                      key={day}
-                      disabled={isPast}
-                        className={`h-8 w-full rounded-[4px] text-[13px] font-medium transition-colors ${
-                        selectedDay === day
-                          ? "bg-primary text-white"
-                          : isPast
-                          ? "text-gray-300 dark:text-slate-600 cursor-not-allowed"
-                          : "hover:bg-primary-light dark:hover:bg-primary/20 text-[#0F172A] dark:text-slate-200"
-                      }`}
-                      onClick={() => {
-                        setSelectedDay(day);
-                        setSelectedTime(null);
-                      }}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
+            <Card className="shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)]">
+              {clientClock ? (
+                <>
+                  <p className="text-[15px] font-semibold dark:text-white mb-3">
+                    {formatRuMonthYearTitleFromDate(clientClock)}
+                  </p>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-gray-400 mb-2">
+                    {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
+                      <span key={d}>{d}</span>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                      const today = clientClock.getDate();
+                      const isPast = day < today;
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          disabled={isPast}
+                          className={`h-8 w-full rounded-[4px] text-[13px] font-medium border transition-all duration-150 ease-out disabled:active:scale-100 ${
+                            selectedDay === day
+                              ? "bg-primary text-white border-primary shadow-[0_2px_8px_rgba(36,139,207,0.25)] dark:shadow-none active:scale-[0.98]"
+                              : isPast
+                                ? "text-gray-300 dark:text-slate-600 cursor-not-allowed border-slate-200/60 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40"
+                                : "border-slate-200 dark:border-slate-600 hover:bg-primary-light dark:hover:bg-primary/20 text-[#0F172A] dark:text-slate-200 bg-white dark:bg-slate-800 shadow-raised-surface active:scale-[0.98]"
+                          }`}
+                          onClick={() => {
+                            setSelectedDay(day);
+                            setSelectedTime(null);
+                          }}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="min-h-[216px] flex items-center justify-center text-[13px] text-secondary" aria-busy>
+                  Загрузка календаря…
+                </div>
+              )}
             </Card>
 
-            {selectedDay !== null && (
-              <Card>
+            {selectedDay !== null && clientClock && (
+              <Card className="shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)]">
                 <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white mb-3">
                   Доступное время · {selectedDay}{" "}
-                  {MONTHS_SHORT[new Date().getMonth()]}
+                  {MONTHS_SHORT[clientClock.getMonth()]}
                 </p>
                 <div className="grid grid-cols-4 gap-2">
                   {timeSlots.map((slot) => {
@@ -833,21 +882,22 @@ function BookingContent() {
                     return (
                       <button
                         key={slot}
+                        type="button"
                         disabled={isBusy || isCurrent}
                         onClick={() => {
                           setSelectedTime(slot);
                           setTimeout(() => setStep("confirm"), 120);
                         }}
                         className={`
-                          h-10 rounded-[4px] text-[13px] font-semibold border transition-all
+                          h-10 rounded-[4px] text-[13px] font-semibold border transition-all duration-150 ease-out disabled:active:scale-100
                           ${
                             isBusy
-                              ? "border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-300 dark:text-slate-600 cursor-not-allowed line-through"
+                              ? "border-slate-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-300 dark:text-slate-600 cursor-not-allowed line-through"
                               : isCurrent
-                              ? "border-amber-200 bg-amber-50 text-amber-400 cursor-not-allowed"
+                              ? "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-500/80 cursor-not-allowed"
                               : isSelected
-                              ? "border-primary bg-primary text-white shadow-sm"
-                              : "border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white hover:border-primary hover:text-primary active:scale-95"
+                              ? "border-primary bg-primary text-white shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none active:scale-[0.98]"
+                              : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white hover:border-primary hover:text-primary shadow-raised-surface active:scale-[0.98]"
                           }
                         `}
                       >
@@ -856,7 +906,7 @@ function BookingContent() {
                     );
                   })}
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 flex flex-wrap gap-x-4 gap-y-1.5">
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap gap-x-4 gap-y-1.5">
                   {[
                     { cls: "bg-primary", label: "Выбрано" },
                     { cls: "bg-gray-100 dark:bg-slate-600", label: "Занято" },
@@ -889,7 +939,7 @@ function BookingContent() {
               Подтверждение
             </p>
 
-            <Card>
+            <Card className="shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)]">
               <div className="flex flex-col gap-4">
                 {isRescheduling ? (
                   <>
@@ -950,6 +1000,7 @@ function BookingContent() {
 
             <Button
               size="full"
+              className="!active:scale-[0.98]"
               disabled={!selectedDay || !selectedTime}
               loading={loading}
               onClick={handleConfirm}
@@ -961,6 +1012,78 @@ function BookingContent() {
       </main>
 
       <BottomBar />
+
+      {successModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center px-4 pt-10 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="booking-success-title"
+          aria-describedby="booking-success-desc"
+        >
+          <button
+            type="button"
+            className={`absolute inset-0 z-0 border-0 bg-black/45 backdrop-blur-[6px] transition-opacity duration-300 ${
+              successModalEntered ? "opacity-100" : "opacity-0"
+            }`}
+            aria-label="Закрыть"
+            onClick={() => {
+              setSuccessModal(null);
+              router.push(ROUTES.clientHome);
+            }}
+          />
+          <div
+            className={`relative z-10 w-full max-w-[390px] rounded-t-[1.75rem] rounded-b-2xl bg-white p-8 pb-7 text-center shadow-[0_-8px_40px_-8px_rgba(15,23,42,0.2)] transition-all duration-300 ease-out ${
+              successModalEntered
+                ? "translate-y-0 opacity-100"
+                : "translate-y-full opacity-0"
+            }`}
+          >
+            <div
+              className="mx-auto mb-5 flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full bg-primary-light"
+              aria-hidden
+            >
+              <svg
+                className="h-9 w-9 text-[#2d6a5d]"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <path
+                  d="M6.5 12.5L10.2 16.5 18 8.5"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <h2
+              id="booking-success-title"
+              className="text-xl font-bold leading-snug text-[#1e293b]"
+            >
+              {successModal.kind === "reschedule"
+                ? "Запись перенесена!"
+                : "Запись оформлена!"}
+            </h2>
+            <p
+              id="booking-success-desc"
+              className="mt-2 text-base font-normal text-[#64748b]"
+            >
+              {successModal.subtitle}
+            </p>
+            <button
+              type="button"
+              className="mt-8 w-full rounded-xl bg-primary py-3.5 text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/25 transition-all duration-150 ease-out active:scale-[0.98] active:bg-primary-dark"
+              onClick={() => {
+                setSuccessModal(null);
+                router.push(ROUTES.clientHome);
+              }}
+            >
+              На главную
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

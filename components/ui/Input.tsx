@@ -20,11 +20,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           className={`
             w-full h-12 px-4 rounded-[4px] border text-[15px] font-medium
             bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500
-            transition-colors outline-none
+            transition-colors outline-none shadow-raised-surface
             ${
               error
                 ? "border-error focus:border-error focus:ring-1 focus:ring-error/30"
-                : "border-gray-200 dark:border-slate-600 focus:border-primary focus:ring-1 focus:ring-primary/20"
+                : "border-slate-200 dark:border-white/10 focus:border-primary focus:ring-1 focus:ring-primary/20 dark:focus:border-slate-500 dark:focus:ring-white/15"
             }
             ${className ?? ""}
           `}

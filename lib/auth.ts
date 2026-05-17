@@ -35,10 +35,16 @@ export interface DentalSession {
   fullName: string;
   phone: string;
   specialization?: string;
+  /** ЛК пациента; для сотрудников поля могут отсутствовать. */
+  firstName?: string;
+  lastName?: string;
+  email?: string;
 }
 
+/** Полный объект сессии + профиля в одном ключе (источник правды после логина). */
+export const USER_SESSION_STORAGE_KEY = "user_session";
 export const DENTAL_SESSION_STORAGE_KEY = "dental_session";
-/** JSON в LS: { id, name, role, phone } — бронирование и защитник роутов. */
+/** JSON в LS: id, name, role, phone, опционально ФИО и email — бронирование и защитник роутов. */
 export const DENTAL_USER_SESSION_STORAGE_KEY = "dental_user_session";
 export const CURRENT_USER_STORAGE_KEY = "currentUserId";
 /** После записи сессии в этой вкладке (StorageEvent здесь не приходит). */
@@ -248,6 +254,9 @@ export async function createUser(
       phone: cleanPhone,
       name: fullName,
       role: "client",
+      first_name: profile.firstName.trim(),
+      last_name: profile.lastName.trim(),
+      email: profile.email.trim(),
     })
     .select("*")
     .single();
@@ -283,48 +292,180 @@ export async function updateClientFormulaTeeth(clientId: string, teeth: ToothSta
   }
 }
 
+/** Нормализует ФИО: fullName всегда непустой для UI. */
+function normalizeDentalSession(session: DentalSession): DentalSession {
+  const firstName = session.firstName?.trim() ?? "";
+  const lastName = session.lastName?.trim() ?? "";
+  const phoneTrimmed = typeof session.phone === "string" ? session.phone.trim() : "";
+  const fromParts = `${firstName} ${lastName}`.trim();
+  const fullName =
+    session.fullName?.trim() ||
+    fromParts ||
+    phoneTrimmed ||
+    "?";
+  return {
+    ...session,
+    ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
+    fullName,
+    ...(firstName ? { firstName } : {}),
+    ...(lastName ? { lastName } : {}),
+    ...(session.email != null && String(session.email).trim() !== ""
+      ? { email: String(session.email).trim() }
+      : {}),
+  };
+}
+
+export function dentalSessionFromClient(c: DentalClientRecord): DentalSession {
+  const firstName = c.firstName ?? "";
+  const lastName = c.lastName ?? "";
+  const fullName = `${firstName} ${lastName}`.trim() || c.phone;
+  return normalizeDentalSession({
+    id: c.id,
+    role: "client",
+    fullName,
+    phone: c.phone,
+    firstName,
+    lastName,
+    email: (c.email ?? "").trim(),
+  });
+}
+
+/** Обновляет данные пациента в Supabase и в памяти/LS сессии. */
+export async function updateClientPersonalProfile(payload: {
+  clientId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneDigits: string;
+}): Promise<void> {
+  const firstName = payload.firstName.trim();
+  const lastName = payload.lastName.trim();
+  const email = payload.email.trim();
+  const phone = normalizePhone(payload.phoneDigits);
+  const name = `${firstName} ${lastName}`.trim();
+
+  const { error } = await supabase
+    .from("dental_clients")
+    .update({
+      first_name: firstName || null,
+      last_name: lastName || null,
+      email: email || null,
+      phone,
+      name: name || null,
+    })
+    .eq("id", payload.clientId);
+
+  if (error) throw error;
+
+  await refreshDentalCaches();
+
+  const cur = typeof window !== "undefined" ? getDentalSession() : null;
+  if (cur?.role === "client" && cur.id === payload.clientId) {
+    const clientRow = getDentalClients().find((c) => c.id === payload.clientId);
+    if (clientRow) {
+      setDentalSession(dentalSessionFromClient(clientRow));
+    }
+  }
+}
+
+/**
+ * Фоном подтянуть профиль из Supabase по телефону (после мгновенной гидратации из LS).
+ */
+export async function refreshDentalSessionFromSupabase(
+  current: DentalSession | null
+): Promise<DentalSession | null> {
+  if (!current?.phone) return current;
+  const cleanPhone = normalizePhone(current.phone);
+  if (cleanPhone.length < 10) return current;
+
+  try {
+    if (current.role === "client") {
+      const { client, supabaseError } = await fetchClientByPhoneForAuth(cleanPhone);
+      if (supabaseError || !client || client.id !== current.id) return current;
+      const next = dentalSessionFromClient(client);
+      const same =
+        next.fullName === current.fullName &&
+        (next.phone || "") === (current.phone || "") &&
+        (next.email || "") === (current.email ?? "") &&
+        (next.firstName || "") === (current.firstName ?? "") &&
+        (next.lastName || "") === (current.lastName ?? "");
+      if (!same) setDentalSession(next);
+      return next;
+    }
+
+    const { employee, supabaseError } = await fetchEmployeeByPhoneForAuth(cleanPhone);
+    if (supabaseError || !employee || employee.id !== current.id) return current;
+    const next: DentalSession = normalizeDentalSession({
+      id: employee.id,
+      role: employee.role,
+      fullName: employee.fullName,
+      phone: employee.phone,
+      specialization: employee.specialization,
+    });
+    const same =
+      next.fullName === current.fullName &&
+      (next.phone || "") === (current.phone || "") &&
+      next.specialization === current.specialization;
+    if (!same) setDentalSession(next);
+    return next;
+  } catch (err) {
+    console.warn("[auth] refreshDentalSessionFromSupabase:", err);
+    return current;
+  }
+}
+
 export function setDentalSession(session: DentalSession): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DENTAL_SESSION_STORAGE_KEY, JSON.stringify(session));
+  const normalized = normalizeDentalSession(session);
+  try {
+    const json = JSON.stringify(normalized);
+    localStorage.setItem(USER_SESSION_STORAGE_KEY, json);
+    localStorage.setItem(DENTAL_SESSION_STORAGE_KEY, json);
+  } catch (err) {
+    console.warn("[auth] session JSON:", err);
+  }
   try {
     localStorage.setItem(
       DENTAL_USER_SESSION_STORAGE_KEY,
       JSON.stringify({
-        id: session.id,
-        name: session.fullName,
-        role: session.role,
-        phone: session.phone,
+        id: normalized.id,
+        name: normalized.fullName,
+        role: normalized.role,
+        phone: normalized.phone,
+        first_name: normalized.firstName ?? "",
+        last_name: normalized.lastName ?? "",
+        email: normalized.email ?? "",
       })
     );
   } catch (err) {
     console.warn("[auth] dental_user_session:", err);
   }
   localStorage.setItem("isLoggedIn", "true");
-  if (session.role === "admin") {
+  if (normalized.role === "admin") {
     localStorage.setItem("isAdmin", "true");
   } else {
     localStorage.removeItem("isAdmin");
   }
-  localStorage.setItem(CURRENT_USER_STORAGE_KEY, session.id);
+  localStorage.setItem(CURRENT_USER_STORAGE_KEY, normalized.id);
   window.dispatchEvent(new CustomEvent(DENTAL_SESSION_CHANGED_EVENT));
 }
 
 /** Синхронно залогинить пациента по строке из `dental_clients` (без ожидания кэша). */
 export function applyLoggedInClientFromSupabaseRow(row: Record<string, unknown>): void {
   const mapped = mapClientRow(row as Parameters<typeof mapClientRow>[0]);
-  setDentalSession({
-    id: mapped.id,
-    role: "client",
-    fullName: `${mapped.firstName} ${mapped.lastName}`.trim() || mapped.phone,
-    phone: mapped.phone,
-  });
+  setDentalSession(dentalSessionFromClient(mapped));
 }
 
 export function getDentalSession(): DentalSession | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(DENTAL_SESSION_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as DentalSession) : null;
+    const primary = localStorage.getItem(USER_SESSION_STORAGE_KEY);
+    if (primary) {
+      return normalizeDentalSession(JSON.parse(primary) as DentalSession);
+    }
+    const leg = localStorage.getItem(DENTAL_SESSION_STORAGE_KEY);
+    const parsed = leg ? (JSON.parse(leg) as DentalSession) : null;
+    return parsed ? normalizeDentalSession(parsed) : null;
   } catch {
     return null;
   }
@@ -339,12 +480,7 @@ export async function resolveHydratedSession(): Promise<DentalSession | null> {
   await refreshDentalCaches();
   const client = getDentalClients().find((c) => c.id === uid);
   if (!client) return null;
-  const rebuilt: DentalSession = {
-    id: client.id,
-    role: "client",
-    fullName: `${client.firstName} ${client.lastName}`.trim() || client.phone,
-    phone: client.phone,
-  };
+  const rebuilt = dentalSessionFromClient(client);
   setDentalSession(rebuilt);
   return rebuilt;
 }
@@ -358,12 +494,7 @@ export async function setCurrentUser(id: string): Promise<void> {
   await refreshDentalCaches();
   const client = getDentalClients().find((c) => c.id === id);
   if (client) {
-    setDentalSession({
-      id: client.id,
-      role: "client",
-      fullName: `${client.firstName} ${client.lastName}`.trim() || client.phone,
-      phone: client.phone,
-    });
+    setDentalSession(dentalSessionFromClient(client));
   } else {
     localStorage.setItem(CURRENT_USER_STORAGE_KEY, id);
     localStorage.setItem("isLoggedIn", "true");
@@ -375,6 +506,7 @@ export function logout(): void {
   localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
   localStorage.removeItem("isLoggedIn");
   localStorage.removeItem("isAdmin");
+  localStorage.removeItem(USER_SESSION_STORAGE_KEY);
   localStorage.removeItem(DENTAL_SESSION_STORAGE_KEY);
   localStorage.removeItem(DENTAL_USER_SESSION_STORAGE_KEY);
 }

@@ -109,12 +109,12 @@ export default function PatientSupportChatPage() {
         : "Напишите лечащему врачу — сообщение будет только ему и вам.";
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe flex flex-col">
-      <header className="px-5 pt-12 pb-3 border-b border-gray-100 dark:border-slate-700 shrink-0">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe flex flex-col">
+      <header className="px-5 pt-12 pb-3 border-b border-slate-200 dark:border-white/8 shrink-0 shadow-[0_4px_12px_rgba(15,23,42,0.04)] dark:shadow-none bg-white/80 dark:bg-app-nav/82 backdrop-blur-sm">
         <div className="flex items-center gap-3 mb-4">
           <Link
             href={ROUTES.clientHome}
-            className="w-10 h-10 rounded-[12px] border border-gray-200 dark:border-slate-600 flex items-center justify-center text-secondary active:scale-95 transition-transform"
+            className="interactive-press-sm w-10 h-10 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center text-secondary shadow-raised-surface"
             aria-label="Назад"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
@@ -143,10 +143,10 @@ export default function PatientSupportChatPage() {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`relative flex-1 py-2.5 rounded-[11px] text-[11px] font-semibold transition-all active:scale-95 leading-tight ${
+              className={`relative flex-1 py-2.5 rounded-[11px] text-[11px] font-semibold transition-all duration-150 ease-out interactive-press-sm leading-tight border ${
                 tab === t.id
-                  ? "bg-white dark:bg-slate-900 text-primary shadow-sm border border-gray-100 dark:border-slate-700"
-                  : "text-secondary"
+                  ? "bg-white dark:bg-slate-900 text-primary shadow-[0_4px_12px_rgba(15,23,42,0.08)] border-slate-200 dark:border-slate-700"
+                  : "border-slate-200/85 dark:border-slate-600 text-slate-700 dark:text-slate-400 bg-white/50 dark:bg-transparent"
               }`}
             >
               {t.label}
@@ -176,7 +176,7 @@ export default function PatientSupportChatPage() {
             Войдите как пациент, чтобы пользоваться чатом.
           </p>
         ) : messages.length === 0 ? (
-          <div className="rounded-[16px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-6 text-center">
+          <div className="rounded-[16px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-6 text-center shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)]">
             <p className="text-[14px] text-[#0F172A] dark:text-white font-medium mb-1">
               Пока нет сообщений
             </p>
@@ -190,8 +190,8 @@ export default function PatientSupportChatPage() {
                 <div
                   className={`max-w-[85%] rounded-[14px] px-3.5 py-2.5 border ${
                     mine
-                      ? "bg-primary-light dark:bg-[#1A3D3F] border-primary/25 text-[#0F172A] dark:text-white"
-                      : "bg-white dark:bg-slate-900 border-[#E2E8F0] dark:border-slate-700 text-[#0F172A] dark:text-white"
+                      ? "bg-primary-light border-primary/25 text-[#0F172A] dark:text-white"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-[#0F172A] dark:text-white shadow-raised-surface"
                   }`}
                 >
                   {!mine ? (
@@ -208,7 +208,7 @@ export default function PatientSupportChatPage() {
       </div>
 
       <div
-        className="shrink-0 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-[#1E293B] px-4 py-3 fixed left-1/2 -translate-x-1/2 w-full max-w-[390px] z-40"
+        className="shrink-0 border-t border-slate-200 dark:border-white/8 bg-white dark:bg-app-nav px-4 py-3 fixed left-1/2 -translate-x-1/2 w-full max-w-[390px] z-40 shadow-[0_-6px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_-8px_28px_rgba(0,0,0,0.45)]"
         style={{ bottom: "calc(60px + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="flex gap-2 items-end max-w-[390px] mx-auto">
@@ -217,7 +217,7 @@ export default function PatientSupportChatPage() {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Сообщение…"
             rows={1}
-            className="flex-1 min-h-[44px] max-h-28 resize-none rounded-[12px] border border-gray-200 dark:border-slate-600 bg-[#F8FAFB] dark:bg-slate-900 px-3 py-2.5 text-[14px] text-[#0F172A] dark:text-white placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="flex-1 min-h-[44px] max-h-28 resize-none rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2.5 text-[14px] text-[#0F172A] dark:text-white placeholder:text-secondary shadow-raised-surface focus:outline-none focus:ring-2 focus:ring-primary/40 dark:focus:ring-slate-500/30"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -230,7 +230,7 @@ export default function PatientSupportChatPage() {
             type="button"
             onClick={handleSend}
             disabled={!uid || !draft.trim() || sending}
-            className="h-11 px-4 rounded-[12px] bg-primary text-white text-[13px] font-semibold disabled:opacity-40 active:scale-95 transition-transform"
+            className="interactive-press-sm h-11 px-4 rounded-[12px] bg-primary text-white text-[13px] font-semibold shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/20 disabled:opacity-40 disabled:active:scale-100"
           >
             Отпр.
           </button>

@@ -136,7 +136,7 @@ export default function TreatmentPlanPage() {
   const stages = groupIntoStages(items);
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <Header title="План лечения" showBack />
 
       <main className="px-5 py-4 flex flex-col gap-5">
@@ -173,7 +173,7 @@ export default function TreatmentPlanPage() {
             <p className="text-[12px] text-gray-400">{stats.completed} из {stats.total} услуг</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100 dark:border-slate-700">
+          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
             {[
               { label: "Выполнено",   value: stats.completed,  barColor: "bg-primary",    textColor: "text-primary" },
               { label: "В процессе",  value: stats.inProgress, barColor: "bg-amber-400",  textColor: "text-amber-600" },

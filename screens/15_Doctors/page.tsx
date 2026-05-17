@@ -30,7 +30,7 @@ const DOCTORS: Doctor[] = [
     research:
       "Автор 18 научных публикаций по методам лечения кариеса и реставрационной стоматологии. Участник ежегодных конференций СтАР.",
     initials: "АМ",
-    color: "#E8F6F6",
+    color: "#E3F2FA",
   },
   {
     id: "ivanov",
@@ -92,7 +92,7 @@ export default function DoctorsPage() {
       : DOCTORS.filter((d) => d.specialtyTag === activeFilter);
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <Header title="Наши врачи" />
 
       {/* Filter chips */}
@@ -103,12 +103,12 @@ export default function DoctorsPage() {
               key={f}
               onClick={() => setActiveFilter(f)}
               className={`
-                flex-shrink-0 h-8 px-4 rounded-full text-[13px] font-semibold
-                border transition-all active:scale-95
+                interactive-press-sm flex-shrink-0 h-8 px-4 rounded-full text-[13px] font-semibold
+                border transition-all duration-150 ease-out shadow-raised-surface
                 ${
                   activeFilter === f
-                    ? "bg-primary text-white border-primary"
-                    : "bg-white dark:bg-slate-800 text-gray-500 border-gray-200 dark:border-slate-600 active:border-primary active:text-primary"
+                    ? "bg-primary text-white border-primary shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-600 active:border-primary active:text-primary"
                 }
               `}
             >
@@ -140,7 +140,7 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
   const bookingService = SPECIALTY_BOOKING_SERVICE[doctor.specialtyTag] ?? "Терапия";
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-[16px] border border-[#E2E8F0] dark:border-slate-700 overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 rounded-[16px] border border-slate-200 dark:border-slate-700 overflow-hidden shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)]">
       {/* Main row */}
       <div className="p-4 flex items-start gap-4">
         {/* Avatar */}
@@ -172,7 +172,7 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
       <div className="px-4 pb-3">
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1.5 text-[12px] text-primary font-medium active:opacity-70 transition-opacity"
+          className="interactive-press-sm flex items-center gap-1.5 text-[12px] text-primary font-medium transition-opacity duration-150 active:opacity-80"
         >
           <svg
             width="14"
@@ -193,7 +193,7 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
         </button>
 
         {expanded && (
-          <div className="mt-2 p-3 bg-surface dark:bg-slate-800 rounded-[10px] border border-[#E2E8F0] dark:border-slate-700">
+          <div className="mt-2 p-3 bg-surface dark:bg-slate-800 rounded-[10px] border border-slate-200 dark:border-slate-700 shadow-inner">
             <p className="text-[13px] text-[#475569] dark:text-slate-400 leading-relaxed">{doctor.research}</p>
           </div>
         )}
@@ -207,11 +207,11 @@ function DoctorCard({ doctor }: { doctor: Doctor }) {
         <Link
           href={`/booking?doctor=${encodeURIComponent(doctor.shortName)}&service=${encodeURIComponent(bookingService)}`}
           className="
-            flex items-center justify-center gap-2
+            interactive-press-sm flex items-center justify-center gap-2
             h-11 w-full rounded-[10px]
             bg-primary text-white
             text-[14px] font-semibold
-            active:scale-95 transition-transform
+            shadow-[0_4px_14px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/25
           "
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-primary">

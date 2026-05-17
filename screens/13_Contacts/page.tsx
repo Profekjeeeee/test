@@ -6,7 +6,7 @@ import BottomBar from "@/components/layout/BottomBar";
 
 export default function ContactsPage() {
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <Header title="Контакты" />
 
       <main className="px-6 py-4 flex flex-col gap-4">
@@ -43,7 +43,7 @@ export default function ContactsPage() {
             { day: "Суббота", hours: "10:00 — 17:00" },
             { day: "Воскресенье", hours: "Выходной" },
           ].map((item) => (
-              <div key={item.day} className="flex justify-between py-1.5 border-b border-gray-100 dark:border-slate-700 last:border-0">
+              <div key={item.day} className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
               <p className="text-[14px] text-gray-500">{item.day}</p>
               <p
                 className={`text-[14px] font-semibold ${

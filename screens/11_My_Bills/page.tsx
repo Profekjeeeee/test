@@ -62,7 +62,7 @@ export default function BillsPage() {
   const paidBills = filtered.filter((b) => b.status === "paid");
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFB] dark:bg-slate-950 pb-[88px]">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-[88px]">
       <Header title="Мои счета" />
 
       {/* ── Balance hero block ─────────────────────────────────── */}
@@ -104,7 +104,7 @@ export default function BillsPage() {
               <button
                 onClick={handlePayAll}
                 disabled={payingAll}
-                className="w-full h-11 rounded-[10px] text-[14px] font-bold text-[#0D2347] active:scale-95 transition-transform disabled:opacity-70 flex items-center justify-center gap-2"
+                className="interactive-press-sm w-full h-11 rounded-[10px] text-[14px] font-bold text-[#0D2347] shadow-[0_4px_14px_rgba(62,207,255,0.45)] border border-sky-300/40 dark:shadow-[0_6px_20px_rgba(0,0,0,0.35)] dark:border-sky-400/20 disabled:opacity-70 disabled:active:scale-100 flex items-center justify-center gap-2"
                 style={{ background: "#3ECFFF" }}
               >
                 {payingAll ? (
@@ -129,18 +129,18 @@ export default function BillsPage() {
             </>
           ) : (
             <div className="flex items-center gap-2 mt-2">
-              <div className="w-5 h-5 rounded-full bg-green-400/20 flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full bg-sky-400/15 flex items-center justify-center">
                 <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-primary">
                   <path
                     d="M2.5 6L5 8.5L9.5 4"
-                    stroke="#4ADE80"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
                 </svg>
               </div>
-              <p className="text-[13px] text-green-300 font-medium">Нет задолженностей</p>
+              <p className="text-[13px] text-primary font-medium">Нет задолженностей</p>
             </div>
           )}
         </div>
@@ -152,10 +152,10 @@ export default function BillsPage() {
           <button
             key={t}
             onClick={() => setFilter(t)}
-            className={`flex-1 h-9 rounded-[8px] text-[13px] font-semibold transition-colors active:scale-95 ${
+            className={`interactive-press-sm flex-1 h-9 rounded-[8px] text-[13px] font-semibold transition-all duration-150 border ${
               filter === t
-                ? "bg-primary text-white shadow-sm"
-                : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400"
+                ? "bg-primary text-white border-primary shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none"
+                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-400 shadow-raised-surface"
             }`}
           >
             {t === "all" ? "Все" : t === "pending" ? "Ожидают" : "Оплаченные"}
@@ -245,11 +245,11 @@ function BillCard({
           {isPending ? (
             <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
           ) : (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="flex-shrink-0">
-              <circle cx="8" cy="8" r="7.5" fill="#DCFCE7" />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="flex-shrink-0 text-primary">
+              <circle cx="8" cy="8" r="7.5" className="fill-primary-light" />
               <path
                 d="M5 8L7 10L11 6"
-                stroke="#16A34A"
+                stroke="currentColor"
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -258,7 +258,7 @@ function BillCard({
           )}
           <span
             className={`text-[12px] font-semibold ${
-              isPending ? "text-red-500" : "text-green-600"
+              isPending ? "text-red-500" : "text-primary"
             }`}
           >
             {isPending ? "Ожидает" : "Оплачено"}
@@ -278,7 +278,7 @@ function BillCard({
           <button
             onClick={() => onPay(bill.id)}
             disabled={paying}
-            className="h-9 px-4 rounded-[8px] bg-primary text-white text-[13px] font-semibold active:scale-95 transition-transform disabled:opacity-60 flex items-center gap-1.5"
+            className="interactive-press-sm h-9 px-4 rounded-[8px] bg-primary text-white text-[13px] font-semibold shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/25 disabled:opacity-60 disabled:active:scale-100 flex items-center gap-1.5"
           >
             {paying ? (
               <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
@@ -305,6 +305,7 @@ type TaxModalView = "confirm" | "enter_email" | "success";
 
 function TaxDeductionCard() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [view, setView] = useState<TaxModalView>("confirm");
   const [userEmail, setUserEmail] = useState("");
   const [emailInput, setEmailInput] = useState("");
@@ -321,14 +322,23 @@ function TaxDeductionCard() {
     setModalOpen(true);
   };
 
-  const closeModal = () => setModalOpen(false);
+  useEffect(() => {
+    if (!modalOpen) return;
+    const id = requestAnimationFrame(() => setModalVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, [modalOpen]);
+
+  const closeModal = () => {
+    setModalVisible(false);
+    setTimeout(() => setModalOpen(false), 300);
+  };
 
   const handleSend = async () => {
     setSending(true);
     await new Promise((r) => setTimeout(r, 800));
     setSending(false);
     setView("success");
-    setTimeout(() => setModalOpen(false), 2200);
+    setTimeout(() => closeModal(), 2200);
   };
 
   const handleSubmitEmail = async () => {
@@ -344,7 +354,7 @@ function TaxDeductionCard() {
     setSending(false);
     setUserEmail(trimmed);
     setView("success");
-    setTimeout(() => setModalOpen(false), 2200);
+    setTimeout(() => closeModal(), 2200);
   };
 
   return (
@@ -353,7 +363,7 @@ function TaxDeductionCard() {
         {/* Illustration */}
         <div
           className="w-full h-[130px] relative overflow-hidden"
-          style={{ background: "linear-gradient(135deg, #E8F5F3 0%, #C5E3DF 100%)" }}
+          style={{ background: "linear-gradient(135deg, #e8f4fc 0%, #bfdbfe 100%)" }}
         >
           <svg
             viewBox="0 0 360 130"
@@ -361,36 +371,36 @@ function TaxDeductionCard() {
             className="absolute inset-0 w-full h-full"
             preserveAspectRatio="xMidYMid slice"
           >
-            <rect x="0" y="0" width="360" height="102" fill="#D9EFEC" />
-            <rect x="0" y="102" width="360" height="28" fill="#B8DAD6" />
-            <line x1="0" y1="102" x2="360" y2="102" stroke="#A4CCC8" strokeWidth="1.5" />
-            <rect x="18" y="14" width="56" height="52" rx="3" fill="#A8D4CF" />
-            <rect x="18" y="14" width="56" height="52" rx="3" stroke="#82BCB7" strokeWidth="1.5" />
-            <line x1="46" y1="14" x2="46" y2="66" stroke="#82BCB7" strokeWidth="1" />
-            <line x1="18" y1="40" x2="74" y2="40" stroke="#82BCB7" strokeWidth="1" />
+            <rect x="0" y="0" width="360" height="102" fill="#dbeafe" />
+            <rect x="0" y="102" width="360" height="28" fill="#93c5fd" />
+            <line x1="0" y1="102" x2="360" y2="102" stroke="#60a5fa" strokeWidth="1.5" />
+            <rect x="18" y="14" width="56" height="52" rx="3" fill="#7dd3fc" />
+            <rect x="18" y="14" width="56" height="52" rx="3" stroke="#3b82f6" strokeWidth="1.5" />
+            <line x1="46" y1="14" x2="46" y2="66" stroke="#3b82f6" strokeWidth="1" />
+            <line x1="18" y1="40" x2="74" y2="40" stroke="#3b82f6" strokeWidth="1" />
             <rect x="22" y="18" width="10" height="18" rx="2" fill="white" opacity="0.3" />
             <rect x="98" y="22" width="18" height="5" rx="2.5" fill="currentColor" opacity="0.3" />
             <rect x="104" y="16" width="5" height="18" rx="2.5" fill="currentColor" opacity="0.3" />
-            <rect x="145" y="90" width="80" height="12" rx="4" fill="#B0CCC8" />
+            <rect x="145" y="90" width="80" height="12" rx="4" fill="#93c5fd" />
             <rect x="140" y="64" width="90" height="32" rx="10" fill="#FFFFFF" />
-            <rect x="140" y="64" width="90" height="32" rx="10" stroke="#C0DDD9" strokeWidth="1.5" />
+            <rect x="140" y="64" width="90" height="32" rx="10" stroke="#93c5fd" strokeWidth="1.5" />
             <rect x="188" y="44" width="34" height="26" rx="8" fill="#FFFFFF" />
-            <rect x="188" y="44" width="34" height="26" rx="8" stroke="#C0DDD9" strokeWidth="1.5" />
-            <rect x="203" y="62" width="5" height="26" rx="2.5" fill="#C0DDD9" />
-            <rect x="245" y="18" width="5" height="84" rx="2.5" fill="#A4C8C4" />
-            <rect x="228" y="18" width="22" height="4" rx="2" fill="#A4C8C4" />
-            <ellipse cx="224" cy="20" rx="10" ry="9" fill="#E2F2F0" stroke="#A4C8C4" strokeWidth="1.5" />
+            <rect x="188" y="44" width="34" height="26" rx="8" stroke="#93c5fd" strokeWidth="1.5" />
+            <rect x="203" y="62" width="5" height="26" rx="2.5" fill="#93c5fd" />
+            <rect x="245" y="18" width="5" height="84" rx="2.5" fill="#7dd3fc" />
+            <rect x="228" y="18" width="22" height="4" rx="2" fill="#7dd3fc" />
+            <ellipse cx="224" cy="20" rx="10" ry="9" fill="#e0f2fe" stroke="#7dd3fc" strokeWidth="1.5" />
             <ellipse cx="224" cy="20" rx="5" ry="4.5" fill="#FDE68A" opacity="0.7" />
-            <rect x="246" y="52" width="30" height="5" rx="2.5" fill="#A4C8C4" />
-            <rect x="244" y="56" width="34" height="8" rx="3" fill="#D9EFEC" stroke="#A4C8C4" strokeWidth="1" />
-            <rect x="298" y="80" width="26" height="22" rx="4" fill="#82BCAC" />
-            <rect x="301" y="78" width="20" height="4" rx="2" fill="#6BAA9A" />
-            <ellipse cx="311" cy="60" rx="16" ry="22" fill="#4DA090" />
-            <ellipse cx="296" cy="56" rx="12" ry="16" fill="#3A9080" />
-            <ellipse cx="326" cy="58" rx="11" ry="15" fill="#3A9080" />
-            <rect x="309" y="68" width="4" height="14" rx="2" fill="#2E7A6C" />
-            <rect x="280" y="38" width="18" height="60" rx="3" fill="#C5E0DC" stroke="#A4C8C4" strokeWidth="1" />
-            <circle cx="285" cy="68" r="2" fill="#A4C8C4" />
+            <rect x="246" y="52" width="30" height="5" rx="2.5" fill="#7dd3fc" />
+            <rect x="244" y="56" width="34" height="8" rx="3" fill="#dbeafe" stroke="#7dd3fc" strokeWidth="1" />
+            <rect x="298" y="80" width="26" height="22" rx="4" fill="#60a5fa" />
+            <rect x="301" y="78" width="20" height="4" rx="2" fill="#3b82f6" />
+            <ellipse cx="311" cy="60" rx="16" ry="22" fill="#2563eb" />
+            <ellipse cx="296" cy="56" rx="12" ry="16" fill="#1d4ed8" />
+            <ellipse cx="326" cy="58" rx="11" ry="15" fill="#1d4ed8" />
+            <rect x="309" y="68" width="4" height="14" rx="2" fill="#1e40af" />
+            <rect x="280" y="38" width="18" height="60" rx="3" fill="#dbeafe" stroke="#7dd3fc" strokeWidth="1" />
+            <circle cx="285" cy="68" r="2" fill="#7dd3fc" />
           </svg>
         </div>
 
@@ -422,20 +432,28 @@ function TaxDeductionCard() {
         </div>
       </Card>
 
-      {/* ── Modal ── */}
+      {/* ── Modal (плавающая карточка над таббаром) ── */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end"
-          style={{ background: "rgba(0,0,0,0.45)" }}
-          onClick={closeModal}
+          className="fixed inset-0 z-[9999]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tax-cert-modal-title"
         >
+          <button
+            type="button"
+            className={`fixed inset-0 cursor-default border-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ease-out outline-none ${
+              modalVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}
+            onClick={closeModal}
+            aria-label="Закрыть"
+          />
           <div
-            className="w-full bg-white dark:bg-[#1E293B] rounded-t-[24px] px-5 pt-5 pb-10 shadow-xl"
+            className={`fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom,0px)+5.25rem))] left-1/2 z-[1] w-[calc(100%-32px)] max-w-md origin-bottom -translate-x-1/2 rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 ease-out dark:border-slate-600 dark:bg-[#1E293B] dark:shadow-[0_8px_32px_rgba(0,0,0,0.35)] max-h-[min(78vh,calc(100dvh-6rem-env(safe-area-inset-bottom,0px)))] overflow-y-auto ${
+              modalVisible ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-95"
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drag handle */}
-            <div className="w-10 h-1 rounded-full bg-gray-200 dark:bg-slate-600 mx-auto mb-5" />
-
             {/* ── View: confirm email ── */}
             {view === "confirm" && (
               <>
@@ -447,14 +465,17 @@ function TaxDeductionCard() {
                     </svg>
                   </div>
                   <div>
-                    <p className="text-[16px] font-bold text-[#0F172A] dark:text-white">
+                    <p
+                      id="tax-cert-modal-title"
+                      className="text-[16px] font-bold text-[#0F172A] dark:text-white"
+                    >
                       Заказать справку
                     </p>
                     <p className="text-[12px] text-gray-400">для налогового вычета 13%</p>
                   </div>
                 </div>
 
-                <div className="rounded-[12px] bg-[#F8FAFB] dark:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 px-4 py-3 mb-4">
+                <div className="rounded-[12px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 mb-4 shadow-raised-surface">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
                     Отправим на почту
                   </p>
@@ -470,14 +491,14 @@ function TaxDeductionCard() {
                 <div className="flex gap-2.5">
                   <button
                     onClick={closeModal}
-                    className="flex-1 h-11 rounded-[10px] border border-gray-200 dark:border-slate-600 text-[14px] font-semibold text-gray-500 dark:text-slate-400 active:scale-95 transition-transform"
+                    className="interactive-press-sm flex-1 h-11 rounded-[10px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[14px] font-semibold text-gray-500 dark:text-slate-400 shadow-raised-surface"
                   >
                     Отмена
                   </button>
                   <button
                     onClick={handleSend}
                     disabled={sending}
-                    className="flex-1 h-11 rounded-[10px] bg-primary text-white text-[14px] font-semibold active:scale-95 transition-transform disabled:opacity-60 flex items-center justify-center gap-2"
+                    className="interactive-press-sm flex-1 h-11 rounded-[10px] bg-primary text-white text-[14px] font-semibold shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/25 disabled:opacity-60 disabled:active:scale-100 flex items-center justify-center gap-2"
                   >
                     {sending ? (
                       <>
@@ -505,7 +526,7 @@ function TaxDeductionCard() {
                     </svg>
                   </div>
                   <div>
-                    <p className="text-[16px] font-bold text-[#0F172A] dark:text-white">
+                    <p id="tax-cert-modal-title" className="text-[16px] font-bold text-[#0F172A] dark:text-white">
                       Укажите email
                     </p>
                     <p className="text-[12px] text-gray-400">для получения справки</p>
@@ -543,14 +564,14 @@ function TaxDeductionCard() {
                 <div className="flex gap-2.5">
                   <button
                     onClick={closeModal}
-                    className="flex-1 h-11 rounded-[10px] border border-gray-200 dark:border-slate-600 text-[14px] font-semibold text-gray-500 dark:text-slate-400 active:scale-95 transition-transform"
+                    className="interactive-press-sm flex-1 h-11 rounded-[10px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[14px] font-semibold text-gray-500 dark:text-slate-400 shadow-raised-surface"
                   >
                     Отмена
                   </button>
                   <button
                     onClick={handleSubmitEmail}
                     disabled={sending}
-                    className="flex-1 h-11 rounded-[10px] bg-primary text-white text-[14px] font-semibold active:scale-95 transition-transform disabled:opacity-60 flex items-center justify-center gap-2"
+                    className="interactive-press-sm flex-1 h-11 rounded-[10px] bg-primary text-white text-[14px] font-semibold shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/25 disabled:opacity-60 disabled:active:scale-100 flex items-center justify-center gap-2"
                   >
                     {sending ? (
                       <>
@@ -576,7 +597,7 @@ function TaxDeductionCard() {
                     <path d="M5 13L10.5 18.5L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <p className="text-[17px] font-bold text-[#0F172A] dark:text-white mb-2">
+                <p id="tax-cert-modal-title" className="text-[17px] font-bold text-[#0F172A] dark:text-white mb-2">
                   Справка отправлена
                 </p>
                 <p className="text-[13px] text-gray-500 leading-relaxed">

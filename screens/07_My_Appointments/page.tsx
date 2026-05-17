@@ -67,11 +67,31 @@ function formatPrice(price: number): string {
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending:     { label: "Ожидает подтверждения", color: "text-amber-700 bg-amber-50" },
-  scheduled:   { label: "Запланирована",  color: "text-primary bg-primary-light" },
-  completed:   { label: "Завершена",       color: "text-gray-500 bg-gray-100" },
-  cancelled:   { label: "Отменена",        color: "text-red-500 bg-red-50" },
-  rescheduled: { label: "Перенесена",      color: "text-amber-600 bg-amber-50" },
+  pending: {
+    label: "Ожидает подтверждения",
+    color:
+      "text-amber-800 bg-amber-50 border border-amber-200/50 dark:text-amber-400/90 dark:bg-amber-500/10 dark:border-amber-500/12",
+  },
+  scheduled: {
+    label: "Запланирована",
+    color:
+      "text-primary bg-primary-light border border-primary/12 dark:text-primary dark:bg-primary/10 dark:border-white/10",
+  },
+  completed: {
+    label: "Завершена",
+    color:
+      "text-gray-500 bg-gray-100 border border-gray-100 dark:text-slate-400 dark:bg-white/[0.06] dark:border-white/8",
+  },
+  cancelled: {
+    label: "Отменена",
+    color:
+      "text-red-600 bg-red-50 border border-red-100 dark:text-red-400/95 dark:bg-red-500/10 dark:border-red-500/12",
+  },
+  rescheduled: {
+    label: "Перенесена",
+    color:
+      "text-amber-700 bg-amber-50 border border-amber-200/50 dark:text-amber-400/85 dark:bg-amber-500/10 dark:border-amber-500/12",
+  },
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -116,7 +136,7 @@ export default function AppointmentsPage() {
   );
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-slate-50 dark:bg-app-canvas pb-safe transition-colors duration-150">
       <Header title="Мои записи" />
 
       {/* Tabs */}
@@ -124,11 +144,12 @@ export default function AppointmentsPage() {
         {(["upcoming", "past"] as const).map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => setTab(t)}
-            className={`flex-1 h-9 rounded-[8px] text-[13px] font-semibold transition-colors ${
+            className={`flex-1 h-9 rounded-[8px] text-[13px] font-semibold border transition-all duration-150 ease-out active:scale-[0.98] ${
               tab === t
-                ? "bg-primary text-white"
-                : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400"
+                ? "bg-primary text-white border-primary shadow-[0_2px_10px_rgba(36,139,207,0.28)] dark:shadow-none"
+                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 shadow-raised-surface"
             }`}
           >
             {t === "upcoming" ? "Предстоящие" : "Прошедшие"}
@@ -150,7 +171,7 @@ export default function AppointmentsPage() {
             const st =
               STATUS_LABELS[apt.status] ?? {
                 label: String(apt.status),
-                color: "text-gray-600 bg-gray-100 dark:bg-slate-700 dark:text-white",
+                color: "text-gray-600 bg-gray-100 dark:bg-white/[0.06] dark:text-slate-400 border border-transparent dark:border-white/8",
               };
             const price = resolvePrice(apt);
             const isPast = tab === "past";
@@ -158,7 +179,10 @@ export default function AppointmentsPage() {
             const isCancelled = apt.status === "cancelled";
 
             return (
-              <Card key={apt.id}>
+              <Card
+                key={apt.id}
+                className="bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:bg-slate-900/80 dark:shadow-[0_4px_18px_rgba(0,0,0,0.22)]"
+              >
                 {/* Row 1: service title + status badge */}
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white flex-1 leading-snug">
@@ -183,7 +207,7 @@ export default function AppointmentsPage() {
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {/* Paid badge for completed appointments */}
                     {isPast && isPaid && !isCancelled && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary-light text-primary">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary-light text-primary dark:bg-primary/12 dark:border dark:border-white/10 dark:text-primary">
                         Оплачено
                       </span>
                     )}
@@ -205,16 +229,18 @@ export default function AppointmentsPage() {
                 {(apt.status === "scheduled" ||
                   apt.status === "pending" ||
                   apt.status === "rescheduled") && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 flex gap-2">
+                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex gap-2">
                     <button
+                      type="button"
                       onClick={() => handleReschedule(apt)}
-                      className="flex-1 h-9 rounded-[8px] border border-gray-200 dark:border-slate-600 text-[13px] font-medium text-gray-600 dark:text-slate-300 active:opacity-70 transition-opacity"
+                      className="flex-1 h-9 rounded-[8px] border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/90 text-[13px] font-semibold text-primary shadow-raised-surface transition-all duration-150 ease-out active:scale-[0.98]"
                     >
                       Перенести
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleCancel(apt.id)}
-                      className="flex-1 h-9 rounded-[8px] border border-red-200 text-[13px] font-medium text-red-500 active:opacity-70 transition-opacity"
+                      className="flex-1 h-9 rounded-[8px] border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/90 text-[13px] font-semibold text-red-500 shadow-raised-surface transition-all duration-150 ease-out active:scale-[0.98]"
                     >
                       Отменить
                     </button>
@@ -226,8 +252,9 @@ export default function AppointmentsPage() {
         )}
 
         <button
+          type="button"
           onClick={() => router.push("/booking")}
-          className="mt-2 w-full h-12 rounded-[12px] bg-primary text-white text-[15px] font-semibold active:scale-[0.98] transition-transform"
+          className="mt-2 w-full h-12 rounded-[12px] bg-primary text-white text-[15px] font-semibold shadow-[0_4px_14px_rgba(36,139,207,0.35)] border border-primary-dark/20 dark:shadow-none transition-all duration-150 ease-out active:scale-[0.98] active:bg-primary-dark"
         >
           + Записаться на приём
         </button>

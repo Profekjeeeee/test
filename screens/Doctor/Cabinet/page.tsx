@@ -21,10 +21,11 @@ import {
   isSameCalendarDay,
   sortAppointmentsByTimeAsc,
   appointmentStatusLabelRu,
-  formatScheduleHeaderDate,
+  formatScheduleHeaderDateStable,
 } from "@/lib/doctorSchedule";
 import DoctorMonthCalendar from "@/screens/Doctor/Cabinet/DoctorMonthCalendar";
 import PatientMedicalSheet from "@/screens/Doctor/Cabinet/PatientMedicalSheet";
+import { useClientNow } from "@/hooks/useClientNow";
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -38,12 +39,32 @@ function patientShortName(patientId?: string): string {
   return `${c.lastName} ${ini ? `${ini}.` : ""}`.trim();
 }
 
+function DoctorCabinetSkeleton() {
+  return (
+    <main
+      className="min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)]"
+      aria-busy="true"
+    >
+      <div className="max-w-[480px] mx-auto px-5 pt-12 space-y-4">
+        <div className="h-24 rounded-2xl bg-slate-200/80 dark:bg-slate-800/80 animate-pulse" />
+        <div className="h-[360px] rounded-2xl bg-slate-200/80 dark:bg-slate-800/80 animate-pulse" />
+      </div>
+    </main>
+  );
+}
+
 export default function DoctorCabinetPage() {
+  const anchor = useClientNow();
+  if (!anchor) return <DoctorCabinetSkeleton />;
+  return <DoctorCabinetInner anchor={anchor} />;
+}
+
+function DoctorCabinetInner({ anchor }: { anchor: Date }) {
   const router = useRouter();
   const [session, setSession] = useState<DentalSession | null>(null);
   const [dataRev, setDataRev] = useState(0);
-  const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(anchor));
+  const [selectedDate, setSelectedDate] = useState(() => anchor);
   const [sheetPatientId, setSheetPatientId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -108,12 +129,12 @@ export default function DoctorCabinetPage() {
     router.replace(ROUTES.auth);
   };
 
-  const todayStr = formatScheduleHeaderDate(new Date());
-  const selectedStr = formatScheduleHeaderDate(selectedDate);
+  const todayStr = formatScheduleHeaderDateStable(anchor);
+  const selectedStr = formatScheduleHeaderDateStable(selectedDate);
 
   return (
     <main
-      className="min-h-dvh bg-[#F8FAFB] dark:bg-slate-950 pb-[calc(env(safe-area-inset-bottom)+24px)]"
+      className="min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)]"
       style={{ fontFamily: "Manrope, sans-serif" }}
     >
       <div className="max-w-[480px] mx-auto px-5 pt-12">
@@ -133,7 +154,7 @@ export default function DoctorCabinetPage() {
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href={ROUTES.doctorMessages}
-              className="w-10 h-10 rounded-xl border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 text-primary flex items-center justify-center active:scale-95 transition-transform"
+              className="interactive-press-sm w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-primary flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
               title="Сообщения пациентов"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -149,7 +170,7 @@ export default function DoctorCabinetPage() {
           <button
             type="button"
             onClick={handleLogout}
-            className="w-10 h-10 rounded-xl border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 text-secondary flex items-center justify-center active:scale-95 transition-transform shrink-0"
+            className="interactive-press-sm w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-secondary flex items-center justify-center shrink-0 shadow-[0_4px_12px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
             title="Выйти"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -174,6 +195,7 @@ export default function DoctorCabinetPage() {
         <DoctorMonthCalendar
           viewMonth={viewMonth}
           selectedDate={selectedDate}
+          clientNow={anchor}
           daysWithAppointments={daysWithDots}
           onSelectDay={handleSelectCalendarDay}
           onPrevMonth={goPrevMonth}
@@ -202,12 +224,12 @@ export default function DoctorCabinetPage() {
                   type="button"
                   disabled={disabled}
                   onClick={() => a.patientId && setSheetPatientId(a.patientId)}
-                  className={`text-left rounded-2xl border border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 transition-transform active:scale-[0.98] ${
-                    disabled ? "opacity-60 cursor-not-allowed" : "active:scale-95"
+                  className={`text-left rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)] transition-all duration-150 ease-out ${
+                    disabled ? "opacity-60 cursor-not-allowed" : "active:scale-[0.97]"
                   }`}
                 >
                   <div className="flex justify-between gap-2 items-start">
-                    <span className="text-[18px] font-bold text-[#A1D6D7] tabular-nums shrink-0">{a.time}</span>
+                    <span className="text-[18px] font-bold text-primary tabular-nums shrink-0">{a.time}</span>
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-[#F1F5F9] dark:bg-slate-800 text-secondary shrink-0">
                       {appointmentStatusLabelRu(a.status)}
                     </span>

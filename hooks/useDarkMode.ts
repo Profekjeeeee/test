@@ -1,24 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
- * Возвращает true когда активна тёмная тема (класс .dark на <html>).
- * Реагирует на смену темы через кастомное событие themeChange.
+ * Тёмная тема: класс .dark на <html>.
+ * Следит за themeChange и за мутациями класса на html (первая инициализация ThemeProvider).
  */
 export function useDarkMode(): boolean {
-  const [dark, setDark] = useState(false);
+  return useSyncExternalStore(subscribeDarkMode, getDarkSnapshot, serverDarkSnapshot);
+}
 
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
+function subscribeDarkMode(onStoreChange: () => void): () => void {
+  const onTheme = () => onStoreChange();
+  window.addEventListener("themeChange", onTheme);
 
-    const handler = (e: Event) => {
-      setDark((e as CustomEvent<{ dark: boolean }>).detail.dark);
-    };
+  const obs =
+    typeof document !== "undefined"
+      ? new MutationObserver(() => onStoreChange())
+      : null;
+  obs?.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
 
-    window.addEventListener("themeChange", handler);
-    return () => window.removeEventListener("themeChange", handler);
-  }, []);
+  return () => {
+    window.removeEventListener("themeChange", onTheme);
+    obs?.disconnect();
+  };
+}
 
-  return dark;
+function getDarkSnapshot(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.documentElement.classList.contains("dark");
+}
+
+function serverDarkSnapshot(): boolean {
+  return false;
 }

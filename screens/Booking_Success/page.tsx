@@ -26,7 +26,7 @@ function BookingSuccessContent() {
   const title = kind === "reschedule" ? "Запись перенесена" : "Запись создана";
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe flex flex-col">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe flex flex-col">
       <Header title="Готово" />
       <main className="px-5 py-8 flex flex-col items-center text-center flex-1 gap-4">
         <div className="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center">
@@ -74,7 +74,7 @@ function BookingSuccessContent() {
 export default function BookingSuccessPage() {
   return (
     <Suspense
-      fallback={<div className="min-h-dvh bg-surface dark:bg-slate-950" />}
+      fallback={<div className="min-h-dvh bg-surface dark:bg-app-canvas" />}
     >
       <BookingSuccessContent />
     </Suspense>

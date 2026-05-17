@@ -96,7 +96,7 @@ export default function AdminFeedPage() {
   const unreadCount = FEED_ITEMS.filter((i) => i.unread).length;
 
   return (
-    <main className="min-h-dvh bg-surface dark:bg-slate-950 pb-[84px]">
+    <main className="min-h-dvh bg-surface dark:bg-app-canvas pb-[84px]">
       {/* Header */}
       <div className="px-5 pt-12 pb-4">
         <div className="flex items-center gap-2">
@@ -117,10 +117,10 @@ export default function AdminFeedPage() {
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold transition-colors active:scale-95 ${
+              className={`interactive-press-sm shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold border shadow-raised-surface ${
                 activeCategory === cat.id
-                  ? "bg-primary text-white"
-                  : "bg-white dark:bg-slate-800 text-secondary border border-gray-100 dark:border-slate-700"
+                  ? "bg-primary text-white border-primary shadow-[0_4px_14px_rgba(36,139,207,0.35)] dark:shadow-none"
+                  : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-700"
               }`}
             >
               {cat.label}
@@ -134,10 +134,10 @@ export default function AdminFeedPage() {
         {filtered.map((item) => (
           <div
             key={item.id}
-            className={`rounded-2xl bg-white dark:bg-slate-900 border p-4 flex gap-3 transition-colors ${
+            className={`rounded-2xl bg-white dark:bg-slate-900 border p-4 flex gap-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)] transition-colors ${
               item.unread
                 ? "border-primary/30 dark:border-primary/20"
-                : "border-gray-100 dark:border-slate-800"
+                : "border-slate-200 dark:border-slate-800"
             }`}
           >
             <div className="w-10 h-10 rounded-xl bg-surface dark:bg-slate-800 flex items-center justify-center shrink-0 text-[20px]">

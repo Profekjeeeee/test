@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createUser, normalizePhone, setCurrentUser } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
+import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 import { saveProfile } from "@/lib/userProfile";
 
 const NAME_RE = /^[а-яёА-ЯЁa-zA-Z][а-яёА-ЯЁa-zA-Z\s-]{1,}$/;
@@ -126,17 +127,15 @@ export default function RegistrationPage() {
 
   return (
     <main
-      className="min-h-dvh bg-surface dark:bg-slate-950 flex flex-col justify-center px-6 pb-8"
+      className="min-h-dvh bg-surface dark:bg-app-canvas flex flex-col justify-center px-6 pb-8"
       style={{ fontFamily: "Manrope, sans-serif" }}
     >
       <div className="mb-8">
-        <div className="w-12 h-12 rounded-[12px] bg-primary flex items-center justify-center mb-6">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 3C9.5 3 7 5 7 8C7 10 8 11.5 8.5 13C9 14.5 9 16 8.5 18C8 20 9 21 10 21C11 21 11.5 20 12 18.5C12.5 20 13 21 14 21C15 21 16 20 15.5 18C15 16 15 14.5 15.5 13C16 11.5 17 10 17 8C17 5 14.5 3 12 3Z"
-              fill="white"
-            />
-          </svg>
+        <div className="flex justify-center mb-6">
+          <FormulaToothIcon
+            variant="outline"
+            className="w-[4.75rem] h-[4.75rem] text-primary shrink-0"
+          />
         </div>
         <h1 className="text-[28px] font-bold text-[#0F172A] dark:text-white leading-tight tracking-tight">
           Регистрация
@@ -245,7 +244,7 @@ function RegistrationField({ label, value, onChange, error, placeholder, type = 
           "placeholder:text-gray-400 dark:placeholder:text-slate-600",
           error
             ? "border-[#EF4444] bg-[#FFF5F5] text-[#0F172A] dark:bg-[#3B1212] dark:border-[#EF4444] dark:text-white"
-            : "border-[#E2E8F0] bg-[#FAFCFC] text-[#0F172A] dark:bg-[#0F172A] dark:border-[#334155] dark:text-white focus:border-primary dark:focus:border-[#A1D6D7]",
+            : "border-[#E2E8F0] bg-[#FAFCFC] text-[#0F172A] dark:bg-[#0F172A] dark:border-[#334155] dark:text-white focus:border-primary dark:focus:border-primary",
         ].join(" ")}
         style={{ fontFamily: "Manrope, sans-serif" }}
       />

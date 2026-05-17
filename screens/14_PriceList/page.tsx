@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -252,11 +252,11 @@ export default function PriceListPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFB] dark:bg-slate-950 pb-[88px]">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-[88px]">
       <Header title="Прайс-лист" showBack />
 
       {/* Sticky search */}
-      <div className="sticky top-14 z-30 bg-[#F8FAFB] dark:bg-slate-950 px-5 pt-3 pb-2 border-b border-gray-100 dark:border-slate-700">
+      <div className="sticky top-14 z-30 bg-surface dark:bg-app-canvas px-5 pt-3 pb-2 border-b border-slate-200 dark:border-slate-700">
         <div className="relative">
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -273,7 +273,7 @@ export default function PriceListPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск по услугам..."
-            className="w-full h-10 pl-9 pr-9 rounded-[10px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-[14px] text-[#0F172A] dark:text-white placeholder-gray-400 outline-none focus:border-primary transition-colors"
+            className="w-full h-10 pl-9 pr-9 rounded-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-[14px] text-[#0F172A] dark:text-white placeholder-gray-400 outline-none focus:border-primary transition-colors shadow-raised-surface"
           />
           {query && (
             <button
@@ -338,9 +338,9 @@ function CategorySection({
   onBook: (service: string, price: number, itemTitle: string) => void;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-[16px] border border-gray-100 dark:border-slate-700 overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 rounded-[16px] border border-slate-200 dark:border-slate-700 overflow-hidden shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)]">
       {/* Category header */}
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-[#F8FAFB] dark:bg-slate-800">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-surface dark:bg-slate-800">
         <div className="w-7 h-7 rounded-[8px] bg-primary/10 flex items-center justify-center flex-shrink-0">
           {CATEGORY_ICONS[category.id]}
         </div>
@@ -396,7 +396,7 @@ function PriceRow({
         </p>
         <button
           onClick={() => onBook(item.price, item.title)}
-          className="h-7 px-3 rounded-[6px] border border-primary text-primary text-[11px] font-bold active:scale-95 active:bg-primary active:text-white transition-all"
+          className="interactive-press-sm h-7 px-3 rounded-[6px] border border-primary text-primary text-[11px] font-bold shadow-[0_2px_6px_rgba(36,139,207,0.15)] dark:shadow-none active:bg-primary active:text-white transition-colors duration-150"
         >
           Записаться
         </button>

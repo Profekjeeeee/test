@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { logout, getDentalSession, getCurrentUserId, updateClientPersonalProfile } from "@/lib/auth";
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
 import { Toast } from "@/components/ui/Toast";
@@ -131,7 +131,7 @@ function Field({ label, value, onChange, error, type = "text", inputMode, placeh
           "placeholder:text-gray-400 dark:placeholder:text-slate-600",
           error
             ? "border-[#EF4444] bg-[#FFF5F5] shadow-[0_0_0_3px_rgba(239,68,68,0.08)] text-[#0F172A] dark:bg-[#3B1212] dark:border-[#EF4444] dark:text-white"
-            : "border-[#E2E8F0] bg-[#FAFCFC] text-[#0F172A] dark:bg-[#0F172A] dark:border-[#334155] dark:text-white focus:border-primary dark:focus:border-[#A1D6D7]",
+            : "border-[#E2E8F0] bg-[#FAFCFC] text-[#0F172A] dark:bg-[#0F172A] dark:border-[#334155] dark:text-white focus:border-primary dark:focus:border-primary",
         ].join(" ")}
         style={{ fontFamily: "Manrope, sans-serif" }}
       />
@@ -248,12 +248,32 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setTouched({ firstName: true, lastName: true, phone: true, email: true });
     if (hasErrors) return;
+    const uid = getCurrentUserId();
+    const sess = getDentalSession();
+    if (!(sess?.role === "client" && uid && sess.id === uid)) return;
+
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    saveProfile(form);
-    setSaving(false);
-    setToastVisible(true);
-    setTimeout(() => setToastVisible(false), 2500);
+    try {
+      await updateClientPersonalProfile({
+        clientId: uid,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+        phoneDigits: form.phone,
+      });
+      saveProfile(form);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 2500);
+    } catch (err) {
+      console.error("[Profile] сохранение в Supabase:", err);
+      const msg =
+        err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "Не удалось сохранить. Проверьте связь.";
+      alert(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleNotif = (key: keyof UserNotifications) => {
@@ -273,7 +293,7 @@ export default function ProfilePage() {
   const saveDisabled = saving || (allTouched && hasErrors);
 
   return (
-    <div className="min-h-dvh bg-[#F7F9FB] dark:bg-[#0F172A] pb-safe" style={{ fontFamily: "Manrope, sans-serif" }}>
+    <div className="min-h-dvh bg-surface dark:bg-[#0F172A] pb-safe" style={{ fontFamily: "Manrope, sans-serif" }}>
       <Header title="Профиль" />
 
       <main className="px-4 py-4 flex flex-col gap-4 pb-28">
@@ -281,8 +301,7 @@ export default function ProfilePage() {
         {/* ── Avatar + name ── */}
         <div className="flex items-center gap-4 px-2 py-2">
           <div
-            className="w-[68px] h-[68px] rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #E6F5F4 0%, #C8E8E5 100%)" }}
+            className="w-[68px] h-[68px] rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#e3f2fa] to-[#c7e2f9] dark:from-[#163554] dark:to-[#1e3a5f]"
           >
             <span className="text-[22px] font-bold text-primary">{initials}</span>
           </div>
@@ -365,10 +384,9 @@ export default function ProfilePage() {
           </p>
           <div className="flex items-center gap-3">
             <div
-              className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #E6F5F4, #C8E8E5)" }}
+              className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#e3f2fa] to-[#c7e2f9] dark:from-[#163554] dark:to-[#1e3a5f]"
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-[#CBD5E1]">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-primary/80">
                 <circle cx="10" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M3.5 17.5C3.5 14.5 6.5 12 10 12C13.5 12 16.5 14.5 16.5 17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
@@ -382,7 +400,7 @@ export default function ProfilePage() {
               </p>
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-[10px] bg-[#F8FAFB] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155]">
+          <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-[10px] bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-[#334155] shadow-raised-surface">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="#94A3B8" strokeWidth="1.3" />
               <path d="M5 2V4M11 2V4" stroke="#94A3B8" strokeWidth="1.3" strokeLinecap="round" />
@@ -447,7 +465,7 @@ export default function ProfilePage() {
               href={item.href}
               className={`flex items-center gap-3 py-3 active:opacity-70 transition-opacity ${idx < CLINIC_LINKS.length - 1 ? "border-b border-[#F1F5F9] dark:border-[#334155]" : ""}`}
             >
-              <div className="w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 bg-[#E6F5F4] dark:bg-[#0D2D3D]">
+              <div className="w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 bg-primary-light dark:bg-[#163554]">
                 {item.icon}
               </div>
               <span className="flex-1 text-[15px] font-medium text-[#0F172A] dark:text-white">{item.label}</span>

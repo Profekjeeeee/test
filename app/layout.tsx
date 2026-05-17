@@ -43,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" className={`${manrope.variable} ${inter.variable}`}>
+    <html lang="ru" className={`${manrope.variable} ${inter.variable}`} suppressHydrationWarning>
       <head>
         {/* Анти-FOUC: применяем сохранённую тему до рендера */}
         <script

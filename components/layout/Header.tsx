@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 interface HeaderProps {
@@ -25,12 +24,12 @@ export default function Header({ title, showBack, backHref, onBack, rightSlot }:
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#1E293B]/95 backdrop-blur-sm border-b border-gray-100 dark:border-[#334155]">
+    <header className="sticky top-0 z-40 bg-white/90 dark:bg-app-nav/92 backdrop-blur-sm border-b border-slate-200 dark:border-white/8 shadow-[0_4px_16px_rgba(15,23,42,0.04)] dark:shadow-none">
       <div className="flex items-center h-14 px-6 gap-3">
         {showBack && (
           <button
             onClick={handleBack}
-            className="flex items-center justify-center w-9 h-9 -ml-1.5 rounded-full hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center w-9 h-9 -ml-1.5 rounded-full border border-slate-200 dark:border-slate-600 bg-white/90 dark:bg-slate-800/90 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-raised-surface"
             aria-label="Назад"
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-[#0F172A] dark:text-white">

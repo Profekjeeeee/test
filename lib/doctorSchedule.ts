@@ -50,6 +50,69 @@ export function appointmentStatusLabelRu(status: AppointmentStatus): string {
   }
 }
 
+/** Понедельник-first: 0 — пн … 6 — вс — как сетка календаря в UI */
+const WEEKDAY_LONG_NOM_MS = [
+  "понедельник",
+  "вторник",
+  "среда",
+  "четвер",
+  "пятница",
+  "суббота",
+  "воскресенье",
+] as const;
+
+const MONTHS_GENITIVE_FOR_HEADER = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+] as const;
+
+export const MONTH_TITLES_NOMINATIVE = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+] as const;
+
+/** Без Intl: одинаково на SSR Node и в браузере убирает hydration mismatch текстов заголовков. */
+export function formatScheduleHeaderDateStable(d: Date): string {
+  const w = WEEKDAY_LONG_NOM_MS[(d.getDay() + 6) % 7] ?? "";
+  const cap = w.charAt(0).toUpperCase() + w.slice(1);
+  const mi = MONTHS_GENITIVE_FOR_HEADER[d.getMonth()] ?? "";
+  const rest = `${d.getDate()} ${mi}, ${d.getFullYear()}`;
+  return `${cap}, ${rest}`;
+}
+
+export function formatRuMonthYearTitleFromDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const nom = MONTH_TITLES_NOMINATIVE[m] ?? "";
+  return `${nom} ${y}`;
+}
+
+/** «17 мая, 2026» без Intl для совпадения SSR/клиента. */
+export function formatRuNumericLongDateStable(d: Date): string {
+  const mi = MONTHS_GENITIVE_FOR_HEADER[d.getMonth()] ?? "";
+  return `${d.getDate()} ${mi}, ${d.getFullYear()}`;
+}
+
 export function formatScheduleHeaderDate(d: Date): string {
   const w = d.toLocaleString("ru-RU", { weekday: "long" });
   const cap = w.charAt(0).toUpperCase() + w.slice(1);

@@ -24,9 +24,9 @@ const STATUS_META: Record<ToothCondition, StatusMeta> = {
   healthy: {
     label: "Здоров",
     subLabel: "Патологий не обнаружено",
-    color: "#10B981",
-    bgColor: "#ECFDF5",
-    borderColor: "#6EE7B7",
+    color: "#248bcf",
+    bgColor: "#e3f2fa",
+    borderColor: "#7dd3fc",
     icdCode: undefined,
   },
   treated: {
@@ -248,7 +248,7 @@ export default function ToothCardPage() {
 
   if (!tooth) {
     return (
-      <div className="min-h-dvh bg-surface dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-dvh bg-surface dark:bg-app-canvas flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -260,7 +260,7 @@ export default function ToothCardPage() {
   const guarantee = getGuarantee(tooth.condition);
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <Header title={`Зуб №${toothNum}`} showBack />
 
       <main className="px-4 py-4 flex flex-col gap-3 pb-28">
@@ -348,7 +348,7 @@ export default function ToothCardPage() {
               <span
                 className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${
                   guarantee.active
-                    ? "bg-emerald-50 text-emerald-600"
+                    ? "bg-primary-light text-primary"
                     : "bg-gray-100 text-gray-400"
                 }`}
               >

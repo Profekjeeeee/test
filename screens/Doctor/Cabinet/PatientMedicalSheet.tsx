@@ -28,7 +28,7 @@ const TOOTH_PATH =
 
 const STRIP: Partial<Record<ToothCondition, { fill: string; stroke: string; dot?: boolean; x?: boolean }>> = {
   healthy: { fill: "none", stroke: "#CBD5E1" },
-  treated: { fill: "#E8F6F6", stroke: "#A1D6D7" },
+  treated: { fill: "var(--color-primary-light)", stroke: "var(--color-primary)" },
   caries: { fill: "#FEE2E2", stroke: "#F87171", dot: true },
   removed: { fill: "none", stroke: "#CBD5E1", x: true },
   crown: { fill: "#FEF3C7", stroke: "#FBBF24" },
@@ -147,10 +147,10 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-[#F8FAFB] dark:bg-slate-950"
+      className="fixed inset-0 z-[100] flex flex-col bg-surface dark:bg-app-canvas"
       style={{ fontFamily: "Manrope, sans-serif" }}
     >
-      <header className="shrink-0 px-5 pt-12 pb-4 border-b border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900">
+      <header className="shrink-0 px-5 pt-12 pb-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-[0_4px_16px_rgba(15,23,42,0.05)] dark:shadow-none">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-secondary mb-1">
@@ -164,7 +164,7 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
           <button
             type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-xl border border-[#E2E8F0] dark:border-slate-700 text-secondary flex items-center justify-center active:scale-95 transition-transform shrink-0"
+            className="interactive-press-sm w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shrink-0 shadow-raised-surface"
             aria-label="Закрыть"
           >
             ✕
@@ -186,7 +186,7 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
               history.map((a: ClinicAppointment) => (
                 <div
                   key={`${a.id}-${a.time}-${a.day}`}
-                  className="rounded-2xl border border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3"
+                  className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 shadow-[0_4px_14px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.28)]"
                 >
                   <div className="flex justify-between gap-2">
                     <span className="text-[14px] font-semibold text-[#0F172A] dark:text-white">
@@ -221,7 +221,7 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
                   return (
                     <div
                       key={item.id}
-                      className="rounded-2xl border border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 flex justify-between gap-3"
+                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 flex justify-between gap-3 shadow-[0_4px_14px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.28)]"
                     >
                       <div>
                         <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white">{item.title}</p>
@@ -233,7 +233,7 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
                         <p className="text-[13px] font-bold text-[#0F172A] dark:text-white">
                           {item.price.toLocaleString("ru-RU")} ₽
                         </p>
-                        <p className="text-[11px] font-semibold text-[#A1D6D7] mt-0.5">{planPhaseRu(st)}</p>
+                        <p className="text-[11px] font-semibold text-primary mt-0.5">{planPhaseRu(st)}</p>
                       </div>
                     </div>
                   );
@@ -242,13 +242,13 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[#E2E8F0] dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)]">
           <div className="flex items-center justify-between mb-3 gap-2">
             <h3 className="text-[13px] font-bold uppercase tracking-widest text-secondary">
               Зубная формула
             </h3>
             {savedHint && (
-              <span className="text-[11px] font-semibold text-[#A1D6D7]">Сохранено</span>
+              <span className="text-[11px] font-semibold text-primary">Сохранено</span>
             )}
           </div>
 
@@ -278,9 +278,9 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
                       key={c.value}
                       type="button"
                       onClick={() => patchCondition(selectedTooth, c.value)}
-                      className={`px-3 py-2 rounded-xl text-[12px] font-semibold border transition-colors active:scale-95 ${
+                      className={`interactive-press-sm px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all duration-150 shadow-raised-surface ${
                         active
-                          ? "border-[#A1D6D7] bg-[#E8F6F6] dark:bg-[#1A3D3F]/40 text-[#0F172A] dark:text-white"
+                          ? "border-primary bg-primary-light text-[#0F172A] dark:text-white"
                           : "border-[#E2E8F0] dark:border-slate-700 text-secondary"
                       }`}
                     >
@@ -296,7 +296,7 @@ export default function PatientMedicalSheet({ patientId, onClose }: PatientMedic
             type="button"
             disabled={saving}
             onClick={handleSaveFormula}
-            className="mt-5 w-full h-12 rounded-2xl bg-[#A1D6D7] text-[#0F172A] font-bold text-[15px] active:scale-95 transition-transform disabled:opacity-60"
+            className="interactive-press-sm mt-5 w-full h-12 rounded-2xl bg-primary text-white font-bold text-[15px] shadow-[0_4px_14px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/25 disabled:opacity-60 disabled:active:scale-100"
           >
             Сохранить формулу
           </button>
@@ -330,8 +330,10 @@ function ToothRow({
             key={n}
             type="button"
             onClick={() => onPick(n)}
-            className={`flex-1 min-w-0 max-w-[42px] aspect-[24/32] p-0.5 rounded-lg transition-transform active:scale-95 ${
-              isSel ? "ring-2 ring-[#A1D6D7] ring-offset-2 ring-offset-white dark:ring-offset-slate-900" : ""
+            className={`flex-1 min-w-0 max-w-[42px] aspect-[24/32] p-0.5 rounded-lg transition-transform active:scale-95 border ${
+              isSel
+                ? "border-transparent ring-2 ring-primary ring-offset-2 ring-offset-white dark:ring-offset-slate-900 dark:ring-primary/55"
+                : "border-slate-200 dark:border-slate-600"
             }`}
           >
             <DoctorToothGlyph condition={condition} flipped={flipped} />

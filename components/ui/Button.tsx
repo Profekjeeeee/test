@@ -2,23 +2,23 @@ import { ButtonHTMLAttributes, forwardRef } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50 disabled:pointer-events-none min-h-[44px] select-none",
+  "inline-flex items-center justify-center font-semibold transition-all duration-150 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:focus-visible:ring-primary/30 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 min-h-[44px] select-none",
   {
     variants: {
       variant: {
         primary:
-          "bg-primary text-white hover:bg-primary-dark active:bg-primary-dark rounded-[4px]",
+          "bg-primary text-white hover:bg-primary-dark active:bg-primary-dark rounded-[4px] dark:shadow-none",
         secondary:
-          "bg-primary-light text-primary hover:bg-primary/20 rounded-[4px]",
+          "bg-primary-light text-primary border border-slate-200 dark:border-slate-600 hover:bg-primary/20 rounded-[4px]",
         outline:
           "border border-primary text-primary hover:bg-primary-light rounded-[4px]",
         ghost:
-          "text-primary hover:bg-primary-light rounded-[4px]",
+          "border border-slate-200 dark:border-slate-700 bg-transparent text-primary hover:bg-primary-light rounded-[4px]",
         destructive:
           "bg-error text-white hover:bg-red-700 rounded-[4px]",
       },
       size: {
-        sm: "text-[13px] px-3 h-9 min-h-[36px]",
+        sm: "text-[13px] px-3 h-9 min-h-[36px] active:scale-95",
         md: "text-[15px] px-5 h-12",
         lg: "text-[16px] px-6 h-[52px]",
         full: "text-[15px] px-5 h-12 w-full",

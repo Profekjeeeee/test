@@ -217,7 +217,7 @@ export default function StaffMessagesPage({ mode }: Props) {
 
   return (
     <main
-      className={`min-h-dvh bg-[#F8FAFB] dark:bg-slate-950 ${
+      className={`min-h-dvh bg-surface dark:bg-app-canvas ${
         mode === "admin" ? "pb-[84px]" : "pb-[calc(env(safe-area-inset-bottom)+24px)]"
       }`}
       style={{ fontFamily: "Manrope, sans-serif" }}
@@ -229,7 +229,7 @@ export default function StaffMessagesPage({ mode }: Props) {
               <div className="flex items-start gap-2">
                 <Link
                   href={backHref}
-                  className="w-10 h-10 rounded-[12px] border border-gray-200 dark:border-slate-600 flex items-center justify-center shrink-0 mt-0.5 active:scale-95 transition-transform"
+                  className="interactive-press-sm w-10 h-10 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-raised-surface"
                   aria-label="Назад"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
@@ -257,7 +257,7 @@ export default function StaffMessagesPage({ mode }: Props) {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="text-[12px] font-semibold text-secondary underline-offset-2 hover:underline active:scale-95"
+                className="interactive-press-sm text-[12px] font-semibold text-secondary underline-offset-2 hover:underline"
               >
                 Выход
               </button>
@@ -276,10 +276,10 @@ export default function StaffMessagesPage({ mode }: Props) {
                     key={t.id}
                     type="button"
                     onClick={() => setAdminSection(t.id)}
-                    className={`flex-1 py-2 rounded-[11px] text-[11px] font-semibold transition-all active:scale-95 ${
+                    className={`flex-1 py-2 rounded-[11px] text-[11px] font-semibold transition-all duration-150 ease-out interactive-press-sm border ${
                       adminSection === t.id
-                        ? "bg-white dark:bg-slate-900 text-primary shadow-sm border border-gray-100 dark:border-slate-700"
-                        : "text-secondary"
+                        ? "bg-white dark:bg-slate-900 text-primary shadow-[0_4px_12px_rgba(15,23,42,0.08)] border-slate-200 dark:border-slate-700"
+                        : "border-slate-200/85 dark:border-slate-600 text-slate-700 dark:text-slate-400 bg-transparent"
                     }`}
                   >
                     {t.label}
@@ -287,7 +287,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                 ))}
               </div>
             ) : (
-              <p className="text-[13px] text-secondary mb-4 rounded-[14px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
+              <p className="text-[13px] text-secondary mb-4 rounded-[14px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 shadow-raised-surface">
                 Здесь ветки «клиника» и личный чат с пациентом (к вашему номеру). Ответ автоматически уходит туда же,
                 где пациент написал последним.
               </p>
@@ -303,7 +303,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                   audit.map((row) => (
                     <li
                       key={row.id}
-                      className="rounded-[14px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3"
+                      className="rounded-[14px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 shadow-[0_4px_14px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)]"
                     >
                       <div className="flex justify-between gap-2 text-[11px] text-secondary mb-1">
                         <span>{formatMsgTime(new Date(row.at).getTime())}</span>
@@ -329,9 +329,9 @@ export default function StaffMessagesPage({ mode }: Props) {
                       <button
                         type="button"
                         onClick={() => setSelected(p)}
-                        className="w-full text-left rounded-[14px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 flex gap-3 items-start active:scale-[0.99] transition-transform"
+                        className="interactive-press-sm w-full text-left rounded-[14px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 flex gap-3 items-start shadow-[0_4px_14px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)]"
                       >
-                        <div className="w-10 h-10 rounded-full bg-primary-light dark:bg-[#1A3D3F] flex items-center justify-center text-[13px] font-bold text-primary shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-primary-light flex items-center justify-center text-[13px] font-bold text-primary shrink-0">
                           {p.patientName.trim().charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -372,7 +372,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                   setSelected(null);
                   refreshList();
                 }}
-                className="w-10 h-10 rounded-[12px] border border-gray-200 dark:border-slate-600 flex items-center justify-center shrink-0 mt-0.5 active:scale-95 transition-transform"
+                className="interactive-press-sm w-10 h-10 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-raised-surface"
                 aria-label="К списку"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
@@ -387,7 +387,7 @@ export default function StaffMessagesPage({ mode }: Props) {
               </div>
             </header>
 
-            <div className="rounded-[16px] border border-[#E2E8F0] dark:border-slate-700 bg-white dark:bg-slate-900 min-h-[280px] max-h-[52vh] overflow-y-auto px-3 py-3 space-y-3 mb-3">
+            <div className="rounded-[16px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 min-h-[280px] max-h-[52vh] overflow-y-auto px-3 py-3 space-y-3 mb-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
               {thread.map((m) => {
                 const isStaffSide = m.senderRole === "admin" || m.senderRole === "doctor";
                 return (
@@ -395,8 +395,8 @@ export default function StaffMessagesPage({ mode }: Props) {
                     <div
                       className={`max-w-[88%] rounded-[14px] px-3.5 py-2.5 border ${
                         isStaffSide
-                          ? "bg-primary-light dark:bg-[#1A3D3F] border-primary/25 text-[#0F172A] dark:text-white"
-                          : "bg-[#F8FAFB] dark:bg-slate-950 border-[#E2E8F0] dark:border-slate-700"
+                          ? "bg-primary-light border-primary/25 text-[#0F172A] dark:text-white"
+                          : "bg-surface dark:bg-app-canvas border-slate-200 dark:border-slate-700"
                       }`}
                     >
                       {isStaffSide ? (
@@ -428,7 +428,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Ответ пациенту…"
                 rows={1}
-                className="flex-1 min-h-[44px] max-h-28 resize-none rounded-[12px] border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2.5 text-[14px] text-[#0F172A] dark:text-white placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="flex-1 min-h-[44px] max-h-28 resize-none rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2.5 text-[14px] text-[#0F172A] dark:text-white placeholder:text-secondary shadow-raised-surface focus:outline-none focus:ring-2 focus:ring-primary/40 dark:focus:ring-slate-500/30"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -441,7 +441,7 @@ export default function StaffMessagesPage({ mode }: Props) {
                 type="button"
                 onClick={() => void handleSendStaff()}
                 disabled={!draft.trim() || sending}
-                className="h-11 px-4 rounded-[12px] bg-primary text-white text-[13px] font-semibold disabled:opacity-40 active:scale-95 transition-transform"
+                className="interactive-press-sm h-11 px-4 rounded-[12px] bg-primary text-white text-[13px] font-semibold shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/20 disabled:opacity-40 disabled:active:scale-100"
               >
                 Отправить
               </button>

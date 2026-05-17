@@ -10,7 +10,9 @@ import { initBills, getBills, getTotalPending } from "@/lib/bills";
 import { type TreatmentPlanStats } from "@/lib/treatmentPlan";
 import { initPlanSources, getMergedPlanStats } from "@/lib/planUtils";
 import { getProfile } from "@/lib/userProfile";
+import { DENTAL_SESSION_CHANGED_EVENT } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
+import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 
 const DAILY_TIPS = [
   "Использование ирригатора снижает риск воспаления дёсен на 40%.",
@@ -55,7 +57,13 @@ export default function MainPage() {
     initBills();
     setPendingAmount(getTotalPending(getBills()));
 
-    setFirstName(getProfile().firstName);
+    const syncHelloName = (): void => {
+      const profile = getProfile();
+      const n = profile.firstName.trim();
+      setFirstName((prev) => n || prev);
+    };
+
+    syncHelloName();
 
     const updateAppointments = () => {
       setNextApt(getNextAppointment());
@@ -70,21 +78,19 @@ export default function MainPage() {
       setPlanStats(getMergedPlanStats());
     };
 
-    const updateProfile = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.firstName) setFirstName(detail.firstName);
+    const onStorage = () => {
+      updateAppointments();
+      updateBills();
+      updatePlan();
+      syncHelloName();
     };
 
     window.addEventListener("appointmentsUpdated", updateAppointments);
     window.addEventListener("billsUpdated", updateBills);
     window.addEventListener("treatmentPlanUpdated", updatePlan);
-    window.addEventListener("profileUpdated", updateProfile);
-    window.addEventListener("storage", () => {
-      updateAppointments();
-      updateBills();
-      updatePlan();
-      setFirstName(getProfile().firstName);
-    });
+    window.addEventListener("profileUpdated", syncHelloName);
+    window.addEventListener(DENTAL_SESSION_CHANGED_EVENT, syncHelloName);
+    window.addEventListener("storage", onStorage);
 
     const tipInterval = setInterval(() => {
       setTipVisible(false);
@@ -95,11 +101,13 @@ export default function MainPage() {
     }, 30000);
 
     return () => {
-    window.removeEventListener("appointmentsUpdated", updateAppointments);
-    window.removeEventListener("billsUpdated", updateBills);
-    window.removeEventListener("treatmentPlanUpdated", updatePlan);
-    window.removeEventListener("profileUpdated", updateProfile);
-    clearInterval(tipInterval);
+      window.removeEventListener("appointmentsUpdated", updateAppointments);
+      window.removeEventListener("billsUpdated", updateBills);
+      window.removeEventListener("treatmentPlanUpdated", updatePlan);
+      window.removeEventListener("profileUpdated", syncHelloName);
+      window.removeEventListener(DENTAL_SESSION_CHANGED_EVENT, syncHelloName);
+      window.removeEventListener("storage", onStorage);
+      clearInterval(tipInterval);
     };
   }, []);
 
@@ -110,7 +118,7 @@ export default function MainPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-slate-950 pb-safe">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       {/* Header */}
       <header className="px-6 pt-6 pb-2">
         <p
@@ -151,12 +159,13 @@ export default function MainPage() {
               <div className="mt-4 flex gap-2">
                 <Link
                   href="/appointments"
-                  className="flex-1 h-9 flex items-center justify-center rounded-[4px] bg-primary text-white text-[13px] font-semibold"
+                  className="interactive-press-sm flex-1 h-9 flex items-center justify-center rounded-[4px] bg-primary text-white text-[13px] font-semibold"
                 >
                   Подробнее
                 </Link>
                 <button
-                  className="flex-1 h-9 flex items-center justify-center rounded-[4px] border border-gray-200 dark:border-slate-600 text-[13px] font-medium text-primary active:scale-95 active:opacity-70 transition-transform"
+                  type="button"
+                  className="interactive-press-sm flex-1 h-9 flex items-center justify-center rounded-[4px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[13px] font-medium text-primary shadow-raised-surface active:opacity-90"
                   onClick={handleReschedule}
                 >
                   Перенести
@@ -171,7 +180,7 @@ export default function MainPage() {
               <p className="text-[15px] text-gray-400">Нет предстоящих записей</p>
               <Link
                 href="/booking"
-                className="mt-3 inline-flex items-center justify-center h-9 px-4 rounded-[4px] bg-primary text-white text-[13px] font-semibold"
+                className="interactive-press-sm mt-3 inline-flex items-center justify-center h-9 px-4 rounded-[4px] bg-primary text-white text-[13px] font-semibold"
               >
                 Записаться
               </Link>
@@ -181,7 +190,7 @@ export default function MainPage() {
 
         {/* Быстрые действия */}
         <div className="grid grid-cols-2 gap-2.5">
-          <Link href="/booking">
+          <Link href="/booking" className="interactive-press block">
             <Card padding="sm" className="text-center py-3.5">
               <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
@@ -193,24 +202,20 @@ export default function MainPage() {
               </p>
             </Card>
           </Link>
-          <Link href="/formula">
+          <Link href="/formula" className="interactive-press block">
             <Card padding="sm" className="text-center py-3.5">
               <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
-                  <path
-                    d="M10 2C8 2 6 3.5 6 6C6 8 7 9.5 7.5 11C8 12.5 8 14 7.5 16C7 17.5 8 18.5 9 18.5C10 18.5 10.5 17.5 10 16"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <FormulaToothIcon
+                  variant="outline"
+                  className="w-5 h-5 text-primary shrink-0"
+                />
               </div>
               <p className="text-[11px] font-semibold text-[#0F172A] dark:text-white leading-tight">
                 Формула
               </p>
             </Card>
           </Link>
-          <Link href="/price-list">
+          <Link href="/price-list" className="interactive-press block">
             <Card padding="sm" className="text-center py-3.5">
               <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
@@ -223,7 +228,7 @@ export default function MainPage() {
               </p>
             </Card>
           </Link>
-          <Link href={ROUTES.patientSupportChat}>
+          <Link href={ROUTES.patientSupportChat} className="interactive-press block">
             <Card padding="sm" className="text-center py-3.5">
               <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
@@ -254,7 +259,7 @@ export default function MainPage() {
             </div>
             <Link
               href="/bills"
-              className="h-9 px-4 flex items-center rounded-[4px] bg-primary text-white text-[13px] font-semibold active:scale-95 transition-transform"
+              className="interactive-press-sm h-9 px-4 flex items-center rounded-[4px] bg-primary text-white text-[13px] font-semibold"
             >
               {pendingAmount > 0 ? "Оплатить" : "Счета"}
             </Link>
@@ -297,50 +302,34 @@ export default function MainPage() {
 
           <Link
             href="/treatment-plan"
-            className="block text-center text-[13px] font-semibold text-primary py-1 border-t border-gray-100 dark:border-slate-700 pt-2.5"
+            className="interactive-press block text-center text-[13px] font-semibold text-primary py-1 border-t border-slate-200 dark:border-slate-700 pt-2.5"
           >
             Открыть план →
           </Link>
         </Card>
 
         {/* ── Совет дня ── */}
-        <div
-          className="relative rounded-[16px] overflow-hidden px-5 py-4"
-          style={{ background: "linear-gradient(135deg, #E8F5F3 0%, #D6EDE9 100%)" }}
-        >
-          {/* Декоративная иконка зуба — фоновый акцент */}
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            className="absolute -right-2 -top-2 w-28 h-28 opacity-[0.08] pointer-events-none"
-          >
-            <path
-              d="M6.5 3C4.5 3 3 4.5 3 7C3 9.5 4.5 11 5.5 12C5.5 12 5 15 5 18C5 20.5 6 21.5 7.5 21.5C9 21.5 10 20.5 10.5 18.5C11 16.5 11.5 13 12 13C12.5 13 13 16.5 13.5 18.5C14 20.5 15 21.5 16.5 21.5C18 21.5 19 20.5 19 18C19 15 18.5 12 18.5 12C19.5 11 21 9.5 21 7C21 4.5 19.5 3 17.5 3C15.5 3 14 4.5 12 4.5C10 4.5 8.5 3 6.5 3Z"
-              fill="var(--color-primary)"
-            />
-          </svg>
+        <div className="relative rounded-[16px] overflow-hidden px-5 py-4 bg-gradient-to-br from-[#e8f4fc] via-[#e3f2fa] to-[#cfe8fc] dark:from-slate-800 dark:via-slate-800/95 dark:to-slate-900">
+          {/* Декоративная иконка зуба — фоновый акцент (та же форма, что в таббаре) */}
+          <FormulaToothIcon
+            variant="solid"
+            className="absolute -right-2 -top-2 w-28 h-28 text-primary opacity-[0.08] pointer-events-none"
+          />
           <div className="flex items-center gap-2 mb-2">
             <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                 <path d="M6 2V7M6 9.5V10" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
-            <p
-              className="text-[11px] font-bold uppercase tracking-widest"
-              style={{ color: "#00504A" }}
-            >
+            <p className="text-[11px] font-bold uppercase tracking-widest text-sky-900 dark:text-sky-100">
               Совет дня
             </p>
           </div>
 
           {/* Текст совета с fade-анимацией */}
           <p
-            className="text-[14px] font-medium leading-snug pr-10 transition-opacity duration-300"
-            style={{
-              color: "#0F3330",
-              opacity: tipVisible ? 1 : 0,
-            }}
+            className="text-[14px] font-medium leading-snug pr-10 text-[#0F172A] dark:text-slate-100 transition-opacity duration-300"
+            style={{ opacity: tipVisible ? 1 : 0 }}
           >
             {DAILY_TIPS[tipIndex]}
           </p>
@@ -348,7 +337,7 @@ export default function MainPage() {
           {/* Ссылка */}
           <Link
             href="/prevention"
-            className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold transition-opacity duration-300"
+            className="interactive-press mt-3 inline-flex items-center gap-1 text-[12px] font-semibold transition-opacity duration-300"
             style={{ color: "var(--color-primary)", opacity: tipVisible ? 1 : 0 }}
           >
             Узнайте больше в разделе рекомендаций

@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { ROUTES } from "@/lib/routes";
 import { addDentalLog } from "@/lib/logger";
+import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 
 /** Длина поля OTP в UI (maxLength инпута). */
 const OTP_INPUT_MAX_LENGTH = 6;
@@ -405,15 +406,13 @@ export default function AuthPage() {
   const otpScreenPhone = authCleanPhone || readAuthPhone() || authPhoneRef.current || phone;
 
   return (
-    <main className="min-h-dvh bg-surface dark:bg-slate-950 flex flex-col justify-center px-6 pb-8">
+    <main className="min-h-dvh bg-surface dark:bg-app-canvas flex flex-col justify-center px-6 pb-8">
       <div className="mb-10">
-        <div className="w-12 h-12 rounded-[12px] bg-primary flex items-center justify-center mb-6">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 3C9.5 3 7 5 7 8C7 10 8 11.5 8.5 13C9 14.5 9 16 8.5 18C8 20 9 21 10 21C11 21 11.5 20 12 18.5C12.5 20 13 21 14 21C15 21 16 20 15.5 18C15 16 15 14.5 15.5 13C16 11.5 17 10 17 8C17 5 14.5 3 12 3Z"
-              fill="white"
-            />
-          </svg>
+        <div className="flex justify-center mb-6">
+          <FormulaToothIcon
+            variant="outline"
+            className="w-[4.75rem] h-[4.75rem] text-primary shrink-0"
+          />
         </div>
         <h1 className="text-[28px] font-bold text-[#0F172A] dark:text-white leading-tight tracking-tight">
           {step === "phone" ? "Вход в кабинет" : "Код из СМС"}
@@ -471,7 +470,7 @@ export default function AuthPage() {
       ) : (
         <form className="flex flex-col gap-5" onSubmit={handleVerify}>
           {demoBypassNotice ? (
-            <p className="text-[13px] font-semibold text-[#A1D6D7] dark:text-[#A1D6D7] text-center animate-pulse">
+            <p className="text-[13px] font-semibold text-primary text-center animate-pulse">
               Вход по демо-коду...
             </p>
           ) : null}

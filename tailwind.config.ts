@@ -14,10 +14,12 @@ const config: Config = {
         manrope: ["var(--font-manrope)", "Manrope", "sans-serif"],
       },
       colors: {
+        "app-canvas": "#0B0F19",
+        "app-nav": "#131B2E",
         primary: {
-          DEFAULT: "#4E8D8F",
-          dark: "#3D7A7C",
-          light: "#D4ECED",
+          DEFAULT: "#248bcf",
+          dark: "#1d6eb8",
+          light: "#e3f2fa",
         },
         secondary: {
           DEFAULT: "#9AB0C5",
@@ -25,7 +27,7 @@ const config: Config = {
         navy: {
           DEFAULT: "#0F172A",
         },
-        surface: "#F7F9FB",
+        surface: "#f8fafc",
         error: "#BA1A1A",
         tooth: {
           healthy: "#FFFFFF",
