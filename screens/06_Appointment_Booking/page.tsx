@@ -14,6 +14,10 @@ import {
   resolveClientPhoneForAppointment,
   type Appointment,
 } from "@/lib/appointments";
+import {
+  notifyDoctorNewBookingAsync,
+  resolveCurrentClientDisplayName,
+} from "@/lib/tgNotifications";
 import { addBillForAppointment } from "@/lib/bills";
 import { ROUTES } from "@/lib/routes";
 import { useClientNow } from "@/hooks/useClientNow";
@@ -588,6 +592,12 @@ function BookingContent() {
         });
 
         addBillForAppointment(newApt.id, serviceTitle, price);
+
+        notifyDoctorNewBookingAsync({
+          bookingDoctorId: selectedDoctorId,
+          clientName: resolveCurrentClientDisplayName(),
+          appointment: newApt,
+        });
 
         setSelectedCategory(null);
         setSelectedDoctorId(null);

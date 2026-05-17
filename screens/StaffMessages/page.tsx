@@ -391,12 +391,12 @@ export default function StaffMessagesPage({ mode }: Props) {
               {thread.map((m) => {
                 const isStaffSide = m.senderRole === "admin" || m.senderRole === "doctor";
                 return (
-                  <div key={m.id} className={`flex ${isStaffSide ? "justify-end" : "justify-start"}`}>
+                  <div key={m.id} className={`flex w-full ${isStaffSide ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[88%] rounded-[14px] px-3.5 py-2.5 border ${
+                      className={`rounded-[14px] px-3.5 py-2.5 border break-words ${
                         isStaffSide
-                          ? "bg-primary-light border-primary/25 text-[#0F172A] dark:text-white"
-                          : "bg-surface dark:bg-app-canvas border-slate-200 dark:border-slate-700"
+                          ? "max-w-[78%] bg-primary-light border-primary/25 text-[#0F172A] dark:text-white"
+                          : "max-w-[85%] bg-surface dark:bg-app-canvas border-slate-200 dark:border-slate-700"
                       }`}
                     >
                       {isStaffSide ? (

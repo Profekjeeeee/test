@@ -33,6 +33,7 @@ export type ToothCondition =
   | "healthy"
   | "treated"
   | "caries"
+  | "pulpitis"
   | "removed"
   | "crown"
   | "implant"

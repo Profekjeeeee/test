@@ -10,6 +10,7 @@ import {
   setDentalSession,
   normalizePhone,
   phoneDigitsSuffixPattern,
+  syncTelegramIdToSupabaseIfNeeded,
 } from "@/lib/auth";
 import { supabase } from "@/lib/supabaseClient";
 import { ROUTES } from "@/lib/routes";
@@ -239,6 +240,7 @@ export default function AuthPage() {
         phone: s.phone,
         specialization: s.specialization,
       });
+      await syncTelegramIdToSupabaseIfNeeded();
       /** Шаг Б: AuthContext в проекте нет — PatientAppGate подписан на `dental_session_changed`. */
       addDentalLog(
         "INFO",
@@ -314,6 +316,7 @@ export default function AuthPage() {
       }
       applyLoggedInClientFromSupabaseRow(client);
       await refreshDentalCaches();
+      await syncTelegramIdToSupabaseIfNeeded();
       addDentalLog("INFO", "client", cleanDbPhone, "auth_success_master_direct", `id=${cid}`);
       router.push(ROUTES.clientHome);
       scheduleClearAuthPhone();

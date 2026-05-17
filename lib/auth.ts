@@ -1,5 +1,6 @@
 import type { ToothStatus } from "@/types";
 import { supabase } from "@/lib/supabaseClient";
+import { getTelegramUserId } from "@/lib/telegramWebApp";
 
 export interface RegisteredUser {
   id: string;
@@ -17,6 +18,8 @@ export interface DentalEmployeeRecord {
   role: "admin" | "doctor";
   fullName: string;
   specialization?: string;
+  /** Supabase: telegram_id — заполняется из Mini App. */
+  telegramId?: string | null;
 }
 
 export interface DentalClientRecord {
@@ -27,6 +30,10 @@ export interface DentalClientRecord {
   lastName: string;
   email: string;
   formulaTeeth?: ToothStatus[];
+  /** Заметки только для персонала (Supabase: internal_notes). */
+  internalNotes?: string | null;
+  /** Supabase: telegram_id — заполняется из Mini App. */
+  telegramId?: string | null;
 }
 
 export interface DentalSession {
@@ -60,13 +67,16 @@ function mapEmployeeRow(row: {
   name: string;
   role: string;
   specialization: string | null;
+  telegram_id?: string | null;
 }): DentalEmployeeRecord {
+  const tg = row.telegram_id;
   return {
     id: row.id,
     phone: row.phone,
     role: row.role as "admin" | "doctor",
     fullName: row.name,
     specialization: row.specialization ?? undefined,
+    telegramId: tg != null && String(tg).trim() !== "" ? String(tg) : null,
   };
 }
 
@@ -79,6 +89,8 @@ function mapClientRow(row: {
   name?: string | null;
   email?: string | null;
   formula_teeth?: unknown | null;
+  internal_notes?: string | null;
+  telegram_id?: string | null;
 }): DentalClientRecord {
   const ft = row.formula_teeth;
   let firstName = row.first_name ?? "";
@@ -89,6 +101,7 @@ function mapClientRow(row: {
     firstName = parts[0] ?? "";
     lastName = parts.slice(1).join(" ");
   }
+  const tg = row.telegram_id;
   return {
     id: row.id,
     phone: row.phone,
@@ -97,6 +110,8 @@ function mapClientRow(row: {
     lastName,
     email: row.email ?? "",
     formulaTeeth: Array.isArray(ft) ? (ft as ToothStatus[]) : undefined,
+    internalNotes: row.internal_notes ?? "",
+    telegramId: tg != null && String(tg).trim() !== "" ? String(tg) : null,
   };
 }
 
@@ -105,6 +120,68 @@ export function normalizePhone(raw: string): string {
   let digits = raw.replace(/\D/g, "");
   if (digits.startsWith("8")) digits = "7" + digits.slice(1);
   return digits;
+}
+
+/** Строка похожа на UUID клиента Supabase (v4 и совместимые варианты). */
+export function isDentalClientUuidKey(key: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key.trim());
+}
+
+/**
+ * Пациент из кэша по id строки записи или по нормализованному телефону (без запроса к Supabase).
+ */
+export function resolveDentalClientFromCacheSync(key: string): DentalClientRecord | null {
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+  const cache = getDentalClients();
+  const byId = cache.find((c) => c.id === trimmed);
+  if (byId) return byId;
+  const digits = normalizePhone(trimmed.replace(/\D/g, ""));
+  if (digits.length >= 10 && digits.length <= 15) {
+    return cache.find((c) => normalizePhone(c.phone) === digits) ?? null;
+  }
+  return null;
+}
+
+/**
+ * Можно безопасно искать строку в dental_clients: телефон (цифры), UUID, уже известный id из кэша,
+ * или непрозрачный текстовый id из БД (длиной 8–64 символа).
+ */
+export function isDentalPatientKeyQueryable(key: string): boolean {
+  const trimmed = key.trim();
+  if (!trimmed) return false;
+  if (resolveDentalClientFromCacheSync(trimmed)) return true;
+  const digits = normalizePhone(trimmed.replace(/\D/g, ""));
+  if (digits.length >= 10 && digits.length <= 15) return true;
+  if (isDentalClientUuidKey(trimmed)) return true;
+  return /^[a-zA-Z0-9_-]{8,64}$/.test(trimmed);
+}
+
+/** Разрешить ключ карты из календаря (uuid или телефон из legacy client_id) в запись dental_clients. */
+export async function resolveDentalClientByPatientKey(key: string): Promise<DentalClientRecord | null> {
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+
+  const cached = resolveDentalClientFromCacheSync(trimmed);
+  if (cached) return cached;
+
+  const digits = normalizePhone(trimmed.replace(/\D/g, ""));
+  if (digits.length >= 10 && digits.length <= 15) {
+    return findClientByPhone(trimmed);
+  }
+
+  /** Только UUID-ключ: иначе `.eq('id', телефон/текст)` даёт invalid input syntax for type uuid при типе id = uuid. */
+  if (!isDentalClientUuidKey(trimmed)) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("dental_clients")
+    .select("*")
+    .eq("id", trimmed)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapClientRow(data as Parameters<typeof mapClientRow>[0]);
 }
 
 /** Паттерн для `.ilike('phone', …)`: совпадение по последним 10 цифрам (формат в БД может отличаться). */
@@ -218,6 +295,17 @@ export async function findClientByPhone(phone: string): Promise<DentalClientReco
   return mapClientRow(data as Parameters<typeof mapClientRow>[0]);
 }
 
+/** Живой uuid строки dental_clients по ключу из календаря (uuid или телефон в legacy client_id). */
+export async function requireDentalClientByPatientKey(patientKey: string): Promise<DentalClientRecord> {
+  const trimmed = patientKey.trim();
+  if (!trimmed || !isDentalPatientKeyQueryable(trimmed)) {
+    throw new Error("Некорректный идентификатор пациента.");
+  }
+  const client = await resolveDentalClientByPatientKey(trimmed);
+  if (!client) throw new Error("Клиент не найден в dental_clients.");
+  return client;
+}
+
 export function getUserRegistry(): RegisteredUser[] {
   return getDentalClients().map((c) => ({
     id: c.id,
@@ -248,18 +336,23 @@ export async function createUser(
   const cleanPhone = normalizePhone(phone);
   const fullName = `${profile.firstName.trim()} ${profile.lastName.trim()}`.trim();
 
-  const { data, error } = await supabase
-    .from("dental_clients")
-    .insert({
-      phone: cleanPhone,
-      name: fullName,
-      role: "client",
-      first_name: profile.firstName.trim(),
-      last_name: profile.lastName.trim(),
-      email: profile.email.trim(),
-    })
-    .select("*")
-    .single();
+  const baseInsert: Record<string, unknown> = {
+    phone: cleanPhone,
+    name: fullName,
+    role: "client",
+    first_name: profile.firstName.trim(),
+    last_name: profile.lastName.trim(),
+    email: profile.email.trim(),
+  };
+  const tgId = getTelegramUserId();
+  if (tgId) baseInsert.telegram_id = tgId;
+
+  let { data, error } = await supabase.from("dental_clients").insert(baseInsert).select("*").single();
+
+  if (error && tgId && isTelegramIdSchemaMissingError(error)) {
+    delete baseInsert.telegram_id;
+    ({ data, error } = await supabase.from("dental_clients").insert(baseInsert).select("*").single());
+  }
 
   if (error) throw error;
 
@@ -275,16 +368,138 @@ export async function createUser(
   };
 }
 
-export async function updateClientFormulaTeeth(clientId: string, teeth: ToothStatus[]): Promise<void> {
+export async function updateClientFormulaTeethByClientId(clientId: string, teeth: ToothStatus[]): Promise<void> {
+  /** Явно сериализуем в JSON для jsonb (без ссылок/циклов). */
+  const jsonPayload = JSON.parse(JSON.stringify(teeth)) as ToothStatus[];
   const { error } = await supabase
     .from("dental_clients")
-    .update({ formula_teeth: teeth })
+    .update({ formula_teeth: jsonPayload })
     .eq("id", clientId);
   if (error) throw error;
   const idx = clientsCache.findIndex((c) => c.id === clientId);
   if (idx !== -1) {
     const next = [...clientsCache];
     next[idx] = { ...next[idx], formulaTeeth: teeth };
+    clientsCache = next;
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("dentalClientsUpdated"));
+  }
+}
+
+/** patientKey — uuid клиента или телефон / legacy ключ из appointments.client_id */
+export async function updateClientFormulaTeeth(patientKey: string, teeth: ToothStatus[]): Promise<void> {
+  const client = await requireDentalClientByPatientKey(patientKey);
+  await updateClientFormulaTeethByClientId(client.id, teeth);
+}
+
+export type ClientInternalNotesFetch = {
+  notes: string;
+  /** Колонки ещё нет в проекте Supabase — нужна миграция 005. */
+  schemaMissing: boolean;
+  /** Ключ некорректен или пациент не найден — строку notes не загружали из БД по клиенту */
+  clientFound: boolean;
+};
+
+/** Колонка ещё не добавлена в Supabase — см. миграцию `005_dental_clients_internal_notes.sql`. */
+export function isInternalNotesSchemaMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  if (e.code === "42703") return true;
+  const m = typeof e.message === "string" ? e.message : "";
+  return m.includes("internal_notes") && m.includes("does not exist");
+}
+
+/** PostgREST: колонка `formula_teeth` отсутствует в `dental_clients` — см. `006_dental_clients_formula_teeth.sql`. */
+export function isFormulaTeethSchemaMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string; details?: string };
+  if (e.code === "PGRST204") return true;
+  const m = `${typeof e.message === "string" ? e.message : ""} ${typeof e.details === "string" ? e.details : ""}`;
+  return (
+    m.includes("formula_teeth") &&
+    (m.includes("Could not find") || m.includes("column") || m.includes("schema cache"))
+  );
+}
+
+/** Колонка `telegram_id` ещё не в Supabase — миграция `007_dental_telegram_id.sql`. */
+export function isTelegramIdSchemaMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string; details?: string };
+  if (e.code === "42703") return true;
+  if (e.code === "PGRST204") return true;
+  const m = `${typeof e.message === "string" ? e.message : ""} ${typeof e.details === "string" ? e.details : ""}`;
+  return (
+    m.includes("telegram_id") &&
+    (m.includes("Could not find") || m.includes("column") || m.includes("does not exist") || m.includes("schema cache"))
+  );
+}
+
+/**
+ * Полная строка `dental_clients` строго по id (UUID или legacy-ключ, приведённый к id через resolve).
+ * Используй для ЛК врача: один запрос вместо «ключ в .eq('id', …)» с телефоном.
+ */
+export async function fetchDentalClientById(patientKey: string): Promise<{
+  client: DentalClientRecord | null;
+  internalNotesSchemaMissing: boolean;
+}> {
+  const trimmed = patientKey.trim();
+  if (!trimmed) return { client: null, internalNotesSchemaMissing: false };
+
+  let idForQuery: string | null = null;
+  if (isDentalClientUuidKey(trimmed)) {
+    idForQuery = trimmed;
+  } else {
+    const resolved = await resolveDentalClientByPatientKey(trimmed);
+    if (!resolved) return { client: null, internalNotesSchemaMissing: false };
+    idForQuery = resolved.id;
+  }
+
+  const { data, error } = await supabase
+    .from("dental_clients")
+    .select("*")
+    .eq("id", idForQuery)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { client: null, internalNotesSchemaMissing: false };
+
+  const raw = data as Record<string, unknown>;
+  const schemaMissing = !Object.prototype.hasOwnProperty.call(raw, "internal_notes");
+  return {
+    client: mapClientRow(data as Parameters<typeof mapClientRow>[0]),
+    internalNotesSchemaMissing: schemaMissing,
+  };
+}
+
+export async function fetchClientInternalNotes(patientKey: string): Promise<ClientInternalNotesFetch> {
+  const trimmed = patientKey.trim();
+  if (!trimmed || !isDentalPatientKeyQueryable(trimmed)) {
+    return { notes: "", schemaMissing: false, clientFound: false };
+  }
+
+  const { client, internalNotesSchemaMissing } = await fetchDentalClientById(trimmed);
+  if (!client) {
+    return { notes: "", schemaMissing: false, clientFound: false };
+  }
+
+  if (internalNotesSchemaMissing) {
+    return { notes: "", schemaMissing: true, clientFound: true };
+  }
+  const notes = typeof client.internalNotes === "string" ? client.internalNotes : "";
+  return { notes, schemaMissing: false, clientFound: true };
+}
+
+export async function updateClientInternalNotes(patientKey: string, internalNotes: string): Promise<void> {
+  const client = await requireDentalClientByPatientKey(patientKey);
+  const { error } = await supabase
+    .from("dental_clients")
+    .update({ internal_notes: internalNotes })
+    .eq("id", client.id);
+  if (error) throw error;
+  const idx = clientsCache.findIndex((c) => c.id === client.id);
+  if (idx !== -1) {
+    const next = [...clientsCache];
+    next[idx] = { ...next[idx], internalNotes };
     clientsCache = next;
   }
   if (typeof window !== "undefined") {
@@ -366,6 +581,46 @@ export async function updateClientPersonalProfile(payload: {
       setDentalSession(dentalSessionFromClient(clientRow));
     }
   }
+
+  await syncTelegramIdToSupabaseIfNeeded();
+}
+
+/**
+ * Если в Mini App есть Telegram id и в строке пользователя `telegram_id` пустой — один UPDATE.
+ * Вне Telegram / без id — no-op; при отсутствии колонки — тихий выход.
+ */
+export async function syncTelegramIdToSupabaseIfNeeded(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const tgId = getTelegramUserId();
+  if (!tgId) return;
+
+  const session = getDentalSession();
+  if (!session?.id) return;
+
+  const table =
+    session.role === "client" ? "dental_clients"
+    : session.role === "doctor" || session.role === "admin" ? "dental_employees"
+    : null;
+  if (!table) return;
+
+  const patch = { telegram_id: tgId };
+  const { error } = await supabase
+    .from(table)
+    .update(patch)
+    .eq("id", session.id)
+    .is("telegram_id", null);
+
+  if (error) {
+    if (isTelegramIdSchemaMissingError(error)) return;
+    console.warn("[auth] syncTelegramIdToSupabaseIfNeeded:", error.message ?? error);
+    return;
+  }
+
+  try {
+    await refreshDentalCaches();
+  } catch (e) {
+    console.warn("[auth] refreshDentalCaches after telegram_id:", e);
+  }
 }
 
 /**
@@ -390,6 +645,7 @@ export async function refreshDentalSessionFromSupabase(
         (next.firstName || "") === (current.firstName ?? "") &&
         (next.lastName || "") === (current.lastName ?? "");
       if (!same) setDentalSession(next);
+      await syncTelegramIdToSupabaseIfNeeded();
       return next;
     }
 
@@ -407,6 +663,7 @@ export async function refreshDentalSessionFromSupabase(
       (next.phone || "") === (current.phone || "") &&
       next.specialization === current.specialization;
     if (!same) setDentalSession(next);
+    await syncTelegramIdToSupabaseIfNeeded();
     return next;
   } catch (err) {
     console.warn("[auth] refreshDentalSessionFromSupabase:", err);

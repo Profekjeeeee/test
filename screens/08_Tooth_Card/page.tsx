@@ -45,6 +45,14 @@ const STATUS_META: Record<ToothCondition, StatusMeta> = {
     borderColor: "#FCA5A5",
     icdCode: "K02.1",
   },
+  pulpitis: {
+    label: "Пульпит",
+    subLabel: "Воспаление мягких тканей зуба, нужна консультация",
+    color: "#EA580C",
+    bgColor: "#FFF7ED",
+    borderColor: "#FDBA74",
+    icdCode: "K04.0",
+  },
   removed: {
     label: "Зуб удалён",
     subLabel: "Рекомендована имплантация",
@@ -56,9 +64,9 @@ const STATUS_META: Record<ToothCondition, StatusMeta> = {
   crown: {
     label: "Коронка",
     subLabel: "Установлена керамическая коронка",
-    color: "#D97706",
-    bgColor: "#FFFBEB",
-    borderColor: "#FCD34D",
+    color: "#248bcf",
+    bgColor: "#e3f2fa",
+    borderColor: "#7dd3fc",
     icdCode: undefined,
   },
   implant: {
@@ -145,6 +153,23 @@ function getMockHistory(condition: ToothCondition, toothNum: number): HistoryIte
         doctor: "Иванов С.П.",
         price: 0,
         note: "Составление индивидуального плана лечения, RT-диагностика",
+      },
+    ];
+  }
+  if (condition === "pulpitis") {
+    return [
+      {
+        date: "8 ноября 2024",
+        procedure: "Диагностика острого пульпита",
+        doctor: "Иванов С.П.",
+        price: 900,
+        note: "Витальное окрашивание, термодиагностика — показания к эндо",
+      },
+      {
+        date: "14 марта 2025",
+        procedure: "Плановый осмотр",
+        doctor: "Михайлова А.В.",
+        price: 0,
       },
     ];
   }

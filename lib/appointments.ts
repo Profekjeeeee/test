@@ -6,6 +6,7 @@ import {
   getDentalClients,
   getDentalEmployees,
   getDentalSession,
+  isDentalClientUuidKey,
   normalizePhone,
 } from "@/lib/auth";
 
@@ -63,6 +64,37 @@ export const RU_MONTHS_SHORT = [
   "ноя",
   "дек",
 ] as const;
+
+/** Родительный падеж (15 мая 2026) — для уведомлений и UI. */
+export const RU_MONTHS_GENITIVE = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+] as const;
+
+/** Слоты расписания клиники (как на экране записи). */
+export const CLINIC_TIME_SLOTS: string[] = (() => {
+  const slots: string[] = [];
+  for (let h = 9; h < 17; h++) {
+    slots.push(`${String(h).padStart(2, "0")}:00`);
+    slots.push(`${String(h).padStart(2, "0")}:30`);
+  }
+  return slots;
+})();
+
+export function formatAppointmentDateRu(apt: Pick<Appointment, "day" | "monthNum" | "year">): string {
+  const m = RU_MONTHS_GENITIVE[apt.monthNum - 1] ?? "";
+  return `${apt.day} ${m} ${apt.year}`.trim();
+}
 
 interface AppointmentRow {
   id: string;
@@ -190,36 +222,74 @@ export type NewAppointmentInput = {
   year: number;
   time: string;
   doctorName: string;
-  /** Явный телефон для `client_id`; иначе берётся из сессии / localStorage. */
+  /** Телефон для поиска строки в `dental_clients` (в `client_id` уходит только её `id`). */
   clientPhone?: string | null;
   status?: AppointmentStatus;
 };
 
-/** ID пациента для вставки в `appointments.client_id`: по currentUserId, телефону в id или сессии. */
-export async function resolveClientIdForAppointment(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-  const uid = getCurrentUserId();
-  const clients = getDentalClients();
+/**
+ * Первичный ключ `dental_clients.id` для FK `appointments.client_id`.
+ * Не подставляет номер телефона: при UUID в сессии сверяет строку в БД; иначе ищет клиента по телефону.
+ */
+async function resolveDentalClientPrimaryKeyForInsert(
+  explicitPhone?: string | null
+): Promise<string> {
+  if (typeof window === "undefined") {
+    throw new Error("Запись на приём доступна только в браузере.");
+  }
 
-  if (uid) {
-    if (clients.some((c) => c.id === uid)) return uid;
+  const uid = getCurrentUserId();
+  const phoneFromArg = explicitPhone?.trim() || null;
+  const phoneFromSession = resolveClientPhoneForAppointment();
+
+  if (uid && isDentalClientUuidKey(uid)) {
+    const { data, error } = await supabase
+      .from("dental_clients")
+      .select("id")
+      .eq("id", uid)
+      .maybeSingle();
+    if (!error && data?.id) return data.id;
+  }
+
+  if (uid && !isDentalClientUuidKey(uid)) {
     const digits = uid.replace(/\D/g, "");
     if (digits.length >= 10) {
-      const c = await findClientByPhone(digits);
-      if (c) return c.id;
+      const row = await findClientByPhone(uid);
+      if (row?.id) return row.id;
     }
-    return uid;
   }
 
-  const session = getDentalSession();
-  if (session?.role === "client" && session.phone) {
-    const c = await findClientByPhone(session.phone);
-    if (c) return c.id;
+  const phone = phoneFromArg ?? phoneFromSession;
+  if (!phone || normalizePhone(phone).length < 10) {
+    throw new Error("Не удалось определить пациента. Войдите в аккаунт или обновите страницу.");
   }
-  return null;
+
+  const normalized = normalizePhone(phone);
+  const { data: byPhoneCol, error: phoneColErr } = await supabase
+    .from("dental_clients")
+    .select("id")
+    .eq("phone", normalized)
+    .maybeSingle();
+  if (!phoneColErr && byPhoneCol?.id) return byPhoneCol.id;
+
+  const row = await findClientByPhone(phone);
+  if (row?.id) return row.id;
+
+  throw new Error(
+    "Пациент не найден в базе клиники. Запись возможна только после регистрации номера."
+  );
 }
 
-/** Телефон для `appointments.client_id` — из сессии, `dental_user_session` или кэша клиента. */
+/** ID пациента (`dental_clients.id`) для сценариев вне вставки записи; без подстановки телефона в `client_id`. */
+export async function resolveClientIdForAppointment(): Promise<string | null> {
+  try {
+    return await resolveDentalClientPrimaryKeyForInsert(null);
+  } catch {
+    return null;
+  }
+}
+
+/** Телефон текущего пользователя для поиска строки в `dental_clients` (не для поля `client_id`). */
 export function resolveClientPhoneForAppointment(): string | null {
   if (typeof window === "undefined") return null;
   const session = getDentalSession();
@@ -253,19 +323,16 @@ export function resolveClientPhoneForAppointment(): string | null {
 }
 
 export async function addAppointment(apt: NewAppointmentInput): Promise<Appointment> {
-  const phone = apt.clientPhone ?? resolveClientPhoneForAppointment();
-  if (!phone || phone.length < 10) {
-    throw new Error("Не удалось определить пациента. Войдите в аккаунт или обновите страницу.");
-  }
-
   const status: AppointmentStatus = apt.status ?? "pending";
   const name = apt.doctorName.trim() || "Врач";
+
+  const clientId = await resolveDentalClientPrimaryKeyForInsert(apt.clientPhone);
 
   const { data, error } = await supabase
     .from("appointments")
     .insert([
       {
-        client_id: phone,
+        client_id: clientId,
         doctor_name: name,
         appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
         appointment_time: apt.time,
