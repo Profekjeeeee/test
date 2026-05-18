@@ -269,7 +269,7 @@ export default function PatientToothFormula({
           key={num}
           type="button"
           onClick={() => onToothClick(num)}
-          className="relative w-full interactive-press-sm focus:outline-none"
+          className="relative z-10 hover:z-20 w-full interactive-press-sm focus:outline-none after:absolute after:inset-[-6px] after:content-['']"
           style={{ aspectRatio: "1 / 1.4" }}
         >
           {isSelected && (

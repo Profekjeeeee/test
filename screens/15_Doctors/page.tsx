@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
 
@@ -84,6 +86,8 @@ const SPECIALTY_BOOKING_SERVICE: Record<string, string> = {
 };
 
 export default function DoctorsPage() {
+  const pathname = usePathname();
+  const adminShell = pathname?.startsWith("/screens/admin") ?? false;
   const [activeFilter, setActiveFilter] = useState<FilterTag>("Все");
 
   const filtered =
@@ -93,7 +97,10 @@ export default function DoctorsPage() {
 
   return (
     <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
-      <Header title="Наши врачи" />
+      <Header
+        title="Наши врачи"
+        rightSlot={adminShell ? <ThemeToggleButton sizeClass="w-9 h-9" /> : undefined}
+      />
 
       {/* Filter chips */}
       <div className="px-6 pt-4 pb-2">

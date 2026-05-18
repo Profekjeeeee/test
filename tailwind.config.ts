@@ -14,8 +14,9 @@ const config: Config = {
         manrope: ["var(--font-manrope)", "Manrope", "sans-serif"],
       },
       colors: {
-        "app-canvas": "#0B0F19",
-        "app-nav": "#131B2E",
+        /* Глубокий графит / slate-900 — гармонирует с синей схемой в тёмной теме */
+        "app-canvas": "#0f172a",
+        "app-nav": "#1e293b",
         primary: {
           DEFAULT: "#248bcf",
           dark: "#1d6eb8",
@@ -29,6 +30,8 @@ const config: Config = {
         },
         surface: "#f8fafc",
         error: "#BA1A1A",
+        /** Совпадает с destructive-кнопками; класс `bg-destructive` для Toast и т.п. */
+        destructive: "#BA1A1A",
         tooth: {
           healthy: "#FFFFFF",
           treated: "#3B82F6",

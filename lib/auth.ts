@@ -1,6 +1,13 @@
 import type { ToothStatus } from "@/types";
 import { supabase } from "@/lib/supabaseClient";
 import { getTelegramUserId } from "@/lib/telegramWebApp";
+import {
+  normalizePhone,
+  phoneDigitsSuffixPattern,
+  ADMIN_LOGIN_DIGITS,
+} from "@/lib/phone";
+
+export { normalizePhone, phoneDigitsSuffixPattern } from "@/lib/phone";
 
 export interface RegisteredUser {
   id: string;
@@ -115,13 +122,6 @@ function mapClientRow(row: {
   };
 }
 
-/** Только цифры; ведущая 8 заменяется на 7 (совпадение с полем phone в Supabase). */
-export function normalizePhone(raw: string): string {
-  let digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("8")) digits = "7" + digits.slice(1);
-  return digits;
-}
-
 /** Строка похожа на UUID клиента Supabase (v4 и совместимые варианты). */
 export function isDentalClientUuidKey(key: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key.trim());
@@ -182,12 +182,6 @@ export async function resolveDentalClientByPatientKey(key: string): Promise<Dent
     .maybeSingle();
   if (error || !data) return null;
   return mapClientRow(data as Parameters<typeof mapClientRow>[0]);
-}
-
-/** Паттерн для `.ilike('phone', …)`: совпадение по последним 10 цифрам (формат в БД может отличаться). */
-export function phoneDigitsSuffixPattern(digits: string): string {
-  const d = digits.replace(/\D/g, "");
-  return `%${d.slice(-10)}`;
 }
 
 async function supabaseSelectEmployeeByPhone(cleanPhone: string) {
@@ -768,7 +762,7 @@ export function logout(): void {
   localStorage.removeItem(DENTAL_USER_SESSION_STORAGE_KEY);
 }
 
-export const ADMIN_PHONE = "77777777777";
+export const ADMIN_PHONE = ADMIN_LOGIN_DIGITS;
 
 export async function setAdminMode(): Promise<void> {
   const emp = await findEmployeeByPhone(ADMIN_PHONE);

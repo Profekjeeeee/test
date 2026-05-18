@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -37,10 +36,14 @@ import {
 import DoctorMonthCalendar from "@/screens/Doctor/Cabinet/DoctorMonthCalendar";
 import DoctorOrdinatorskayaChat from "@/screens/Doctor/Cabinet/DoctorOrdinatorskayaChat";
 import PatientMedicalSheet from "@/screens/Doctor/Cabinet/PatientMedicalSheet";
+import StaffMessagesPage from "@/screens/StaffMessages/page";
+import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
 import { useClientNow } from "@/hooks/useClientNow";
 import { DOCTOR_OPEN_PATIENT_MEDICAL_SHEET_EVENT } from "@/lib/doctorMedicalSheetEvents";
 
 type DoctorCabinetTab = "calendar" | "chats";
+
+type DoctorChatsScope = "colleagues" | "patients";
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -62,7 +65,7 @@ function DoctorCabinetSkeleton() {
       className="min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)]"
       aria-busy="true"
     >
-      <div className="max-w-[480px] mx-auto px-5 pt-12 space-y-4">
+      <div className="max-w-[480px] mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] space-y-4">
         <div className="h-24 rounded-2xl bg-slate-200/80 dark:bg-slate-800/80 animate-pulse" />
         <div className="h-[360px] rounded-2xl bg-slate-200/80 dark:bg-slate-800/80 animate-pulse" />
       </div>
@@ -82,7 +85,7 @@ function isAppointmentDoctorEditable(status: ClinicAppointment["status"]): boole
 
 function DoctorCabinetInner({ anchor }: { anchor: Date }) {
   const router = useRouter();
-  const { toastMessage, toastVisible, showToast } = useToast();
+  const { toastMessage, toastVisible, toastTone, showToast } = useToast();
   const [session, setSession] = useState<DentalSession | null>(null);
   const [dataRev, setDataRev] = useState(0);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(anchor));
@@ -96,6 +99,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
   const [rescheduleIso, setRescheduleIso] = useState("");
   const [rescheduleTimePick, setRescheduleTimePick] = useState("");
   const [cabinetTab, setCabinetTab] = useState<DoctorCabinetTab>("calendar");
+  const [doctorChatsScope, setDoctorChatsScope] = useState<DoctorChatsScope>("colleagues");
 
   useEffect(() => {
     void (async () => {
@@ -189,7 +193,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
     const monthNum = parts[1];
     const day = parts[2];
     if (!year || !monthNum || !day || Number.isNaN(year) || Number.isNaN(monthNum) || Number.isNaN(day)) {
-      showToast("Выберите корректную дату");
+      showToast("Выберите корректную дату", "error");
       return;
     }
     setAgendaActionId(a.id);
@@ -229,7 +233,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
   const handleDoctorCancel = useCallback(
     async (a: ClinicAppointment) => {
       if (!a.patientId) {
-        showToast("Нет привязки к карте пациента");
+        showToast("Нет привязки к карте пациента", "error");
         return;
       }
       if (!window.confirm("Отменить этот приём? Пациент получит уведомление в Telegram (если есть telegram_id).")) {
@@ -261,7 +265,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
       className="min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)] flex flex-col"
       style={{ fontFamily: "Manrope, sans-serif" }}
     >
-      <div className="max-w-[480px] mx-auto px-5 pt-12 w-full flex flex-col flex-1 min-h-0">
+      <div className="max-w-[480px] mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] w-full flex flex-col flex-1 min-h-0">
         <header className="flex items-start justify-between gap-3 mb-6">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-secondary mb-1">
@@ -276,21 +280,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
             <p className="text-[13px] text-secondary mt-3 leading-snug">{todayStr}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Link
-              href={ROUTES.doctorMessages}
-              className="interactive-press-sm w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-primary flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
-              title="Сообщения пациентов"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M4 14V18L8 14H18C18.5523 14 19 13.5523 19 13V7C19 6.44772 18.5523 6 18 6H6C5.44772 6 5 6.44772 5 7V14H4Z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-                <path d="M8 10H14M8 12.5H12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </Link>
+          <ThemeToggleButton />
           <button
             type="button"
             onClick={handleLogout}
@@ -418,14 +408,14 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
                           <button
                             type="button"
                             onClick={() => openRescheduleModal(a)}
-                            className="flex-1 h-9 rounded-[10px] text-[12px] font-semibold border border-primary/30 bg-primary-light text-primary active:scale-[0.98]"
+                            className="flex-1 h-11 rounded-[10px] text-[12px] font-semibold border border-primary/30 bg-primary-light text-primary active:scale-[0.98] flex items-center justify-center"
                           >
                             Перенести
                           </button>
                           <button
                             type="button"
                             onClick={() => void handleDoctorCancel(a)}
-                            className="flex-1 h-9 rounded-[10px] text-[12px] font-semibold border border-slate-200 dark:border-slate-600 text-secondary active:scale-[0.98]"
+                            className="flex-1 h-11 rounded-[10px] text-[12px] font-semibold border border-slate-200 dark:border-slate-600 text-secondary active:scale-[0.98] flex items-center justify-center"
                           >
                             Отменить
                           </button>
@@ -438,8 +428,49 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
             </div>
           </>
         ) : (
-          <div className="flex flex-col flex-1 min-h-0 pb-8">
-            <DoctorOrdinatorskayaChat session={session} showToast={showToast} />
+          <div className="flex flex-col flex-1 min-h-0 pb-8 gap-4">
+            <div
+              role="tablist"
+              aria-label="Тип чатов"
+              className="flex rounded-2xl p-1.5 bg-primary-light/90 dark:bg-slate-800/90 border border-primary/20 dark:border-primary/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] dark:shadow-none shrink-0"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={doctorChatsScope === "colleagues"}
+                onClick={() => setDoctorChatsScope("colleagues")}
+                className={`interactive-press-sm flex-1 min-h-[48px] rounded-[14px] text-[15px] font-semibold transition-colors duration-200 px-2 ${
+                  doctorChatsScope === "colleagues"
+                    ? "bg-primary text-white shadow-[0_4px_12px_rgba(36,139,207,0.35)]"
+                    : "text-secondary bg-transparent dark:text-[#9AB0C5]"
+                }`}
+              >
+                Коллеги
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={doctorChatsScope === "patients"}
+                onClick={() => setDoctorChatsScope("patients")}
+                className={`interactive-press-sm flex-1 min-h-[48px] rounded-[14px] text-[15px] font-semibold transition-colors duration-200 px-2 ${
+                  doctorChatsScope === "patients"
+                    ? "bg-primary text-white shadow-[0_4px_12px_rgba(36,139,207,0.35)]"
+                    : "text-secondary bg-transparent dark:text-[#9AB0C5]"
+                }`}
+              >
+                Пациенты
+              </button>
+            </div>
+
+            {doctorChatsScope === "colleagues" ? (
+              <div className="flex flex-col flex-1 min-h-0">
+                <DoctorOrdinatorskayaChat session={session} showToast={showToast} />
+              </div>
+            ) : (
+              <div key="doctor-patient-chats" className="flex flex-col flex-1 min-h-0">
+                <StaffMessagesPage mode="doctor" embedded />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -510,7 +541,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
         </div>
       )}
 
-      <Toast message={toastMessage} visible={toastVisible} />
+      <Toast variant="staffPlain" message={toastMessage} visible={toastVisible} tone={toastTone} />
     </main>
   );
 }

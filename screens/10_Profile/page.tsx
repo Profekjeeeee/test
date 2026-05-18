@@ -17,26 +17,7 @@ import {
 } from "@/lib/userProfile";
 import { getNextAppointment, type Appointment } from "@/lib/appointments";
 import { ROUTES } from "@/lib/routes";
-
-// ─── Phone formatting ──────────────────────────────────────────────────────────
-
-function formatPhone(raw: string): string {
-  let digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("8")) digits = "7" + digits.slice(1);
-  if (digits.length > 0 && !digits.startsWith("7")) digits = "7" + digits;
-  digits = digits.slice(0, 11);
-  const d = digits.slice(1);
-  let result = "+7";
-  if (d.length >= 1) result += ` (${d.slice(0, 3)}`;
-  if (d.length >= 4) result += `) ${d.slice(3, 6)}`;
-  if (d.length >= 7) result += `-${d.slice(6, 8)}`;
-  if (d.length >= 9) result += `-${d.slice(8, 10)}`;
-  return result;
-}
-
-function phoneDigitCount(phone: string): number {
-  return phone.replace(/\D/g, "").length;
-}
+import { formatRuPhoneInput, countPhoneDigits, RU_MOBILE_DIGIT_COUNT } from "@/lib/phone";
 
 // ─── Validation ────────────────────────────────────────────────────────────────
 
@@ -54,7 +35,7 @@ function validate(form: UserProfile): FormErrors {
   const errors: FormErrors = {};
   if (!NAME_RE.test(form.firstName.trim())) errors.firstName = "Только буквы, минимум 2 символа";
   if (!NAME_RE.test(form.lastName.trim())) errors.lastName = "Только буквы, минимум 2 символа";
-  if (phoneDigitCount(form.phone) !== 11) errors.phone = "Введите номер полностью";
+  if (countPhoneDigits(form.phone) !== RU_MOBILE_DIGIT_COUNT) errors.phone = "Введите номер полностью";
   if (!EMAIL_RE.test(form.email.trim())) errors.email = "Некорректный email";
   return errors;
 }
@@ -242,7 +223,7 @@ export default function ProfilePage() {
   }, []);
 
   const handlePhoneChange = useCallback((raw: string) => {
-    setField("phone", formatPhone(raw));
+    setField("phone", formatRuPhoneInput(raw));
   }, [setField]);
 
   const handleSave = async () => {
@@ -486,7 +467,7 @@ export default function ProfilePage() {
       </main>
 
       <BottomBar />
-      <Toast message="✓ Данные успешно обновлены" visible={toastVisible} />
+      <Toast message="Данные успешно обновлены" visible={toastVisible} variant="patientWithTabBar" />
     </div>
   );
 }

@@ -95,7 +95,7 @@ export interface ChatMessage {
   senderId: string;
   senderRole: "client" | "doctor" | "admin";
   senderName: string;
-  /** `clinic` | `support` | UUID пациента | телефон врача (например "79991112233"); legacy: `admin` = поддержка */
+  /** `clinic` | `support` | UUID пациента | id врача (`dental_employees.id`) или legacy телефон врача */
   recipientId: string;
   text: string;
   timestamp: number;

@@ -58,19 +58,28 @@ export default function PatientSupportChatPage() {
   }, [uid, tab, refresh]);
 
   useEffect(() => {
+    let cancelled = false;
     let unsub: (() => void) | undefined;
 
     void (async () => {
       await hydrateDentalMessages();
+      if (cancelled) return;
       refresh();
+      if (cancelled) return;
       unsub = subscribeDentalMessagesRealtime(refresh);
+      if (cancelled) {
+        unsub();
+        unsub = undefined;
+      }
     })();
 
     const onCustom = () => refresh();
     window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
     window.addEventListener("appointmentsUpdated", onCustom);
     return () => {
+      cancelled = true;
       unsub?.();
+      unsub = undefined;
       window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
       window.removeEventListener("appointmentsUpdated", onCustom);
     };
@@ -109,12 +118,12 @@ export default function PatientSupportChatPage() {
         : "Напишите лечащему врачу — сообщение будет только ему и вам.";
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe flex flex-col">
-      <header className="px-5 pt-12 pb-3 border-b border-slate-200 dark:border-white/8 shrink-0 shadow-[0_4px_12px_rgba(15,23,42,0.04)] dark:shadow-none bg-white/80 dark:bg-app-nav/82 backdrop-blur-sm">
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-surface dark:bg-app-canvas pb-[max(1rem,calc(env(safe-area-inset-bottom,0px)+5.25rem))]">
+      <header className="shrink-0 border-b border-slate-200 bg-white/80 px-5 pb-3 pt-[calc(env(safe-area-inset-top,0px)+3rem)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] backdrop-blur-sm dark:border-white/8 dark:bg-app-nav/82 dark:shadow-none">
         <div className="flex items-center gap-3 mb-4">
           <Link
             href={ROUTES.clientHome}
-            className="interactive-press-sm w-10 h-10 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center text-secondary shadow-raised-surface"
+            className="interactive-press-sm min-w-[44px] min-h-[44px] w-11 h-11 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center text-secondary shadow-raised-surface"
             aria-label="Назад"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
@@ -135,15 +144,15 @@ export default function PatientSupportChatPage() {
           {(
             [
               { id: "clinic" as const, label: "Клиника", hint: clinicUnread },
-              { id: "support" as const, label: "Техподдержка", hint: supportUnread },
               { id: "doctor" as const, label: "Мой лечащий врач", hint: doctorUnread },
+              { id: "support" as const, label: "Техподдержка", hint: supportUnread },
             ] as const
           ).map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`relative flex-1 py-2.5 rounded-[11px] text-[11px] font-semibold transition-all duration-150 ease-out interactive-press-sm leading-tight border ${
+              className={`relative flex-1 py-2.5 rounded-[11px] text-[11px] font-semibold transition-all duration-150 ease-out interactive-press-sm leading-snug border ${
                 tab === t.id
                   ? "bg-white dark:bg-slate-900 text-primary shadow-[0_4px_12px_rgba(15,23,42,0.08)] border-slate-200 dark:border-slate-700"
                   : "border-slate-200/85 dark:border-slate-600 text-slate-700 dark:text-slate-400 bg-white/50 dark:bg-transparent"
@@ -170,70 +179,97 @@ export default function PatientSupportChatPage() {
         ) : null}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 pb-36">
-        {!uid ? (
-          <p className="text-[14px] text-secondary text-center py-8">
-            Войдите как пациент, чтобы пользоваться чатом.
-          </p>
-        ) : messages.length === 0 ? (
-          <div className="rounded-[16px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-6 text-center shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)]">
-            <p className="text-[14px] text-[#0F172A] dark:text-white font-medium mb-1">
-              Пока нет сообщений
-            </p>
-            <p className="text-[13px] text-secondary leading-snug">{emptyHint}</p>
-          </div>
-        ) : (
-          messages.map((m) => {
-            const mine = m.senderRole === "client" && m.senderId === uid;
-            return (
-              <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] rounded-[14px] px-3.5 py-2.5 border ${
-                    mine
-                      ? "bg-primary-light border-primary/25 text-[#0F172A] dark:text-white"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-[#0F172A] dark:text-white shadow-raised-surface"
-                  }`}
-                >
-                  {!mine ? (
-                    <p className="text-[11px] font-semibold text-primary mb-1">{m.senderName}</p>
-                  ) : null}
-                  <p className="text-[14px] whitespace-pre-wrap leading-snug">{m.text}</p>
-                  <p className="text-[10px] text-secondary mt-1.5 tabular-nums">{formatMsgTime(m.timestamp)}</p>
-                </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      <div
-        className="shrink-0 border-t border-slate-200 dark:border-white/8 bg-white dark:bg-app-nav px-4 py-3 fixed left-1/2 -translate-x-1/2 w-full max-w-[390px] z-40 shadow-[0_-6px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_-8px_28px_rgba(0,0,0,0.45)]"
-        style={{ bottom: "calc(60px + env(safe-area-inset-bottom, 0px))" }}
-      >
-        <div className="flex gap-2 items-end max-w-[390px] mx-auto">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Сообщение…"
-            rows={1}
-            className="flex-1 min-h-[44px] max-h-28 resize-none rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2.5 text-[14px] text-[#0F172A] dark:text-white placeholder:text-secondary shadow-raised-surface focus:outline-none focus:ring-2 focus:ring-primary/40 dark:focus:ring-slate-500/30"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            disabled={!uid || sending}
-          />
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!uid || !draft.trim() || sending}
-            className="interactive-press-sm h-11 px-4 rounded-[12px] bg-primary text-white text-[13px] font-semibold shadow-[0_4px_12px_rgba(36,139,207,0.35)] dark:shadow-none border border-primary-dark/20 disabled:opacity-40 disabled:active:scale-100"
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-4 py-3">
+        <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div
+            className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-4 space-y-3"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
           >
-            Отпр.
-          </button>
+            {!uid ? (
+              <p className="text-[14px] text-secondary text-center py-8 px-1">
+                Войдите как пациент, чтобы пользоваться чатом.
+              </p>
+            ) : messages.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="text-[14px] text-[#0F172A] dark:text-white font-medium mb-1">
+                  Пока нет сообщений
+                </p>
+                <p className="text-[13px] text-secondary leading-snug">{emptyHint}</p>
+              </div>
+            ) : (
+              messages.map((m) => {
+                const mine = m.senderRole === "client" && m.senderId === uid;
+                return (
+                  <div
+                    key={m.id}
+                    className={`flex w-full shrink-0 ${mine ? "justify-end items-end pl-10" : "justify-start items-end pr-10"}`}
+                  >
+                    <div
+                      className={`max-w-[80%] break-words px-4 py-2 shadow-sm rounded-2xl ${
+                        mine
+                          ? "mr-2 ml-0 rounded-tr-none bg-primary text-white border border-primary-dark/30 dark:border-primary-dark/40 dark:text-white"
+                          : "ml-1 mr-0 rounded-tl-none border border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-100"
+                      }`}
+                    >
+                      {!mine ? (
+                        <p className="text-[11px] font-semibold text-primary mb-1 dark:text-[#94c4ee]">{m.senderName}</p>
+                      ) : null}
+                      <p
+                        className={`text-[14px] whitespace-pre-wrap leading-snug [overflow-wrap:anywhere] ${mine ? "text-white" : ""}`}
+                      >
+                        {m.text}
+                      </p>
+                      <p
+                        className={`text-[10px] mt-1.5 tabular-nums ${mine ? "text-right text-white/75" : "text-left text-slate-500 dark:text-secondary"}`}
+                      >
+                        {formatMsgTime(m.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        <div className="shrink-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="mx-auto flex w-full max-w-[390px] items-center gap-2">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Сообщение…"
+              rows={1}
+              className="min-h-[44px] max-h-28 flex-1 resize-none rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-[14px] leading-snug text-slate-800 shadow-sm placeholder:text-secondary focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/25 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-primary/40 dark:focus:ring-primary/30"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              disabled={!uid || sending}
+            />
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!uid || !draft.trim() || sending}
+              aria-label="Отправить"
+              title="Отправить"
+              className="interactive-press-sm flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary-dark/25 bg-primary text-white shadow-sm disabled:pointer-events-none disabled:opacity-40 dark:border-primary-dark/40"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 

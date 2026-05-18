@@ -27,7 +27,7 @@ function BookingSuccessContent() {
 
   return (
     <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe flex flex-col">
-      <Header title="Готово" />
+      <Header title="Готово" showBack backHref={ROUTES.clientHome} />
       <main className="px-5 py-8 flex flex-col items-center text-center flex-1 gap-4">
         <div className="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center">
           <svg
@@ -52,7 +52,7 @@ function BookingSuccessContent() {
             {title}
           </h1>
           {dateLine && (
-            <p className="text-[14px] text-gray-500 mt-2">{dateLine}</p>
+            <p className="text-[14px] text-gray-500 dark:text-slate-400 mt-2">{dateLine}</p>
           )}
           {kind === "new" && (
             <p className="text-[13px] text-primary font-semibold mt-2">
@@ -60,9 +60,12 @@ function BookingSuccessContent() {
             </p>
           )}
         </div>
-        <div className="w-full max-w-sm mt-auto pt-6">
+        <div className="w-full max-w-sm mt-auto pt-6 flex flex-col gap-3">
           <Button size="full" onClick={() => router.push(ROUTES.clientHome)}>
             На главную
+          </Button>
+          <Button variant="ghost" size="full" onClick={() => router.push("/appointments")}>
+            К моим записям
           </Button>
         </div>
       </main>

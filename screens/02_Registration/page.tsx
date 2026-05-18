@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createUser, normalizePhone, setCurrentUser } from "@/lib/auth";
+import { createUser, setCurrentUser } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 import { saveProfile } from "@/lib/userProfile";
+import { formatRuPhoneInput, isCompleteRuMobileDigits, normalizePhone } from "@/lib/phone";
 
 const NAME_RE = /^[а-яёА-ЯЁa-zA-Z][а-яёА-ЯЁa-zA-Z\s-]{1,}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,7 +54,7 @@ export default function RegistrationPage() {
       /* noop */
     }
     const normalized = normalizePhone(phoneParam || stored);
-    if (!normalized || normalized.length < 11) {
+    if (!isCompleteRuMobileDigits(normalized)) {
       router.replace(ROUTES.auth);
       return;
     }
@@ -140,7 +141,7 @@ export default function RegistrationPage() {
         <h1 className="text-[28px] font-bold text-[#0F172A] dark:text-white leading-tight tracking-tight">
           Регистрация
         </h1>
-        <p className="text-[15px] text-gray-500 mt-2 leading-relaxed">
+        <p className="text-[15px] text-gray-500 dark:text-slate-500 mt-2 leading-relaxed">
           Вы новый пациент. Заполните данные для создания личного кабинета.
         </p>
       </div>
@@ -148,12 +149,12 @@ export default function RegistrationPage() {
       <div className="flex flex-col gap-4">
         {/* Phone (readonly) */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-widest text-[#94A3B8]">
+          <label className="text-[11px] font-bold uppercase tracking-widest text-[#94A3B8] dark:text-slate-400">
             Телефон
           </label>
           <input
             type="tel"
-            value={savedPhone ?? ""}
+            value={formatRuPhoneInput(savedPhone ?? "")}
             readOnly
             className="h-12 px-4 text-[15px] font-medium rounded-[8px] border-[1.5px] border-[#E2E8F0] bg-[#F1F5F9] text-[#94A3B8] dark:bg-[#1E293B] dark:border-[#334155] dark:text-slate-500 cursor-not-allowed outline-none"
             style={{ fontFamily: "Manrope, sans-serif" }}
@@ -211,6 +212,15 @@ export default function RegistrationPage() {
           ) : (
             "Создать профиль"
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => router.push(ROUTES.auth)}
+          className="mt-4 w-full min-h-[44px] py-3 px-4 flex items-center justify-center text-[15px] font-semibold text-primary active:scale-95 transition-transform rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white/90 dark:bg-slate-800/90 hover:bg-primary-light dark:hover:bg-slate-700"
+          style={{ fontFamily: "Manrope, sans-serif" }}
+        >
+          Назад к входу
         </button>
       </div>
     </main>

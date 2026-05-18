@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CHAT_UPDATED_EVENT,
   hydrateDentalMessages,
@@ -23,6 +23,7 @@ import {
 } from "@/lib/supportChat";
 import { logout, resolveHydratedSession, getDentalSession, type DentalSession } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
+import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
 
 function formatMsgTime(ts: number): string {
   try {
@@ -41,9 +42,11 @@ type StaffMessagesMode = "admin" | "doctor";
 
 interface Props {
   mode: StaffMessagesMode;
+  /** Встроено в кабинет врача: без «Назад», выхода и переключателя темы в шапке списка. */
+  embedded?: boolean;
 }
 
-export default function StaffMessagesPage({ mode }: Props) {
+export default function StaffMessagesPage({ mode, embedded = false }: Props) {
   const router = useRouter();
   const [session, setSession] = useState<DentalSession | null>(null);
   const [adminSection, setAdminSection] = useState<"clinic" | "support" | "audit">("support");
@@ -100,17 +103,27 @@ export default function StaffMessagesPage({ mode }: Props) {
   }, [mode, adminSection, refreshAudit]);
 
   useEffect(() => {
+    let cancelled = false;
     let unsub: (() => void) | undefined;
+
     void (async () => {
       await hydrateDentalMessages();
+      if (cancelled) return;
       refreshList();
+      if (cancelled) return;
       unsub = subscribeDentalMessagesRealtime(refreshList);
+      if (cancelled) {
+        unsub();
+        unsub = undefined;
+      }
     })();
 
     const onCustom = () => refreshList();
     window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
     return () => {
+      cancelled = true;
       unsub?.();
+      unsub = undefined;
       window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
     };
   }, [refreshList]);
@@ -186,7 +199,7 @@ export default function StaffMessagesPage({ mode }: Props) {
 
   const backHref = mode === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet;
 
-  const title = mode === "admin" ? "Сообщения (админ)" : "Сообщения пациентов";
+  const title = mode === "admin" ? "Сообщения (админ)" : "Пациенты";
 
   const unreadTotal = useMemo(
     () => previews.reduce((n, p) => n + (p.unread ? 1 : 0), 0),
@@ -215,28 +228,33 @@ export default function StaffMessagesPage({ mode }: Props) {
       </>
     );
 
-  return (
-    <main
-      className={`min-h-dvh bg-surface dark:bg-app-canvas ${
-        mode === "admin" ? "pb-[84px]" : "pb-[calc(env(safe-area-inset-bottom)+24px)]"
-      }`}
-      style={{ fontFamily: "Manrope, sans-serif" }}
-    >
-      <div className="max-w-[480px] mx-auto px-5 pt-12">
+  const rootClass =
+    mode === "admin"
+      ? "min-h-dvh bg-surface dark:bg-app-canvas pb-[84px]"
+      : embedded
+        ? "flex flex-col flex-1 min-h-0 bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+8px)]"
+        : "min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)]";
+
+  const inner = (
+    <div className={`max-w-[480px] mx-auto px-5 w-full min-h-0 flex flex-col ${embedded ? "pt-[max(0.25rem,calc(env(safe-area-inset-top,0px)+4px))] flex-1" : "pt-[calc(env(safe-area-inset-top,0px)+3rem)]"}`}>
         {!selected ? (
           <>
             <header className="flex items-start justify-between gap-3 mb-5">
-              <div className="flex items-start gap-2">
-                <Link
-                  href={backHref}
-                  className="interactive-press-sm w-10 h-10 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-raised-surface"
-                  aria-label="Назад"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
-                    <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </Link>
-                <div>
+              <div className="flex items-start gap-2 min-w-0">
+                {!embedded ? (
+                  <Link
+                    href={backHref}
+                    className="interactive-press-sm min-w-[44px] min-h-[44px] w-11 h-11 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-raised-surface"
+                    aria-label="Назад"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
+                      <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </Link>
+                ) : (
+                  <span className="w-0 shrink-0" aria-hidden />
+                )}
+                <div className="min-w-0">
                   <p className="text-[11px] font-bold uppercase tracking-widest text-secondary mb-1">{title}</p>
                   <h1 className="text-[22px] font-bold text-[#0F172A] dark:text-white leading-tight">
                     {mode === "admin" ? "Диалоги" : "Клиника и личные вопросы"}
@@ -254,13 +272,18 @@ export default function StaffMessagesPage({ mode }: Props) {
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="interactive-press-sm text-[12px] font-semibold text-secondary underline-offset-2 hover:underline"
-              >
-                Выход
-              </button>
+              {!embedded ? (
+                <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                  <ThemeToggleButton sizeClass="w-10 h-10" />
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="interactive-press-sm text-[12px] font-semibold text-secondary underline-offset-2 hover:underline px-1"
+                  >
+                    Выход
+                  </button>
+                </div>
+              ) : null}
             </header>
 
             {mode === "admin" ? (
@@ -365,26 +388,29 @@ export default function StaffMessagesPage({ mode }: Props) {
           </>
         ) : (
           <>
-            <header className="flex items-start gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected(null);
-                  refreshList();
-                }}
-                className="interactive-press-sm w-10 h-10 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-raised-surface"
-                aria-label="К списку"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
-                  <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div className="min-w-0 flex-1">
-                {threadSubtitle}
-                <h1 className="text-[18px] font-bold text-[#0F172A] dark:text-white truncate">
-                  {selected.patientName}
-                </h1>
+            <header className="flex items-start justify-between gap-2 mb-4">
+              <div className="flex items-start gap-2 min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected(null);
+                    refreshList();
+                  }}
+                  className="interactive-press-sm w-10 h-10 rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5 shadow-raised-surface"
+                  aria-label="К списку"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#0F172A] dark:text-white">
+                    <path d="M15 6L9 12L15 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="min-w-0 flex-1">
+                  {threadSubtitle}
+                  <h1 className="text-[18px] font-bold text-[#0F172A] dark:text-white truncate">
+                    {selected.patientName}
+                  </h1>
+                </div>
               </div>
+              {!embedded ? <ThemeToggleButton sizeClass="w-10 h-10" className="mt-0.5" /> : null}
             </header>
 
             <div className="rounded-[16px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 min-h-[280px] max-h-[52vh] overflow-y-auto px-3 py-3 space-y-3 mb-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
@@ -449,6 +475,11 @@ export default function StaffMessagesPage({ mode }: Props) {
           </>
         )}
       </div>
-    </main>
   );
+
+  return createElement(embedded ? "div" : "main", {
+    className: rootClass,
+    style: { fontFamily: "Manrope, sans-serif" },
+    children: inner,
+  });
 }

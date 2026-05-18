@@ -72,7 +72,7 @@ export default function PatientMedicalSheet({
   onClose,
   contextAppointment = null,
 }: PatientMedicalSheetProps) {
-  const { toastMessage, toastVisible, showToast } = useToast();
+  const { toastMessage, toastVisible, toastTone, showToast } = useToast();
   const [formulaTeeth, setFormulaTeeth] = useState<ToothStatus[]>([]);
   const [sheetTooth, setSheetTooth] = useState<number | null>(null);
 
@@ -283,12 +283,12 @@ export default function PatientMedicalSheet({
       await refreshDentalCaches();
       const sess = getDentalSession();
       if (!sess?.id || sess.role !== "doctor") {
-        showToast("Консилиум доступен только врачам");
+        showToast("Консилиум доступен только врачам", "error");
         return;
       }
       const { roomId, error: roomErr } = await findOrCreatePrivateDoctorRoom(sess.id, doc.id);
       if (roomErr || !roomId) {
-        showToast(roomErr ?? "Не удалось открыть чат с коллегой");
+        showToast(roomErr ?? "Не удалось открыть чат с коллегой", "error");
         return;
       }
       const nameForCase =
@@ -306,10 +306,10 @@ export default function PatientMedicalSheet({
         formulaTeeth,
       });
       if (sendErr) {
-        showToast(sendErr);
+        showToast(sendErr, "error");
         return;
       }
-      showToast("✓ Случай направлен коллеге");
+      showToast("Случай направлен коллеге");
       setConsiliumOpen(false);
     } finally {
       setConsiliumBusy(false);
@@ -318,7 +318,7 @@ export default function PatientMedicalSheet({
 
   const handleDoctorToothClick = (toothNum: number) => {
     if (!canEditFormula) {
-      showToast("Дождитесь загрузки карточки пациента в базе");
+      showToast("Дождитесь загрузки карточки пациента в базе", "error");
       return;
     }
     setSheetTooth(toothNum);
@@ -331,9 +331,9 @@ export default function PatientMedicalSheet({
     if (!id) return;
     try {
       await navigator.clipboard.writeText(id);
-      showToast("✓ ID скопирован");
+      showToast("ID скопирован");
     } catch {
-      showToast("Не удалось скопировать ID");
+      showToast("Не удалось скопировать ID", "error");
     }
   };
 
@@ -347,16 +347,19 @@ export default function PatientMedicalSheet({
     setProfile((p) => (p ? { ...p, formulaTeeth: next } : null));
     try {
       await persistPatientTeeth(canonicalPatientId, next);
-      showToast("✓ Статус зуба сохранён");
+      showToast("Статус зуба сохранён");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[PatientMedicalSheet] formula save:", msg, e);
       setFormulaTeeth(snapshotTeeth);
       setProfile(snapshotProfile);
       if (isFormulaTeethSchemaMissingError(e)) {
-        showToast("В Supabase нет колонки formula_teeth. Выполни миграцию 006_dental_clients_formula_teeth.sql");
+        showToast(
+          "В Supabase нет колонки formula_teeth. Выполни миграцию 006_dental_clients_formula_teeth.sql",
+          "error"
+        );
       } else {
-        showToast(`Не удалось сохранить формулу: ${msg}`);
+        showToast(`Не удалось сохранить формулу: ${msg}`, "error");
       }
     }
   };
@@ -371,12 +374,12 @@ export default function PatientMedicalSheet({
           <button
             type="button"
             onClick={onClose}
-            className="interactive-press-sm absolute top-2 right-2 z-[1] w-9 h-9 rounded-lg border border-primary/20 dark:border-primary/35 bg-white/90 dark:bg-slate-900/90 text-secondary flex items-center justify-center"
+            className="interactive-press-sm absolute top-2 right-2 z-[1] h-11 w-11 rounded-lg border border-primary/20 dark:border-primary/35 bg-white/90 dark:bg-slate-900/90 text-secondary flex items-center justify-center"
             aria-label="Закрыть"
           >
             ✕
           </button>
-          <div className="grid grid-cols-2 gap-2 gap-y-1 min-w-0 pr-10">
+          <div className="grid grid-cols-2 gap-2 gap-y-1 min-w-0 pr-[52px]">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-secondary mb-0.5">Карта</p>
               <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white leading-snug break-words">
@@ -417,7 +420,7 @@ export default function PatientMedicalSheet({
               <button
                 type="button"
                 onClick={() => void copyPatientId()}
-                className="interactive-press-sm shrink-0 flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25 bg-white dark:bg-slate-900 text-primary"
+                className="interactive-press-sm shrink-0 flex h-11 w-11 items-center justify-center rounded-lg border border-primary/25 bg-white dark:bg-slate-900 text-primary"
                 aria-label="Скопировать полный ID"
                 title="Скопировать полный ID"
               >
@@ -740,9 +743,11 @@ export default function PatientMedicalSheet({
       )}
 
       <Toast
+        variant="staffPlain"
         message={toastMessage}
         visible={toastVisible}
-        className="z-[125] !left-4 !right-4 !w-auto !translate-x-0 !max-w-[480px] !mx-auto bottom-[max(16px,env(safe-area-inset-bottom))] bg-primary text-white shadow-[0_8px_28px_rgba(36,139,207,0.45)] whitespace-normal text-center py-3.5 px-4 rounded-xl border border-primary-dark/20 font-semibold"
+        tone={toastTone}
+        className="z-[125]"
       />
     </div>
   );

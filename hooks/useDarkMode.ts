@@ -11,6 +11,9 @@ export function useDarkMode(): boolean {
 }
 
 function subscribeDarkMode(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
   const onTheme = () => onStoreChange();
   window.addEventListener("themeChange", onTheme);
 

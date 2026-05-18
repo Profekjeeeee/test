@@ -101,7 +101,7 @@ export default function AppointmentsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
-  const { toastMessage, toastVisible, showToast } = useToast();
+  const { toastMessage, toastVisible, toastTone, showToast } = useToast();
 
   useEffect(() => {
     void initAppointments().then(() => {
@@ -146,7 +146,7 @@ export default function AppointmentsPage() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`flex-1 h-9 rounded-[8px] text-[13px] font-semibold border transition-all duration-150 ease-out active:scale-[0.98] ${
+            className={`flex flex-1 min-h-[44px] items-center justify-center rounded-[8px] text-[13px] font-semibold border transition-all duration-150 ease-out active:scale-[0.98] ${
               tab === t
                 ? "bg-primary text-white border-primary shadow-[0_2px_10px_rgba(36,139,207,0.28)] dark:shadow-none"
                 : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 shadow-raised-surface"
@@ -260,7 +260,12 @@ export default function AppointmentsPage() {
         </button>
       </main>
 
-      <Toast message={toastMessage} visible={toastVisible} />
+      <Toast
+        message={toastMessage}
+        visible={toastVisible}
+        variant="patientWithTabBar"
+        tone={toastTone}
+      />
       <BottomBar />
     </div>
   );

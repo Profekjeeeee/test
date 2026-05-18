@@ -77,45 +77,56 @@ export async function hydrateDentalMessages(): Promise<void> {
 /**
  * Подписка на новые/изменённые строки в `chat_messages` (Supabase Realtime).
  * После подключения вызывайте `hydrateDentalMessages()`.
+ *
+ * У каждого вызова своё имя канала: иначе при повторном mount / гонке async-эффекта
+ * клиент может переиспользовать уже подписанный канал и упасть с
+ * «cannot add postgres_changes callbacks after subscribe».
  */
 export function subscribeDentalMessagesRealtime(onReloaded: () => void): () => void {
-  const channel = supabase
-    .channel("chat_messages_changes")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "chat_messages" },
-      (payload: { new?: unknown }) => {
-        const row = payload.new as DbMessageRow | undefined;
-        if (
-          row &&
-          typeof row.id === "string" &&
-          typeof row.text === "string" &&
-          typeof row.sender_id === "string"
-        ) {
-          const msg = dbRowToChatMessage(row);
-          const without = messagesCache.filter((m) => m.id !== msg.id);
-          messagesCache = [...without, msg].sort((a, b) => a.timestamp - b.timestamp);
-          emitUpdated();
-          onReloaded();
-          return;
-        }
-        void hydrateDentalMessages().then(() => {
-          emitUpdated();
-          onReloaded();
-        });
+  const instanceId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
+  const channel = supabase.channel(`chat_messages_changes:${instanceId}`);
+
+  channel.on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "chat_messages" },
+    (payload: { new?: unknown }) => {
+      const row = payload.new as DbMessageRow | undefined;
+      if (
+        row &&
+        typeof row.id === "string" &&
+        typeof row.text === "string" &&
+        typeof row.sender_id === "string"
+      ) {
+        const msg = dbRowToChatMessage(row);
+        const without = messagesCache.filter((m) => m.id !== msg.id);
+        messagesCache = [...without, msg].sort((a, b) => a.timestamp - b.timestamp);
+        emitUpdated();
+        onReloaded();
+        return;
       }
-    )
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "chat_messages" },
-      () => {
-        void hydrateDentalMessages().then(() => {
-          emitUpdated();
-          onReloaded();
-        });
-      }
-    )
-    .subscribe();
+      void hydrateDentalMessages().then(() => {
+        emitUpdated();
+        onReloaded();
+      });
+    }
+  );
+
+  channel.on(
+    "postgres_changes",
+    { event: "UPDATE", schema: "public", table: "chat_messages" },
+    () => {
+      void hydrateDentalMessages().then(() => {
+        emitUpdated();
+        onReloaded();
+      });
+    }
+  );
+
+  channel.subscribe();
 
   return () => {
     void supabase.removeChannel(channel);
@@ -126,8 +137,8 @@ export function getAllMessages(): ChatMessage[] {
   return messagesCache;
 }
 
-export function patientReadKey(tab: PatientChatTab, doctorPhone?: string): string {
-  if (tab === "doctor" && doctorPhone) return `${tab}|${doctorPhone}`;
+export function patientReadKey(tab: PatientChatTab, doctorPeerKey?: string): string {
+  if (tab === "doctor" && doctorPeerKey) return `${tab}|${doctorPeerKey}`;
   return tab;
 }
 
@@ -138,7 +149,19 @@ function normalizeDoctorPhone(phone: string): string {
   return d;
 }
 
-export function resolveAttendingDoctor(): { doctorPhone: string; doctorName: string } {
+/** Сообщения doctor-ветки: peer может быть `dental_employees.id` (новый формат) или нормализованный телефон (legacy). */
+function doctorPeerMatches(doctorEmployeeId: string, doctorPhoneNorm: string, peerId: string): boolean {
+  const p = peerId.trim();
+  if (!p) return false;
+  if (doctorEmployeeId !== "" && p === doctorEmployeeId) return true;
+  return normalizeDoctorPhone(p) === doctorPhoneNorm;
+}
+
+export function resolveAttendingDoctor(): {
+  doctorId: string;
+  doctorPhone: string;
+  doctorName: string;
+} {
   const employees = getDentalEmployees().filter((e) => e.role === "doctor");
   const fallback =
     employees.find((e) => e.phone === DEFAULT_ATTENDING_DOCTOR_PHONE) ?? employees[0];
@@ -158,7 +181,7 @@ export function resolveAttendingDoctor(): { doctorPhone: string; doctorName: str
   const next = getNextAppointment();
   if (next) {
     const emp = byName(next.doctor);
-    if (emp) return { doctorPhone: emp.phone, doctorName: emp.fullName };
+    if (emp) return { doctorId: emp.id, doctorPhone: emp.phone, doctorName: emp.fullName };
   }
 
   const all = getAppointments().filter((a) => a.status !== "cancelled");
@@ -167,13 +190,20 @@ export function resolveAttendingDoctor(): { doctorPhone: string; doctorName: str
   const sorted = [...all].sort((a, b) => score(b) - score(a));
   for (const a of sorted) {
     const emp = byName(a.doctor);
-    if (emp) return { doctorPhone: emp.phone, doctorName: emp.fullName };
+    if (emp) return { doctorId: emp.id, doctorPhone: emp.phone, doctorName: emp.fullName };
   }
 
   if (fallback) {
-    return { doctorPhone: fallback.phone, doctorName: fallback.fullName };
+    return { doctorId: fallback.id, doctorPhone: fallback.phone, doctorName: fallback.fullName };
   }
-  return { doctorPhone: DEFAULT_ATTENDING_DOCTOR_PHONE, doctorName: "Врач" };
+  const orphan = getDentalEmployees().find(
+    (e) => e.role === "doctor" && normalizeDoctorPhone(e.phone) === normalizeDoctorPhone(DEFAULT_ATTENDING_DOCTOR_PHONE)
+  );
+  return {
+    doctorId: orphan?.id ?? "",
+    doctorPhone: DEFAULT_ATTENDING_DOCTOR_PHONE,
+    doctorName: "Врач",
+  };
 }
 
 export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
@@ -182,6 +212,7 @@ export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
   const all = getAllMessages();
   const doc = resolveAttendingDoctor();
   const dPhone = normalizeDoctorPhone(doc.doctorPhone);
+  const doctorId = doc.doctorId;
 
   return all.filter((m) => {
     if (tab === "clinic") {
@@ -200,8 +231,8 @@ export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
     }
     return (
       m.chatType === "doctor" &&
-      ((m.senderId === uid && normalizeDoctorPhone(m.recipientId) === dPhone) ||
-        (normalizeDoctorPhone(m.senderId) === dPhone && m.recipientId === uid))
+      ((m.senderId === uid && doctorPeerMatches(doctorId, dPhone, m.recipientId)) ||
+        (doctorPeerMatches(doctorId, dPhone, m.senderId) && m.recipientId === uid))
     );
   });
 }
@@ -216,6 +247,7 @@ export interface SupportAuditEntry {
 }
 
 function appendSupportAudit(entry: Omit<SupportAuditEntry, "id">): void {
+  if (typeof window === "undefined") return;
   try {
     const raw = localStorage.getItem(SUPPORT_AUDIT_KEY);
     const list = raw ? (JSON.parse(raw) as SupportAuditEntry[]) : [];
@@ -241,6 +273,7 @@ export function getSupportAuditLog(): SupportAuditEntry[] {
 }
 
 function getPatientReadMap(): Record<string, number> {
+  if (typeof window === "undefined") return {};
   try {
     const raw = localStorage.getItem(PATIENT_READS_KEY);
     if (!raw) return {};
@@ -251,10 +284,12 @@ function getPatientReadMap(): Record<string, number> {
 }
 
 function setPatientReadMap(map: Record<string, number>): void {
+  if (typeof window === "undefined") return;
   localStorage.setItem(PATIENT_READS_KEY, JSON.stringify(map));
 }
 
 function getStaffReadMap(): Record<string, number> {
+  if (typeof window === "undefined") return {};
   try {
     const raw = localStorage.getItem(STAFF_READS_KEY);
     if (!raw) return {};
@@ -265,6 +300,7 @@ function getStaffReadMap(): Record<string, number> {
 }
 
 function setStaffReadMap(map: Record<string, number>): void {
+  if (typeof window === "undefined") return;
   localStorage.setItem(STAFF_READS_KEY, JSON.stringify(map));
 }
 
@@ -290,6 +326,7 @@ export function getPatientUnread(uid: string, tab: PatientChatTab): boolean {
   const all = getAllMessages();
   const doc = resolveAttendingDoctor();
   const dPhone = normalizeDoctorPhone(doc.doctorPhone);
+  const doctorId = doc.doctorId;
   const msgs = all.filter((m) => {
     if (tab === "clinic")
       return (
@@ -306,12 +343,12 @@ export function getPatientUnread(uid: string, tab: PatientChatTab): boolean {
     }
     return (
       m.chatType === "doctor" &&
-      ((m.senderId === uid && normalizeDoctorPhone(m.recipientId) === dPhone) ||
-        (normalizeDoctorPhone(m.senderId) === dPhone && m.recipientId === uid))
+      ((m.senderId === uid && doctorPeerMatches(doctorId, dPhone, m.recipientId)) ||
+        (doctorPeerMatches(doctorId, dPhone, m.senderId) && m.recipientId === uid))
     );
   });
   const readMap = getPatientReadMap();
-  const key = patientReadKey(tab, tab === "doctor" ? dPhone : undefined);
+  const key = patientReadKey(tab, tab === "doctor" ? doctorId || dPhone : undefined);
   const lastRead = readMap[key] ?? 0;
   return lastUnreadFromPeer(msgs, uid, true) > lastRead;
 }
@@ -320,8 +357,9 @@ export function markPatientConversationRead(uid: string, tab: PatientChatTab): v
   if (typeof window === "undefined") return;
   const doc = resolveAttendingDoctor();
   const dPhone = normalizeDoctorPhone(doc.doctorPhone);
+  const doctorId = doc.doctorId;
   const map = getPatientReadMap();
-  const key = patientReadKey(tab, tab === "doctor" ? dPhone : undefined);
+  const key = patientReadKey(tab, tab === "doctor" ? doctorId || dPhone : undefined);
   map[key] = Date.now();
   setPatientReadMap(map);
   emitUpdated();
@@ -460,12 +498,13 @@ export async function sendPatientMessage(
     });
   }
 
-  const { doctorPhone } = resolveAttendingDoctor();
+  const { doctorPhone, doctorId } = resolveAttendingDoctor();
+  const doctorRecipient = doctorId || normalizeDoctorPhone(doctorPhone);
   return appendChatMessage({
     senderId: uid,
     senderRole: "client",
     senderName: name,
-    recipientId: normalizeDoctorPhone(doctorPhone),
+    recipientId: doctorRecipient,
     text,
     chatType: "doctor",
   });
@@ -500,7 +539,7 @@ export async function sendStaffToPatientClinic(
   if (!text) return null;
   const role = session.role === "doctor" ? "doctor" : "admin";
   return appendChatMessage({
-    senderId: session.phone,
+    senderId: session.id,
     senderRole: role,
     senderName: session.fullName.trim() || (role === "doctor" ? "Врач" : "Клиника"),
     recipientId: patientId,
@@ -519,7 +558,7 @@ export async function sendDoctorToPatientPersonal(
   const text = body.trim();
   if (!text) return null;
   return appendChatMessage({
-    senderId: normalizeDoctorPhone(doctorPhone),
+    senderId: session.id,
     senderRole: "doctor",
     senderName: session.fullName.trim() || "Врач",
     recipientId: patientId,
@@ -549,7 +588,7 @@ export async function sendStaffMessage(
     });
   }
   return appendChatMessage({
-    senderId: session.phone,
+    senderId: session.id,
     senderRole: "doctor",
     senderName: staffLabel,
     recipientId: patientId,
@@ -586,6 +625,8 @@ export function getDoctorPatientThreadMessages(
   patientId: string
 ): ChatMessage[] {
   const d = normalizeDoctorPhone(doctorPhone);
+  const emp = getDentalEmployees().find((e) => normalizeDoctorPhone(e.phone) === d);
+  const doctorId = emp?.id ?? "";
   const all = getAllMessages();
   return all
     .filter((m) => {
@@ -597,8 +638,8 @@ export function getDoctorPatientThreadMessages(
       }
       if (m.chatType === "doctor") {
         return (
-          (m.senderId === patientId && normalizeDoctorPhone(m.recipientId) === d) ||
-          (normalizeDoctorPhone(m.senderId) === d && m.recipientId === patientId)
+          (m.senderId === patientId && doctorPeerMatches(doctorId, d, m.recipientId)) ||
+          (doctorPeerMatches(doctorId, d, m.senderId) && m.recipientId === patientId)
         );
       }
       return false;
@@ -677,11 +718,12 @@ export function inferDoctorReplyPreference(
   doctorPhone: string
 ): "clinic" | "doctor" {
   const d = normalizeDoctorPhone(doctorPhone);
+  const emp = getDentalEmployees().find((e) => normalizeDoctorPhone(e.phone) === d);
+  const doctorId = emp?.id ?? "";
   const fromPatientLast = [...thread].reverse().find((m) => m.senderRole === "client");
   if (!fromPatientLast) return "clinic";
   if (fromPatientLast.chatType === "doctor") {
-    const toThisDoc =
-      fromPatientLast.recipientId && normalizeDoctorPhone(fromPatientLast.recipientId) === d;
+    const toThisDoc = doctorPeerMatches(doctorId, d, fromPatientLast.recipientId ?? "");
     return toThisDoc ? "doctor" : "clinic";
   }
   return "clinic";

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import type { ReactNode } from "react";
 import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -37,20 +38,17 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+const themeBootstrapScript =
+  "try{var t=localStorage.getItem('theme');" +
+  "if(t==='dark')document.documentElement.classList.add('dark');" +
+  "else document.documentElement.classList.remove('dark');}catch(e){}";
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru" className={`${manrope.variable} ${inter.variable}`} suppressHydrationWarning>
       <head>
         {/* Анти-FOUC: применяем сохранённую тему до рендера */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}`,
-          }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
       </head>
       <body className="font-sans">
         <ThemeProvider>

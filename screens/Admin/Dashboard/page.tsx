@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { logout } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
+import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
 import {
   clearDentalLogs,
   DENTAL_LOGS_KEY,
@@ -36,7 +37,7 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 function logLevelBadgeClasses(level: DentalLog["level"]): string {
   if (level === "ERROR") return "text-red-600 dark:text-red-400 font-semibold";
   if (level === "WARN") return "text-amber-600 dark:text-amber-400 font-semibold";
-  return "text-secondary font-medium dark:text-blue-300/90 dark:font-semibold text-[#475569]";
+  return "text-secondary font-medium dark:text-blue-300/90 dark:font-semibold";
 }
 
 function formatLogTime(ts: number): string {
@@ -96,23 +97,26 @@ export default function AdminDashboardPage() {
 
   return (
     <main className="min-h-dvh bg-surface dark:bg-app-canvas pb-[84px]">
-      <div className="px-5 pt-12 pb-5">
+      <div className="px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[12px] font-medium text-secondary uppercase tracking-widest mb-1">Панель администратора</p>
             <h1 className="text-[24px] font-bold text-[#0F172A] dark:text-white">Дашборд</h1>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="interactive-press-sm w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-raised-surface"
-            title="Выйти"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M9 21H5C4.44772 21 4 20.5523 4 20V4C4 3.44772 4.44772 3 5 3H9" stroke="#9CA3AF" strokeWidth="1.8" strokeLinecap="round" />
-              <path d="M16 17L21 12M21 12L16 7M21 12H9" stroke="#9CA3AF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <ThemeToggleButton sizeClass="w-9 h-9" />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="interactive-press-sm w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center border border-slate-200 dark:border-slate-700 shadow-raised-surface"
+              title="Выйти"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M9 21H5C4.44772 21 4 20.5523 4 20V4C4 3.44772 4.44772 3 5 3H9" stroke="#9CA3AF" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M16 17L21 12M21 12L16 7M21 12H9" stroke="#9CA3AF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex rounded-[14px] bg-gray-100 dark:bg-slate-800 p-1 gap-1 mt-5">

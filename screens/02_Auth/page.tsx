@@ -8,10 +8,14 @@ import {
   applyLoggedInClientFromSupabaseRow,
   refreshDentalCaches,
   setDentalSession,
-  normalizePhone,
-  phoneDigitsSuffixPattern,
   syncTelegramIdToSupabaseIfNeeded,
 } from "@/lib/auth";
+import {
+  formatRuPhoneInput,
+  isCompleteRuMobileDigits,
+  normalizePhone,
+  phoneDigitsSuffixPattern,
+} from "@/lib/phone";
 import { supabase } from "@/lib/supabaseClient";
 import { ROUTES } from "@/lib/routes";
 import { addDentalLog } from "@/lib/logger";
@@ -108,9 +112,9 @@ export default function AuthPage() {
   /** Восстановление после ремоунта Strict Mode и т.п. */
   useEffect(() => {
     if (step !== "code") return;
-    if (authCleanPhone.length >= 11) return;
     const pinned = readAuthPhone();
-    if (pinned.length >= 11) {
+    if (isCompleteRuMobileDigits(authCleanPhone)) return;
+    if (isCompleteRuMobileDigits(pinned)) {
       console.log("[AUTH] восстановлен телефон из localStorage для шага кода:", pinned);
       authPhoneRef.current = pinned;
       setAuthCleanPhone(pinned);
@@ -119,15 +123,15 @@ export default function AuthPage() {
 
   const handlePhoneSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length < 11) {
+    const cleanPhone = normalizePhone(phone);
+    if (!isCompleteRuMobileDigits(cleanPhone)) {
       setError("Введите корректный номер телефона");
       addDentalLog(
         "WARN",
         "guest",
         "",
         "validation_phone",
-        `Номер телефона слишком короткий | raw=${phone} | cleanPhone=${cleanPhone}`
+        `Номер телефона не РФ 11 цифр | raw=${phone} | cleanPhone=${cleanPhone}`
       );
       return;
     }
@@ -163,7 +167,7 @@ export default function AuthPage() {
       return null;
     }
     const cleanDbPhone = normalizePhone(activePhone);
-    if (cleanDbPhone.length < 11) {
+    if (!isCompleteRuMobileDigits(cleanDbPhone)) {
       setError("Введите номер телефона на прошлом шаге ещё раз.");
       addDentalLog("WARN", "guest", "", "auth_master_phone_short", cleanDbPhone);
       return null;
@@ -403,8 +407,8 @@ export default function AuthPage() {
     );
   };
 
-  const digitsOnlyInput = phone.replace(/\D/g, "");
-  const digitLen = digitsOnlyInput.length;
+  const digitsNormalized = normalizePhone(phone);
+  const digitLen = digitsNormalized.length;
   /** Номер для подписи на шаге OTP (стейт мог обнулиться при ремоунте — читаем LS). */
   const otpScreenPhone = authCleanPhone || readAuthPhone() || authPhoneRef.current || phone;
 
@@ -423,7 +427,7 @@ export default function AuthPage() {
         <p className="text-[15px] text-secondary mt-2 leading-relaxed">
           {step === "phone"
             ? "Один номер для пациентов и сотрудников клиники — после СМС вы попадёте в нужный раздел."
-            : `Код отправлен на\u00a0${otpScreenPhone || "…"} (демо: до 6 цифр)`}
+            : `Код отправлен на\u00a0${formatRuPhoneInput(otpScreenPhone || "") || "…"} (демо: до 6 цифр)`}
         </p>
         {step === "phone" && (
           <div className="flex flex-wrap gap-2 mt-4">
@@ -447,7 +451,7 @@ export default function AuthPage() {
             placeholder="+7 (___) ___-__-__"
             value={phone}
             onChange={(e) => {
-              setPhone(e.target.value);
+              setPhone(formatRuPhoneInput(e.target.value));
               setError("");
             }}
             error={error}
@@ -461,8 +465,8 @@ export default function AuthPage() {
             {digitLen >= 11 ? (
               <>
                 {" · "}
-                Только цифры (как сохранится):{" "}
-                <span className="font-mono text-[#0F172A] dark:text-white">{digitsOnlyInput}</span>
+                В БД сохранится:{" "}
+                <span className="font-mono text-[#0F172A] dark:text-white">{digitsNormalized}</span>
               </>
             ) : null}
           </p>
@@ -498,9 +502,10 @@ export default function AuthPage() {
           <Button type="submit" size="full" loading={loading}>
             Войти
           </Button>
-          <button
-            className="text-[13px] text-gray-400 text-center active:scale-95 transition-transform"
+          <Button
             type="button"
+            variant="ghost"
+            className="w-full !h-auto min-h-[44px] py-3 text-[15px] font-medium border-slate-200 dark:border-slate-700"
             onClick={() => {
               bypassInFlightRef.current = false;
               authPhoneRef.current = "";
@@ -513,7 +518,7 @@ export default function AuthPage() {
             }}
           >
             Изменить номер
-          </button>
+          </Button>
         </form>
       )}
     </main>

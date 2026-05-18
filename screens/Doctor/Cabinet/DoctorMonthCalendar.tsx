@@ -60,7 +60,7 @@ export default function DoctorMonthCalendar({
         <button
           type="button"
           onClick={onPrevMonth}
-          className="interactive-press-sm w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface"
+          className="interactive-press-sm min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface"
           aria-label="Предыдущий месяц"
         >
           ‹
@@ -69,7 +69,7 @@ export default function DoctorMonthCalendar({
         <button
           type="button"
           onClick={onNextMonth}
-          className="interactive-press-sm w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface"
+          className="interactive-press-sm min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface"
           aria-label="Следующий месяц"
         >
           ›
@@ -84,10 +84,10 @@ export default function DoctorMonthCalendar({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-y-2 gap-x-1">
+      <div className="grid grid-cols-7 gap-y-3 gap-x-1">
         {cells.map((day, idx) => {
           if (day === null) {
-            return <div key={`e-${idx}`} className="h-9" />;
+            return <div key={`e-${idx}`} className="min-h-[44px]" />;
           }
           const selected = isSelected(day);
           const today = isToday(day);
@@ -98,7 +98,7 @@ export default function DoctorMonthCalendar({
               key={day}
               type="button"
               onClick={() => onSelectDay(day)}
-              className={`relative h-9 rounded-xl text-[13px] font-semibold flex flex-col items-center justify-center transition-all duration-150 ease-out active:scale-95 border ${
+              className={`relative min-h-[44px] rounded-xl text-[13px] font-semibold flex flex-col items-center justify-center transition-all duration-150 ease-out active:scale-95 border ${
                 selected
                   ? "bg-primary text-white border-primary"
                   : today

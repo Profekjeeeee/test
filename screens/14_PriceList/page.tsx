@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
 
@@ -228,6 +229,8 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 
 export default function PriceListPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const adminShell = pathname?.startsWith("/screens/admin") ?? false;
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -253,7 +256,11 @@ export default function PriceListPage() {
 
   return (
     <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-[88px]">
-      <Header title="Прайс-лист" showBack />
+      <Header
+        title="Прайс-лист"
+        showBack
+        rightSlot={adminShell ? <ThemeToggleButton sizeClass="w-9 h-9" /> : undefined}
+      />
 
       {/* Sticky search */}
       <div className="sticky top-14 z-30 bg-surface dark:bg-app-canvas px-5 pt-3 pb-2 border-b border-slate-200 dark:border-slate-700">
@@ -384,7 +391,7 @@ function PriceRow({
         <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white leading-snug">
           {item.title}
         </p>
-        <p className="text-[12px] text-gray-400 mt-0.5 leading-relaxed">
+        <p className="text-[12px] text-gray-400 dark:text-slate-500 mt-0.5 leading-relaxed">
           {item.description}
         </p>
       </div>
@@ -395,8 +402,9 @@ function PriceRow({
           {item.price.toLocaleString("ru-RU")} ₽
         </p>
         <button
+          type="button"
           onClick={() => onBook(item.price, item.title)}
-          className="interactive-press-sm h-7 px-3 rounded-[6px] border border-primary text-primary text-[11px] font-bold shadow-[0_2px_6px_rgba(36,139,207,0.15)] dark:shadow-none active:bg-primary active:text-white transition-colors duration-150"
+          className="interactive-press-sm inline-flex h-11 min-h-[44px] min-w-0 shrink-0 items-center justify-center rounded-[8px] border border-primary bg-transparent px-3 text-[12px] font-semibold text-primary transition-colors duration-150 hover:bg-primary-light/80 dark:bg-transparent dark:hover:bg-primary/15 active:bg-primary active:text-white"
         >
           Записаться
         </button>

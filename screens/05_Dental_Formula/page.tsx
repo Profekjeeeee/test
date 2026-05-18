@@ -76,7 +76,7 @@ function FormulaHelpModal({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={handleClose}
-          className="interactive-press-sm absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full text-[#9CA3AF] transition-colors hover:bg-slate-100 hover:text-[#64748B] dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          className="interactive-press-sm absolute top-4 right-4 flex h-11 w-11 items-center justify-center rounded-full text-[#9CA3AF] transition-colors hover:bg-slate-100 hover:text-[#64748B] dark:hover:bg-slate-800 dark:hover:text-slate-300"
           aria-label="Закрыть"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
@@ -187,7 +187,7 @@ export default function DentalFormulaPage() {
             <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white truncate">
               Врач не назначен
             </p>
-            <p className="text-[11px] mt-0.5" style={{ color: "#9ab0c5" }}>
+            <p className="text-[11px] mt-0.5 text-secondary">
               Будет указан после первого приёма
             </p>
           </div>

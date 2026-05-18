@@ -6,7 +6,6 @@ import {
   getDentalClients,
   getDentalEmployees,
   getDentalSession,
-  isDentalClientUuidKey,
   normalizePhone,
 } from "@/lib/auth";
 
@@ -173,37 +172,24 @@ export async function initAppointments(): Promise<void> {
   await refreshAppointmentsCache();
 }
 
-export function getAppointments(): Appointment[] {
+function getClientSubjectIdForFilters(): string | null {
   const uid = getCurrentUserId();
+  if (uid) return uid;
   const session = getDentalSession();
+  if (session?.role === "client" && session.id) return session.id;
+  return null;
+}
+
+/** Записи пациента: client_id в БД всегда `dental_clients.id`, без сопоставления по телефону. */
+export function getAppointments(): Appointment[] {
+  const subjectId = getClientSubjectIdForFilters();
   const all = clinicCache ?? [];
-
-  const phoneCandidates = new Set<string>();
-  if (session?.phone) {
-    const p = normalizePhone(session.phone);
-    if (p.length >= 10) phoneCandidates.add(p);
-  }
-  if (uid) {
-    const c = getDentalClients().find((x) => x.id === uid);
-    if (c?.phone) {
-      const p = normalizePhone(c.phone);
-      if (p.length >= 10) phoneCandidates.add(p);
-    }
-    const uidDigits = uid.replace(/\D/g, "");
-    if (uidDigits.length >= 10) phoneCandidates.add(normalizePhone(uid));
-  }
-
-  if (!uid && phoneCandidates.size === 0) return [];
+  if (!subjectId) return [];
 
   return all.filter((a) => {
     const pid = a.patientId;
     if (!pid) return false;
-    if (uid && pid === uid) return true;
-    const pNorm = normalizePhone(String(pid));
-    for (const ph of phoneCandidates) {
-      if (ph === pNorm) return true;
-    }
-    return false;
+    return pid === subjectId;
   });
 }
 
@@ -242,21 +228,13 @@ async function resolveDentalClientPrimaryKeyForInsert(
   const phoneFromArg = explicitPhone?.trim() || null;
   const phoneFromSession = resolveClientPhoneForAppointment();
 
-  if (uid && isDentalClientUuidKey(uid)) {
+  if (uid) {
     const { data, error } = await supabase
       .from("dental_clients")
       .select("id")
       .eq("id", uid)
       .maybeSingle();
     if (!error && data?.id) return data.id;
-  }
-
-  if (uid && !isDentalClientUuidKey(uid)) {
-    const digits = uid.replace(/\D/g, "");
-    if (digits.length >= 10) {
-      const row = await findClientByPhone(uid);
-      if (row?.id) return row.id;
-    }
   }
 
   const phone = phoneFromArg ?? phoneFromSession;
@@ -316,8 +294,6 @@ export function resolveClientPhoneForAppointment(): string | null {
       const p = normalizePhone(fromCache.phone);
       if (p.length >= 10) return p;
     }
-    const digits = uid.replace(/\D/g, "");
-    if (digits.length >= 10) return normalizePhone(uid);
   }
   return null;
 }

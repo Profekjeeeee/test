@@ -120,7 +120,7 @@ export default function MainPage() {
   return (
     <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       {/* Header */}
-      <header className="px-6 pt-6 pb-2">
+      <header className="px-6 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] pb-2">
         <p
           className="text-[13px] font-medium uppercase tracking-wider"
           style={{ color: "#9ab0c5" }}
@@ -159,13 +159,13 @@ export default function MainPage() {
               <div className="mt-4 flex gap-2">
                 <Link
                   href="/appointments"
-                  className="interactive-press-sm flex-1 h-9 flex items-center justify-center rounded-[4px] bg-primary text-white text-[13px] font-semibold"
+                  className="interactive-press-sm flex-1 h-11 flex items-center justify-center rounded-[4px] bg-primary text-white text-[13px] font-semibold"
                 >
                   Подробнее
                 </Link>
                 <button
                   type="button"
-                  className="interactive-press-sm flex-1 h-9 flex items-center justify-center rounded-[4px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[13px] font-medium text-primary shadow-raised-surface active:opacity-90"
+                  className="interactive-press-sm flex-1 h-11 flex items-center justify-center rounded-[4px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-[13px] font-medium text-primary shadow-raised-surface active:opacity-90"
                   onClick={handleReschedule}
                 >
                   Перенести

@@ -2,7 +2,7 @@
 -- chat_type + sender_name остаются нужны приложению (раздел clinic / support / doctor и подпись в UI).
 
 CREATE TABLE IF NOT EXISTS public.chat_messages (
-  id text PRIMARY KEY,
+  id text PRIMARY KEY DEFAULT (gen_random_uuid()::text),
   sender_id text NOT NULL,
   recipient_id text NOT NULL,
   "text" text NOT NULL,

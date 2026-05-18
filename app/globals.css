@@ -12,8 +12,8 @@
   --color-primary-light: #e3f2fa;
   --color-secondary: #9AB0C5;
   /* Единый тёмный холст и панели (совпадает с html.dark в @layer base) */
-  --color-app-canvas: #0b0f19;
-  --color-app-nav: #131b2e;
+  --color-app-canvas: #0f172a;
+  --color-app-nav: #1e293b;
   /* Подложка страницы: слегка приглушённый светлый фон (slate-50), карточки — белые поверх */
   --color-surface: #f8fafc;
   --color-error: #BA1A1A;

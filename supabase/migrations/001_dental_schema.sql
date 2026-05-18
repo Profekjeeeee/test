@@ -3,7 +3,7 @@
 
 -- ─── dental_clients ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.dental_clients (
-  id text PRIMARY KEY,
+  id text PRIMARY KEY DEFAULT (gen_random_uuid()::text),
   phone text NOT NULL UNIQUE,
   role text NOT NULL DEFAULT 'client',
   first_name text NOT NULL DEFAULT '',
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.dental_clients (
 
 -- ─── dental_employees ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.dental_employees (
-  id text PRIMARY KEY,
+  id text PRIMARY KEY DEFAULT (gen_random_uuid()::text),
   phone text NOT NULL UNIQUE,
   name text NOT NULL,
   role text NOT NULL CHECK (role IN ('admin', 'doctor')),
@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_date ON public.appointments (appoint
 
 -- ─── dental_messages ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.dental_messages (
-  id text PRIMARY KEY,
+  id text PRIMARY KEY DEFAULT (gen_random_uuid()::text),
   sender_id text NOT NULL,
   recipient_id text NOT NULL,
   body text NOT NULL,

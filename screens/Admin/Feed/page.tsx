@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
 
 type FeedCategory = "all" | "appointments" | "payments" | "system";
 
@@ -99,15 +100,20 @@ export default function AdminFeedPage() {
     <main className="min-h-dvh bg-surface dark:bg-app-canvas pb-[84px]">
       {/* Header */}
       <div className="px-5 pt-12 pb-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-[24px] font-bold text-[#0F172A] dark:text-white">Лента событий</h1>
-          {unreadCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-primary text-white text-[12px] font-bold">
-              {unreadCount}
-            </span>
-          )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-[24px] font-bold text-[#0F172A] dark:text-white leading-tight">Лента событий</h1>
+              {unreadCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-primary text-white text-[12px] font-bold shrink-0">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+            <p className="text-[13px] text-secondary mt-0.5">Активность клиники в реальном времени</p>
+          </div>
+          <ThemeToggleButton sizeClass="w-9 h-9" className="mt-1" />
         </div>
-        <p className="text-[13px] text-secondary mt-0.5">Активность клиники в реальном времени</p>
       </div>
 
       {/* Category tabs */}

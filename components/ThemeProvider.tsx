@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    const saved = localStorage.getItem("theme");
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
     if (saved === "dark") {
       document.documentElement.classList.add("dark");
     } else {
@@ -20,10 +21,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const { dark } = (e as CustomEvent<{ dark: boolean }>).detail;
       if (dark) {
         document.documentElement.classList.add("dark");
-        localStorage.setItem("theme", "dark");
+        localStorage.setItem(THEME_STORAGE_KEY, "dark");
       } else {
         document.documentElement.classList.remove("dark");
-        localStorage.setItem("theme", "light");
+        localStorage.setItem(THEME_STORAGE_KEY, "light");
       }
     };
 

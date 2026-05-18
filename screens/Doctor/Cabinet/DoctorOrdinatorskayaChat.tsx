@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import type { ToothStatus } from "@/types";
+import type { ToastTone } from "@/components/ui/Toast";
 import type { DentalEmployeeRecord, DentalSession } from "@/lib/auth";
 import { getDentalEmployees, refreshDentalCaches } from "@/lib/auth";
 import {
@@ -44,7 +45,7 @@ export default function DoctorOrdinatorskayaChat({
   showToast,
 }: {
   session: DentalSession | null;
-  showToast: (message: string) => void;
+  showToast: (message: string, tone?: ToastTone) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [surface, setSurface] = useState<ChatSurface>({ kind: "general" });
@@ -102,7 +103,10 @@ export default function DoctorOrdinatorskayaChat({
         setGeneralRoomName(GENERAL_CHAT_FALLBACK_NAME);
         setActiveRoomId(null);
         setMessages([]);
-        showToast("Не удалось открыть общий чат. Проверьте соединение или настройку Supabase.");
+        showToast(
+          "Не удалось открыть общий чат. Проверьте соединение или настройку Supabase.",
+          "error"
+        );
         setLoading(false);
         return;
       }
@@ -174,7 +178,7 @@ export default function DoctorOrdinatorskayaChat({
       setDrawerOpen(false);
       const { roomId, error } = await findOrCreatePrivateDoctorRoom(session.id, peer.id);
       if (error || !roomId) {
-        showToast(error ?? "Не удалось открыть чат");
+        showToast(error ?? "Не удалось открыть чат", "error");
         return;
       }
       setPeerToRoomId((m) => ({ ...m, [peer.id]: roomId }));
@@ -187,7 +191,7 @@ export default function DoctorOrdinatorskayaChat({
 
   const handleSend = useCallback(async () => {
     if (!activeRoomId || !session?.id || session.role !== "doctor") {
-      showToast("Нет данных врача для отправки");
+      showToast("Нет данных врача для отправки", "error");
       return;
     }
     const text = draft.trim();
@@ -202,7 +206,7 @@ export default function DoctorOrdinatorskayaChat({
         body: text,
       });
       if (error) {
-        showToast(error);
+        showToast(error, "error");
         return;
       }
       if (message) {
