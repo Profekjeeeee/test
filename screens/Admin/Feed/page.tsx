@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
@@ -27,7 +27,7 @@ const FEED_ITEMS = [
   {
     id: 3,
     category: "appointments" as FeedCategory,
-    icon: "🔁",
+    icon: "🔄",
     title: "Перенос записи",
     body: "Нурмагамбетов Р.А. перенёс визит с 11:00 на 13:30",
     time: "45 мин назад",
@@ -97,7 +97,7 @@ export default function AdminFeedPage() {
   const unreadCount = FEED_ITEMS.filter((i) => i.unread).length;
 
   return (
-    <main className="min-h-dvh bg-surface dark:bg-app-canvas pb-[84px]">
+    <main className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       {/* Header */}
       <div className="px-5 pt-12 pb-4">
         <div className="flex items-start justify-between gap-3">

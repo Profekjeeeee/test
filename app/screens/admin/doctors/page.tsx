@@ -1,1 +1,1 @@
-export { default } from "@/screens/15_Doctors/page";
+export { default } from "@/screens/Admin/Doctors/page";

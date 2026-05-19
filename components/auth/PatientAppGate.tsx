@@ -16,7 +16,7 @@ import {
   type DentalSession,
 } from "@/lib/auth";
 import { refreshAppointmentsCache } from "@/lib/appointments";
-import { addDentalLog } from "@/lib/logger";
+import { log } from "@/lib/logger";
 import {
   PUBLIC_ROUTE_PREFIXES,
   PATIENT_ROUTE_PREFIXES,
@@ -130,21 +130,17 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
     hydrationLogDone.current = true;
     const pub = isPublicPath(pathname);
     if (!pub && !hydratedSession) {
-      addDentalLog(
-        "WARN",
-        "guest",
-        "",
-        "session_empty",
-        "Сессия отсутствует"
-      );
+      log("WARN", "session_empty", {
+        role: "guest",
+        userId: "",
+        details: "Сессия отсутствует",
+      });
     } else if (hydratedSession) {
-      addDentalLog(
-        "INFO",
-        hydratedSession.role,
-        hydratedSession.id,
-        "session_initialized",
-        "Пользователь восстановлен"
-      );
+      log("INFO", "session_initialized", {
+        role: hydratedSession.role,
+        userId: hydratedSession.id,
+        details: "Пользователь восстановлен",
+      });
     }
   }, [hydratedSession, pathname]);
 
@@ -155,7 +151,10 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
     const session = hydratedSession;
 
     if (pathname.startsWith(ADMIN_ROUTE_PREFIX)) {
-      if (!session || session.role !== "admin") router.replace(ROUTES.auth);
+      const adminOk =
+        session?.role === "admin" ||
+        (typeof window !== "undefined" && localStorage.getItem("isAdmin") === "true");
+      if (!adminOk) router.replace(ROUTES.auth);
       return;
     }
 

@@ -1,102 +1,100 @@
-"use client";
+﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ScrollText } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { logout } from "@/lib/auth";
+import { getDashboardStats } from "@/lib/admin/dashboard";
+import type { DashboardAppointmentRow, DashboardChartPoint, DashboardStats } from "@/lib/admin/types";
 import { ROUTES } from "@/lib/routes";
 import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
-import {
-  clearDentalLogs,
-  DENTAL_LOGS_KEY,
-  getDentalLogsNewestFirst,
-  type DentalLog,
-} from "@/lib/logger";
-
-const STATS = [
-  { label: "Записей сегодня", value: "12", sub: "+3 с утра", color: "bg-primary-light", textColor: "text-primary" },
-  { label: "Активных врачей", value: "6", sub: "из 8 работают", color: "bg-amber-50 dark:bg-amber-900/20", textColor: "text-amber-600 dark:text-amber-400" },
-  { label: "Пациентов", value: "148", sub: "за этот месяц", color: "bg-violet-50 dark:bg-violet-900/20", textColor: "text-violet-600 dark:text-violet-400" },
-  { label: "Выручка, ₽", value: "284 500", sub: "за этот месяц", color: "bg-primary-light", textColor: "text-primary" },
-];
-
-const TODAY_APPOINTMENTS = [
-  { time: "09:00", patient: "Иванова А.С.", doctor: "Смирнов К.А.", procedure: "Осмотр", status: "done" },
-  { time: "10:30", patient: "Петров Д.М.", doctor: "Козлова Е.В.", procedure: "Лечение кариеса", status: "done" },
-  { time: "12:00", patient: "Сидорова Л.П.", doctor: "Смирнов К.А.", procedure: "Удаление зуба", status: "current" },
-  { time: "13:30", patient: "Нурмагамбетов Р.А.", doctor: "Федоров И.С.", procedure: "Брекеты — контроль", status: "upcoming" },
-  { time: "15:00", patient: "Морозова К.Г.", doctor: "Козлова Е.В.", procedure: "Чистка", status: "upcoming" },
-  { time: "16:30", patient: "Александров В.Д.", doctor: "Смирнов К.А.", procedure: "Имплант — этап 2", status: "upcoming" },
-];
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   done: { label: "Выполнено", cls: "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400" },
   current: { label: "Сейчас", cls: "bg-primary-light text-primary" },
-  upcoming: { label: "Ожидает", cls: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" },
+  upcoming: { label: "Ожидает", cls: "bg-primary/10 text-primary" },
 };
 
-function logLevelBadgeClasses(level: DentalLog["level"]): string {
-  if (level === "ERROR") return "text-red-600 dark:text-red-400 font-semibold";
-  if (level === "WARN") return "text-amber-600 dark:text-amber-400 font-semibold";
-  return "text-secondary font-medium dark:text-blue-300/90 dark:font-semibold";
+function formatRub(n: number): string {
+  return n.toLocaleString("ru-RU");
 }
 
-function formatLogTime(ts: number): string {
-  try {
-    return new Date(ts).toLocaleString("ru-RU", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return String(ts);
-  }
+function buildStatCards(stats: DashboardStats) {
+  return [
+    {
+      label: "Выручка, ₽",
+      value: formatRub(stats.revenueMonth),
+      sub: "за текущий месяц",
+      color: "bg-primary-light",
+      textColor: "text-primary",
+    },
+    {
+      label: "Новые записи",
+      value: String(stats.newAppointmentsMonth),
+      sub: "созданы в этом месяце",
+      color: "bg-primary/10",
+      textColor: "text-primary",
+    },
+    {
+      label: "Необработанные",
+      value: String(stats.unprocessedCount),
+      sub: "pending / scheduled",
+      color: "bg-slate-100 dark:bg-slate-800",
+      textColor: "text-[#0F172A] dark:text-white",
+    },
+    {
+      label: "Записей сегодня",
+      value: String(stats.appointmentsToday),
+      sub: `врачей активно: ${stats.activeDoctors} из ${stats.totalDoctors || "—"}`,
+      color: "bg-primary-light",
+      textColor: "text-primary",
+    },
+  ];
 }
-
-type DashboardTabId = "main" | "logs";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [section, setSection] = useState<DashboardTabId>("main");
-  const [logs, setLogs] = useState<DentalLog[]>(() => getDentalLogsNewestFirst());
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [chart, setChart] = useState<DashboardChartPoint[]>([]);
+  const [today, setToday] = useState<DashboardAppointmentRow[]>([]);
+  const [dashLoading, setDashLoading] = useState(true);
+  const [dashError, setDashError] = useState("");
 
-  const reloadLogs = useCallback(() => {
-    setLogs(getDentalLogsNewestFirst());
+  const statCards = useMemo(() => (stats ? buildStatCards(stats) : []), [stats]);
+
+  const loadDashboard = useCallback(async () => {
+    setDashLoading(true);
+    const res = await getDashboardStats();
+    setStats(res.stats);
+    setChart(res.chart);
+    setToday(res.today);
+    setDashError(res.error ?? "");
+    setDashLoading(false);
   }, []);
 
   useEffect(() => {
-    if (section !== "logs") return;
-    reloadLogs();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== DENTAL_LOGS_KEY && e.key !== null) return;
-      reloadLogs();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [section, reloadLogs]);
-
-  useEffect(() => {
-    const onCustom = () => reloadLogs();
-    window.addEventListener("dental_logs_updated", onCustom);
-    return () => window.removeEventListener("dental_logs_updated", onCustom);
-  }, [reloadLogs]);
+    void loadDashboard();
+  }, [loadDashboard]);
 
   const handleLogout = () => {
     logout();
     router.replace(ROUTES.auth);
   };
 
-  const handleClearLogs = () => {
-    clearDentalLogs();
-    reloadLogs();
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("dental_logs_updated"));
-    }
-  };
-
   return (
-    <main className="min-h-dvh bg-surface dark:bg-app-canvas pb-[84px]">
+    <main className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <div className="px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-5">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -119,125 +117,128 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div className="flex rounded-[14px] bg-gray-100 dark:bg-slate-800 p-1 gap-1 mt-5">
-          {(
-            [
-              { id: "main" as const, label: "Обзор" },
-              { id: "logs" as const, label: "Логи системы" },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setSection(t.id)}
-              className={`interactive-press-sm flex-1 py-2.5 rounded-[11px] text-[13px] font-semibold transition-all border ${
-                section === t.id
-                  ? "bg-white dark:bg-slate-900 text-primary shadow-[0_4px_14px_rgba(15,23,42,0.08)] border-slate-200 dark:border-slate-700"
-                  : "border-slate-200/85 dark:border-slate-600 text-slate-700 dark:text-slate-400 bg-transparent"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <Link
+          href={ROUTES.adminLogs}
+          className="interactive-press-sm mt-4 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary-light/60 px-4 py-3 dark:border-primary/30 dark:bg-primary/10"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-primary">
+            <ScrollText className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold text-[#0F172A] dark:text-white">Логи системы</span>
+            <span className="block text-[12px] text-secondary">Supabase · фильтр по уровню · экспорт JSON</span>
+          </span>
+          <span className="text-primary text-[13px] font-semibold shrink-0">Открыть</span>
+        </Link>
       </div>
 
-      {section === "logs" ? (
-        <div className="px-5 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[13px] text-secondary">
-              События из localStorage (лимит 200 записей). Свежие — сверху.
-            </p>
-            <button
-              type="button"
-              onClick={handleClearLogs}
-              className="interactive-press-sm shrink-0 px-4 py-2 rounded-[12px] border border-red-200 dark:border-red-900/60 bg-white dark:bg-slate-900 text-[12px] font-semibold text-red-600 dark:text-red-400 shadow-raised-surface"
-            >
-              Очистить логи
-            </button>
-          </div>
+      {dashError ? (
+        <p className="px-5 text-[13px] text-red-600 dark:text-red-400 mb-2">{dashError}</p>
+      ) : null}
 
-          <div className="rounded-[16px] border border-slate-200 dark:border-slate-700 bg-surface dark:bg-slate-900/80 overflow-hidden shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.35)]">
-            <div className="max-h-[calc(100dvh-260px)] overflow-auto font-mono text-[11px] leading-snug">
-              <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 bg-white/95 dark:bg-slate-900/95 border-b border-[#E2E8F0] dark:border-slate-700 z-10">
-                  <tr className="text-secondary uppercase tracking-wider text-[10px]">
-                    <th className="py-2.5 px-3 font-semibold">Время</th>
-                    <th className="py-2.5 px-2 font-semibold">Ур.</th>
-                    <th className="py-2.5 px-2 font-semibold">Роль</th>
-                    <th className="py-2.5 px-2 font-semibold">Действие</th>
-                    <th className="py-2.5 px-3 font-semibold">Детали</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-16 text-center text-secondary">
-                        Логи пусты
-                      </td>
-                    </tr>
-                  ) : (
-                    logs.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-[#E2E8F0]/80 dark:border-slate-800 odd:bg-white/60 dark:odd:bg-app-canvas/40"
-                      >
-                        <td className="py-2 px-3 whitespace-nowrap text-secondary tabular-nums">{formatLogTime(row.timestamp)}</td>
-                        <td className={`py-2 px-2 whitespace-nowrap ${logLevelBadgeClasses(row.level)}`}>{row.level}</td>
-                        <td className="py-2 px-2 whitespace-nowrap text-[#0F172A] dark:text-slate-200">{row.role}</td>
-                        <td className="py-2 px-2 font-semibold text-[#0F172A] dark:text-white break-all">{row.action}</td>
-                        <td className="py-2 px-3 text-secondary break-all max-w-[140px] sm:max-w-[220px]">{row.details ?? "—"}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Stats grid */}
-          <div className="px-5 grid grid-cols-2 gap-3 mb-6">
-            {STATS.map((s) => (
-              <div key={s.label} className={`rounded-2xl p-4 shadow-[0_4px_14px_rgba(15,23,42,0.07)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-700/50 ${s.color}`}>
-                <p className={`text-[26px] font-bold ${s.textColor} leading-none`}>{s.value}</p>
+      <div className="px-5 grid grid-cols-2 gap-3 mb-4">
+        {dashLoading || !stats
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-2xl p-4 h-[88px] bg-slate-100 dark:bg-slate-800 animate-pulse border border-slate-200/80 dark:border-slate-700/50"
+              />
+            ))
+          : statCards.map((s) => (
+              <div
+                key={s.label}
+                className={`rounded-2xl p-4 shadow-[0_4px_14px_rgba(15,23,42,0.07)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-700/50 ${s.color}`}
+              >
+                <p className={`text-[22px] font-bold ${s.textColor} leading-none tabular-nums`}>{s.value}</p>
                 <p className="text-[12px] font-semibold text-[#0F172A] dark:text-white mt-1 leading-tight">{s.label}</p>
                 <p className="text-[11px] text-secondary mt-0.5">{s.sub}</p>
               </div>
             ))}
-          </div>
+      </div>
 
-          {/* Today schedule */}
-          <div className="px-5">
-            <h2 className="text-[16px] font-bold text-[#0F172A] dark:text-white mb-3">Расписание на сегодня</h2>
-            <div className="flex flex-col gap-2">
-              {TODAY_APPOINTMENTS.map((a, i) => {
-                const { label, cls } = STATUS_MAP[a.status];
-                return (
-                  <div
-                    key={`${a.time}_${i}`}
-                    className={`rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex items-start gap-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)] ${
-                      a.status === "current" ? "ring-1 ring-primary" : ""
-                    }`}
-                  >
-                    <div className="min-w-[44px] text-center">
-                      <span className="text-[15px] font-bold text-[#0F172A] dark:text-white">{a.time}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white truncate">{a.patient}</p>
-                      <p className="text-[12px] text-secondary truncate">
-                        {a.doctor} · {a.procedure}
-                      </p>
-                    </div>
-                    <span className={`text-[11px] font-medium px-2 py-1 rounded-lg shrink-0 ${cls}`}>{label}</span>
+      <div className="px-5 mb-4 space-y-3">
+        <ChartCard title="Выручка по дням (месяц)" loading={dashLoading}>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={chart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={42} />
+              <Tooltip
+                formatter={(v) => [`${formatRub(Number(v))} ₽`, "Выручка"]}
+                labelFormatter={(l) => `День ${l}`}
+              />
+              <Bar dataKey="revenue" fill="#248BCF" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Записи по дням (месяц)" loading={dashLoading}>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={chart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
+              <Tooltip labelFormatter={(l) => `День ${l}`} />
+              <Line type="monotone" dataKey="appointments" stroke="#248BCF" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <div className="px-5">
+        <h2 className="text-[16px] font-bold text-[#0F172A] dark:text-white mb-3">Расписание на сегодня</h2>
+        <div className="flex flex-col gap-2">
+          {dashLoading ? (
+            <p className="text-[13px] text-secondary py-6 text-center">Загрузка расписания…</p>
+          ) : today.length === 0 ? (
+            <p className="text-[13px] text-secondary py-6 text-center">На сегодня записей нет</p>
+          ) : (
+            today.map((a) => {
+              const { label, cls } = STATUS_MAP[a.status] ?? STATUS_MAP.upcoming;
+              return (
+                <div
+                  key={a.id}
+                  className={`rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex items-start gap-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)] ${
+                    a.status === "current" ? "ring-1 ring-primary" : ""
+                  }`}
+                >
+                  <div className="min-w-[44px] text-center">
+                    <span className="text-[15px] font-bold text-[#0F172A] dark:text-white">{a.time}</span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white truncate">{a.patient}</p>
+                    <p className="text-[12px] text-secondary truncate">
+                      {a.doctor} · {a.procedure}
+                    </p>
+                  </div>
+                  <span className={`text-[11px] font-medium px-2 py-1 rounded-lg shrink-0 ${cls}`}>{label}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </main>
+  );
+}
+
+function ChartCard({
+  title,
+  loading,
+  children,
+}: {
+  title: string;
+  loading: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)]">
+      <p className="text-[13px] font-semibold text-[#0F172A] dark:text-white mb-2">{title}</p>
+      {loading ? (
+        <div className="h-[180px] rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      ) : (
+        children
+      )}
+    </div>
   );
 }

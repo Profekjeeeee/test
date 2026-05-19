@@ -127,7 +127,7 @@ export default function BottomBar() {
 
   return (
     <nav
-      className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
+      className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
       aria-label="Основная навигация"
     >
       <div

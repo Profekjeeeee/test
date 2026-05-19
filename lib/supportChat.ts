@@ -4,7 +4,7 @@ import {
   getDentalEmployees,
   getDentalSession,
 } from "@/lib/auth";
-import { addDentalLog } from "@/lib/logger";
+import { log } from "@/lib/logger";
 import { getAppointments, getNextAppointment } from "@/lib/appointments";
 import type { ChatMessage } from "@/types";
 import type { Appointment } from "@/lib/appointments";
@@ -443,17 +443,15 @@ export async function appendChatMessage(
     const r = full.senderRole;
     const role: "client" | "doctor" | "admin" =
       r === "doctor" ? "doctor" : r === "admin" ? "admin" : "client";
-    addDentalLog(
-      "INFO",
+    log("INFO", "chat_message_sent", {
       role,
-      full.senderId,
-      "chat_message_sent",
-      JSON.stringify({
+      userId: full.senderId,
+      details: JSON.stringify({
         chatType: full.chatType,
         recipientId: full.recipientId,
         preview: full.text.slice(0, 120),
-      })
-    );
+      }),
+    });
   }
 
   emitUpdated();

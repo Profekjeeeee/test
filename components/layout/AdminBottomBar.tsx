@@ -191,7 +191,7 @@ export default function AdminBottomBar() {
 
   return (
     <nav
-      className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
+      className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]"
       aria-label="Навигация админки"
     >
       <div
@@ -205,13 +205,11 @@ export default function AdminBottomBar() {
               <li key={tab.id} className="flex min-w-0 flex-1 justify-center">
                 <Link
                   href={tab.href}
-                  className="interactive-press-sm flex w-full max-w-[4.25rem] flex-col items-center justify-center gap-0.5 py-1"
+                  className="interactive-press-sm flex w-full max-w-[4.5rem] flex-col items-center justify-center gap-0.5 py-1"
                 >
                   <span
-                    className={`flex items-center justify-center rounded-full px-1.5 py-1 transition-colors border ${
-                      active
-                        ? "bg-sky-400/15 dark:bg-primary/16 border-transparent"
-                        : "border-slate-200/90 dark:border-white/8"
+                    className={`relative flex items-center justify-center rounded-full px-2 py-1 transition-colors ${
+                      active ? "bg-sky-400/15 dark:bg-primary/16" : ""
                     }`}
                   >
                     <span
@@ -221,11 +219,13 @@ export default function AdminBottomBar() {
                           : "text-zinc-700 dark:text-slate-400"
                       }
                     >
-                      <Icon active={active} />
+                      <span className="relative flex items-center justify-center">
+                        <Icon active={active} />
+                      </span>
                     </span>
                   </span>
                   <span
-                    className={`max-w-full truncate text-center text-[9px] font-medium leading-none tracking-tight sm:text-[10px] ${
+                    className={`max-w-full truncate text-center text-[10px] font-medium leading-none tracking-tight ${
                       active
                         ? "text-[#248bcf] dark:text-primary"
                         : "text-zinc-600 dark:text-slate-500"

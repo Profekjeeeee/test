@@ -230,10 +230,10 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
 
   const rootClass =
     mode === "admin"
-      ? "min-h-dvh bg-surface dark:bg-app-canvas pb-[84px]"
+      ? "min-h-dvh bg-surface dark:bg-app-canvas pb-safe"
       : embedded
         ? "flex flex-col flex-1 min-h-0 bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+8px)]"
-        : "min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)]";
+        : "min-h-dvh bg-surface dark:bg-app-canvas pb-page-end";
 
   const inner = (
     <div className={`max-w-[480px] mx-auto px-5 w-full min-h-0 flex flex-col ${embedded ? "pt-[max(0.25rem,calc(env(safe-area-inset-top,0px)+4px))] flex-1" : "pt-[calc(env(safe-area-inset-top,0px)+3rem)]"}`}>

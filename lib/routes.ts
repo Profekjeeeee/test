@@ -5,6 +5,7 @@ export const ROUTES = {
   bookingSuccess: "/booking/success",
   clientHome: "/screens/03_Main",
   adminDashboard: "/screens/admin/dashboard",
+  adminLogs: "/screens/admin/logs",
   adminMessages: "/screens/admin/messages",
   doctorCabinet: "/screens/doctor/cabinet",
   doctorMessages: "/screens/doctor/messages",

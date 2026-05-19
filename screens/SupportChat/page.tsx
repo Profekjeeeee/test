@@ -118,7 +118,7 @@ export default function PatientSupportChatPage() {
         : "Напишите лечащему врачу — сообщение будет только ему и вам.";
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-surface dark:bg-app-canvas pb-[max(1rem,calc(env(safe-area-inset-bottom,0px)+5.25rem))]">
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-surface dark:bg-app-canvas pb-safe">
       <header className="shrink-0 border-b border-slate-200 bg-white/80 px-5 pb-3 pt-[calc(env(safe-area-inset-top,0px)+3rem)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] backdrop-blur-sm dark:border-white/8 dark:bg-app-nav/82 dark:shadow-none">
         <div className="flex items-center gap-3 mb-4">
           <Link

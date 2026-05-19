@@ -62,7 +62,7 @@ function patientShortName(patientId?: string): string {
 function DoctorCabinetSkeleton() {
   return (
     <main
-      className="min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)]"
+      className="min-h-dvh bg-surface dark:bg-app-canvas pb-page-end"
       aria-busy="true"
     >
       <div className="max-w-[480px] mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] space-y-4">
@@ -262,7 +262,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
 
   return (
     <main
-      className="min-h-dvh bg-surface dark:bg-app-canvas pb-[calc(env(safe-area-inset-bottom)+24px)] flex flex-col"
+      className="min-h-dvh bg-surface dark:bg-app-canvas pb-page-end flex flex-col"
       style={{ fontFamily: "Manrope, sans-serif" }}
     >
       <div className="max-w-[480px] mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] w-full flex flex-col flex-1 min-h-0">

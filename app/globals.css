@@ -74,8 +74,14 @@
 }
 
 @layer utilities {
+  /* Отступ под плавающий tabbar: pill + зазор 12px + safe-area (см. BottomBar pt-3) */
   .pb-safe {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 72px);
+    padding-bottom: calc(4.75rem + 0.75rem + max(1.5rem, env(safe-area-inset-bottom, 0px)));
+  }
+
+  /* Экраны без tabbar: небольшой зазор от нижнего края + safe-area */
+  .pb-page-end {
+    padding-bottom: calc(0.75rem + max(1.5rem, env(safe-area-inset-bottom, 0px)));
   }
   .screen-padding {
     @apply px-6 pt-4;

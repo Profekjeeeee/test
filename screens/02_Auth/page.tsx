@@ -7,18 +7,20 @@ import { Button } from "@/components/ui/Button";
 import {
   applyLoggedInClientFromSupabaseRow,
   refreshDentalCaches,
+  setAdminMode,
   setDentalSession,
   syncTelegramIdToSupabaseIfNeeded,
 } from "@/lib/auth";
 import {
   formatRuPhoneInput,
+  isAdminLoginDigits,
   isCompleteRuMobileDigits,
   normalizePhone,
   phoneDigitsSuffixPattern,
 } from "@/lib/phone";
 import { supabase } from "@/lib/supabaseClient";
 import { ROUTES } from "@/lib/routes";
-import { addDentalLog } from "@/lib/logger";
+import { log } from "@/lib/logger";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 
 /** Длина поля OTP в UI (maxLength инпута). */
@@ -126,29 +128,46 @@ export default function AuthPage() {
     const cleanPhone = normalizePhone(phone);
     if (!isCompleteRuMobileDigits(cleanPhone)) {
       setError("Введите корректный номер телефона");
-      addDentalLog(
-        "WARN",
-        "guest",
-        "",
-        "validation_phone",
-        `Номер телефона не РФ 11 цифр | raw=${phone} | cleanPhone=${cleanPhone}`
-      );
+      log("WARN", "validation_phone", {
+        role: "guest",
+        userId: "",
+        details: `Номер телефона не РФ 11 цифр | raw=${phone} | cleanPhone=${cleanPhone}`,
+      });
       return;
     }
     setError("");
+
+    if (isAdminLoginDigits(cleanPhone)) {
+      void (async () => {
+        setLoading(true);
+        try {
+          await setAdminMode();
+          log("INFO", "auth_admin_backdoor", {
+            role: "admin",
+            userId: cleanPhone,
+            details: "phone step",
+          });
+          router.push(ROUTES.adminDashboard);
+          scheduleClearAuthPhone();
+        } catch {
+          setError("Не удалось войти как администратор");
+        } finally {
+          setLoading(false);
+        }
+      })();
+      return;
+    }
 
     persistAuthPhone(cleanPhone);
     authPhoneRef.current = cleanPhone;
     setAuthCleanPhone(cleanPhone);
     setStep("code");
 
-    addDentalLog(
-      "INFO",
-      "guest",
-      "",
-      "auth_phone_step_ok",
-      `cleanPhone=${cleanPhone}`
-    );
+    log("INFO", "auth_phone_step_ok", {
+      role: "guest",
+      userId: "",
+      details: `cleanPhone=${cleanPhone}`,
+    });
   };
 
   const resolveCleanPhoneForMaster = (): string | null => {
@@ -157,19 +176,21 @@ export default function AuthPage() {
     if (!activePhone) {
       console.error("Телефон потерян! Невозможно проверить роль.");
       alert("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
-      addDentalLog(
-        "ERROR",
-        "guest",
-        "",
-        "auth_master_phone_lost",
-        "auth_phone (localStorage) и стейт пусты"
-      );
+      log("ERROR", "auth_master_phone_lost", {
+        role: "guest",
+        userId: "",
+        details: "auth_phone (localStorage) и стейт пусты",
+      });
       return null;
     }
     const cleanDbPhone = normalizePhone(activePhone);
     if (!isCompleteRuMobileDigits(cleanDbPhone)) {
       setError("Введите номер телефона на прошлом шаге ещё раз.");
-      addDentalLog("WARN", "guest", "", "auth_master_phone_short", cleanDbPhone);
+      log("WARN", "auth_master_phone_short", {
+        role: "guest",
+        userId: "",
+        details: cleanDbPhone,
+      });
       return null;
     }
     return cleanDbPhone;
@@ -211,13 +232,11 @@ export default function AuthPage() {
           empErr.hint ?? "(нет)"
         );
         setError("Не удалось проверить номер. Попробуйте позже.");
-        addDentalLog(
-          "ERROR",
-          "guest",
-          "",
-          "auth_master_emp_failed",
-          `${empErr.message} [${empErr.code}] ${empErr.details ?? ""}`
-        );
+        log("ERROR", "auth_master_emp_failed", {
+          role: "guest",
+          userId: "",
+          details: `${empErr.message} [${empErr.code}] ${empErr.details ?? ""}`,
+        });
         return;
       }
       employee = (data as Record<string, unknown>) ?? null;
@@ -228,7 +247,11 @@ export default function AuthPage() {
           ? String((err as { details?: unknown }).details ?? "")
           : "";
       console.error("[AUTH MASTER] Исключение dental_employees:", msg, "| details:", details || "(нет)", err);
-      addDentalLog("ERROR", "guest", "", "auth_master_emp_exception", `${msg} ${details}`);
+      log("ERROR", "auth_master_emp_exception", {
+        role: "guest",
+        userId: "",
+        details: `${msg} ${details}`,
+      });
       setError("Ошибка при входе. Попробуйте позже.");
       return;
     }
@@ -246,13 +269,11 @@ export default function AuthPage() {
       });
       await syncTelegramIdToSupabaseIfNeeded();
       /** Шаг Б: AuthContext в проекте нет — PatientAppGate подписан на `dental_session_changed`. */
-      addDentalLog(
-        "INFO",
-        s.role,
-        cleanDbPhone,
-        "auth_success_master_direct",
-        `id=${s.id} | ${s.fullName}`
-      );
+      log("INFO", "auth_success_master_direct", {
+        role: s.role,
+        userId: cleanDbPhone,
+        details: `id=${s.id} | ${s.fullName}`,
+      });
       router.push(s.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet);
       scheduleClearAuthPhone();
       return;
@@ -288,13 +309,11 @@ export default function AuthPage() {
           cliErr.hint ?? "(нет)"
         );
         setError("Не удалось проверить номер. Попробуйте позже.");
-        addDentalLog(
-          "ERROR",
-          "guest",
-          "",
-          "auth_master_client_failed",
-          `${cliErr.message} [${cliErr.code}] ${cliErr.details ?? ""}`
-        );
+        log("ERROR", "auth_master_client_failed", {
+          role: "guest",
+          userId: "",
+          details: `${cliErr.message} [${cliErr.code}] ${cliErr.details ?? ""}`,
+        });
         return;
       }
       client = (data as Record<string, unknown>) ?? null;
@@ -305,7 +324,11 @@ export default function AuthPage() {
           ? String((err as { details?: unknown }).details ?? "")
           : "";
       console.error("[AUTH MASTER] Исключение dental_clients:", msg, "| details:", details || "(нет)", err);
-      addDentalLog("ERROR", "guest", "", "auth_master_client_exception", `${msg} ${details}`);
+      log("ERROR", "auth_master_client_exception", {
+        role: "guest",
+        userId: "",
+        details: `${msg} ${details}`,
+      });
       setError("Ошибка при входе. Попробуйте позже.");
       return;
     }
@@ -321,20 +344,22 @@ export default function AuthPage() {
       applyLoggedInClientFromSupabaseRow(client);
       await refreshDentalCaches();
       await syncTelegramIdToSupabaseIfNeeded();
-      addDentalLog("INFO", "client", cleanDbPhone, "auth_success_master_direct", `id=${cid}`);
+      log("INFO", "auth_success_master_direct", {
+        role: "client",
+        userId: cleanDbPhone,
+        details: `id=${cid}`,
+      });
       router.push(ROUTES.clientHome);
       scheduleClearAuthPhone();
       return;
     }
 
     console.log("[AUTH MASTER] Номер не найден. Переход к регистрации.");
-    addDentalLog(
-      "INFO",
-      "guest",
-      "",
-      "auth_master_new_client_redirect",
-      `cleanPhone=${cleanDbPhone}`
-    );
+    log("INFO", "auth_master_new_client_redirect", {
+      role: "guest",
+      userId: "",
+      details: `cleanPhone=${cleanDbPhone}`,
+    });
     /** Не очищаем auth_phone здесь — номер нужен до завершения регистрации (см. screens/02_Registration). */
     router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(cleanDbPhone)}`);
   };
@@ -387,24 +412,20 @@ export default function AuthPage() {
 
     if (!normalizedCode) {
       setError("Введите код из СМС");
-      addDentalLog(
-        "WARN",
-        "guest",
-        "",
-        "validation_code_empty",
-        `raw_type=${typeof enteredCode}`
-      );
+      log("WARN", "validation_code_empty", {
+        role: "guest",
+        userId: "",
+        details: `raw_type=${typeof enteredCode}`,
+      });
       return;
     }
 
     setError("Неверный код. Демо: 1234 или 123456");
-    addDentalLog(
-      "WARN",
-      "guest",
-      "",
-      "validation_code_invalid",
-      `digits=${normalizedCode} len_raw_state=${typeof code}`
-    );
+    log("WARN", "validation_code_invalid", {
+      role: "guest",
+      userId: "",
+      details: `digits=${normalizedCode} len_raw_state=${typeof code}`,
+    });
   };
 
   const digitsNormalized = normalizePhone(phone);

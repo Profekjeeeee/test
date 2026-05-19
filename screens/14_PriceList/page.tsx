@@ -255,7 +255,7 @@ export default function PriceListPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-[88px]">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <Header
         title="Прайс-лист"
         showBack

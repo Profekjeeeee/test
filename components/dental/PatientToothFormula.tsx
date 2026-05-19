@@ -10,6 +10,9 @@ export const FORMULA_Q2 = [21, 22, 23, 24, 25, 26, 27, 28];
 export const FORMULA_Q4 = [48, 47, 46, 45, 44, 43, 42, 41];
 export const FORMULA_Q3 = [31, 32, 33, 34, 35, 36, 37, 38];
 
+/** Как в `screens/05_Dental_Formula/dental_formula.html` — зазор между зубами в четверти */
+const TOOTH_GRID_GAP_PX = 4;
+
 export interface FormulaConditionCfg {
   fill: string;
   stroke: string;
@@ -234,7 +237,7 @@ export default function PatientToothFormula({
     const numCell = (num: number) => (
       <p
         key={num}
-        className="text-center leading-none select-none text-[9px] font-medium text-slate-400 dark:text-slate-500 tracking-tight font-manrope"
+        className="text-center leading-none select-none text-[9px] font-medium text-slate-400 dark:text-slate-500 tracking-tight font-manrope min-w-0"
       >
         {num}
       </p>
@@ -243,7 +246,7 @@ export default function PatientToothFormula({
     const toothCell = (num: number) => {
       const condition = getCondition(num);
       const isSelected = selectedTooth === num;
-      const hasNote = teethMap[num]?.hasNote;
+      const hasNote = !!teethMap[num]?.hasNote;
       const glyph = (
         <>
           <FormulaToothIcon condition={condition} flipped={isLower} darkPalette={darkPalette} />
@@ -258,7 +261,7 @@ export default function PatientToothFormula({
 
       if (readOnly || !onToothClick) {
         return (
-          <div key={num} className="relative w-full" style={{ aspectRatio: "1 / 1.4" }}>
+          <div key={num} className="relative w-full min-w-0" style={{ aspectRatio: "1 / 1.4" }}>
             {glyph}
           </div>
         );
@@ -269,11 +272,15 @@ export default function PatientToothFormula({
           key={num}
           type="button"
           onClick={() => onToothClick(num)}
-          className="relative z-10 hover:z-20 w-full interactive-press-sm focus:outline-none after:absolute after:inset-[-6px] after:content-['']"
+          aria-pressed={isSelected}
+          className="relative z-10 hover:z-20 w-full min-w-0 interactive-press-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset rounded-[4px] after:absolute after:inset-[-3px] after:content-['']"
           style={{ aspectRatio: "1 / 1.4" }}
         >
           {isSelected && (
-            <span className="absolute inset-[-2px] rounded-[3px] ring-[1.5px] ring-primary ring-offset-2 ring-offset-white dark:ring-offset-slate-950 dark:ring-primary/50 z-10 pointer-events-none" />
+            <span
+              className="absolute inset-0 rounded-[4px] ring-[1.5px] ring-inset ring-primary bg-primary/[0.08] dark:bg-primary/15 z-10 pointer-events-none"
+              aria-hidden
+            />
           )}
           {glyph}
         </button>
@@ -281,7 +288,13 @@ export default function PatientToothFormula({
     };
 
     const halfGrid = (nums: number[], renderer: (n: number) => React.ReactNode) => (
-      <div className="grid" style={{ gridTemplateColumns: "repeat(8, 1fr)", flex: 1, minWidth: 0 }}>
+      <div
+        className="grid flex-1 min-w-0 basis-0"
+        style={{
+          gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
+          gap: `${TOOTH_GRID_GAP_PX}px`,
+        }}
+      >
         {nums.map(renderer)}
       </div>
     );
@@ -293,7 +306,7 @@ export default function PatientToothFormula({
     );
 
     const numberRow = (
-      <div key="nums" className="flex items-center">
+      <div key="nums" className="flex w-full min-w-0 items-center">
         {halfGrid(leftNums, numCell)}
         <div className="flex-shrink-0" style={{ width: "5px" }} />
         {halfGrid(rightNums, numCell)}
@@ -301,7 +314,7 @@ export default function PatientToothFormula({
     );
 
     const teethRow = (
-      <div key="teeth" className="flex items-stretch">
+      <div key="teeth" className="flex w-full min-w-0 items-stretch">
         {halfGrid(leftNums, toothCell)}
         {midSep}
         {halfGrid(rightNums, toothCell)}

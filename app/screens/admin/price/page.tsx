@@ -1,1 +1,1 @@
-export { default } from "@/screens/14_PriceList/page";
+export { default } from "@/screens/Admin/Price/page";

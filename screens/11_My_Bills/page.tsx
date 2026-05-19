@@ -62,7 +62,7 @@ export default function BillsPage() {
   const paidBills = filtered.filter((b) => b.status === "paid");
 
   return (
-    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-[88px]">
+    <div className="min-h-dvh bg-surface dark:bg-app-canvas pb-safe">
       <Header title="Мои счета" />
 
       {/* ── Balance hero block ─────────────────────────────────── */}
