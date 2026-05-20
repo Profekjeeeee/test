@@ -48,10 +48,10 @@ const themeBootstrapScript =
 /** Ранний фон по themeParams до гидрации React (меньше вспышки в WebView). */
 const telegramThemeBootstrapScript =
   "try{var w=window.Telegram&&window.Telegram.WebApp;" +
-  "if(!w)return;var p=w.themeParams||{};" +
+  "if(w){var p=w.themeParams||{};" +
   "var c=p.bg_color||p.secondary_bg_color;" +
-  "if(!c)return;document.documentElement.style.backgroundColor=c;" +
-  "if(document.body)document.body.style.backgroundColor=c;" +
+  "if(c){document.documentElement.style.backgroundColor=c;" +
+  "if(document.body)document.body.style.backgroundColor=c;}}}" +
   "}catch(e){}";
 
 const TELEGRAM_WEB_APP_SDK = "https://telegram.org/js/telegram-web-app.js";
