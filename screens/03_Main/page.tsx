@@ -13,6 +13,7 @@ import { getProfile } from "@/lib/userProfile";
 import { DENTAL_SESSION_CHANGED_EVENT } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
+import { usePatientUnreadCount } from "@/hooks/usePatientUnreadCount";
 
 const DAILY_TIPS = [
   "Использование ирригатора снижает риск воспаления дёсен на 40%.",
@@ -45,6 +46,7 @@ export default function MainPage() {
   const [tipIndex, setTipIndex] = useState(0);
   const [tipVisible, setTipVisible] = useState(true);
   const [firstName, setFirstName] = useState("Иван");
+  const chatUnreadCount = usePatientUnreadCount();
 
   useEffect(() => {
     setCurrentDateStr(formatCurrentDate());
@@ -230,11 +232,19 @@ export default function MainPage() {
           </Link>
           <Link href={ROUTES.patientSupportChat} className="interactive-press block">
             <Card padding="sm" className="text-center py-3.5">
-              <div className="w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
+              <div className="relative w-9 h-9 rounded-[10px] bg-primary-light flex items-center justify-center mx-auto mb-2">
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" className="text-primary">
                   <path d="M4 14V17L8 14H15C15.5523 14 16 13.5523 16 13V6C16 5.44772 15.5523 5 15 5H5C4.44772 5 4 5.44772 4 6V14Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                   <path d="M7 9H13M7 11H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
+                {chatUnreadCount > 0 && (
+                  <span
+                    className="absolute -right-1.5 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#248bcf] dark:bg-primary/90 px-1 text-[9px] font-bold leading-none text-white"
+                    aria-label={`Непрочитанных сообщений: ${chatUnreadCount}`}
+                  >
+                    {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
+                  </span>
+                )}
               </div>
               <p className="text-[11px] font-semibold text-[#0F172A] dark:text-white leading-tight">
                 Поддержка

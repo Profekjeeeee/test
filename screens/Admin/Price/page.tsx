@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin/services";
 import type { AdminService } from "@/lib/admin/types";
 import { tgHapticImpact, tgHapticSuccess } from "@/lib/telegramHaptic";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 const DEFAULT_CATEGORY = "Прочее";
 
@@ -45,6 +46,7 @@ export default function AdminPricePage() {
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState<NewServiceForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,9 +119,13 @@ export default function AdminPricePage() {
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
-    if (!window.confirm(`Удалить выбранные услуги (${ids.length})? Это действие нельзя отменить.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Удалить услуги",
+      message: `Удалить выбранные услуги (${ids.length})? Это действие нельзя отменить.`,
+      confirmLabel: "Удалить",
+      destructive: true,
+    });
+    if (!ok) return;
     const { error: err } = await bulkDeleteServices(ids);
     if (err) {
       setError(err);
@@ -132,7 +138,13 @@ export default function AdminPricePage() {
   };
 
   const handleDeleteOne = async (svc: AdminService) => {
-    if (!window.confirm(`Удалить услугу «${svc.name}»?`)) return;
+    const ok = await confirm({
+      title: "Удалить услугу",
+      message: `Удалить услугу «${svc.name}»?`,
+      confirmLabel: "Удалить",
+      destructive: true,
+    });
+    if (!ok) return;
     tgHapticImpact("light");
     const { error: err } = await deleteService(svc.id);
     if (err) {
@@ -288,6 +300,7 @@ export default function AdminPricePage() {
           onSave={() => void handleCreate()}
         />
       ) : null}
+      {confirmDialog}
     </main>
   );
 }

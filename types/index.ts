@@ -99,6 +99,8 @@ export interface ChatMessage {
   recipientId: string;
   text: string;
   timestamp: number;
+  /** Время последней правки (Supabase `updated_at`), если сообщение редактировали. */
+  editedAt?: number | null;
   chatType: "support" | "clinic" | "doctor";
 }
 

@@ -3,10 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChatMessageContextMenu } from "@/components/chat/ChatMessageContextMenu";
+import { ChatMessageMetaRow } from "@/components/chat/ChatMessageMetaRow";
+import { LongPressBubble } from "@/components/chat/LongPressBubble";
+import {
+  buildChatViewerContext,
+  canDeleteDentalChatMessage,
+  canEditDentalChatMessage,
+} from "@/lib/chatMessagePermissions";
 import {
   CHAT_UPDATED_EVENT,
   hydrateDentalMessages,
-  subscribeDentalMessagesRealtime,
+  acquireDentalMessagesRealtime,
+  deleteChatMessage,
   getDoctorDialogPreviews,
   getDoctorPatientThreadMessages,
   getStaffBranchMessages,
@@ -17,6 +26,7 @@ import {
   sendAdminToPatient,
   sendDoctorToPatientPersonal,
   sendStaffToPatientClinic,
+  updateChatMessageText,
   type ChatMessage,
   type StaffDialogPreview,
   type SupportAuditEntry,
@@ -24,6 +34,8 @@ import {
 import { logout, resolveHydratedSession, getDentalSession, type DentalSession } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
+import { Toast } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
 
 function formatMsgTime(ts: number): string {
   try {
@@ -56,7 +68,10 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
   const [thread, setThread] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { toastMessage, toastVisible, toastTone, showToast } = useToast();
 
   useEffect(() => {
     void resolveHydratedSession().then(setSession);
@@ -71,6 +86,9 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
 
   useEffect(() => {
     setSelected(null);
+    setMenuMessage(null);
+    setEditingMessage(null);
+    setDraft("");
   }, [channelFilter, adminSection]);
 
   const refreshList = useCallback(() => {
@@ -104,26 +122,31 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    let unsub: (() => void) | undefined;
+    let releaseRealtime: (() => void) | undefined;
+
+    const safeRefresh = () => {
+      if (cancelled) return;
+      refreshList();
+    };
 
     void (async () => {
       await hydrateDentalMessages();
       if (cancelled) return;
-      refreshList();
+      safeRefresh();
       if (cancelled) return;
-      unsub = subscribeDentalMessagesRealtime(refreshList);
+      releaseRealtime = acquireDentalMessagesRealtime(safeRefresh);
       if (cancelled) {
-        unsub();
-        unsub = undefined;
+        releaseRealtime();
+        releaseRealtime = undefined;
       }
     })();
 
-    const onCustom = () => refreshList();
+    const onCustom = () => safeRefresh();
     window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
     return () => {
       cancelled = true;
-      unsub?.();
-      unsub = undefined;
+      releaseRealtime?.();
+      releaseRealtime = undefined;
       window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
     };
   }, [refreshList]);
@@ -139,6 +162,9 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
 
   useEffect(() => {
     if (!selected || !session) return;
+    setMenuMessage(null);
+    setEditingMessage(null);
+    setDraft("");
     if (selected.scope === "doctor_merge") {
       markStaffConversationRead(selected.patientId, "doctor_merge", session.phone);
     } else {
@@ -161,6 +187,16 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
 
     setSending(true);
     try {
+      if (editingMessage) {
+        await updateChatMessageText(editingMessage.id, draft);
+        setEditingMessage(null);
+        setDraft("");
+        refreshThread();
+        refreshList();
+        showToast("Сообщение изменено", "success");
+        return;
+      }
+
       if (mode === "admin") {
         if (selected.scope === "clinic") {
           await sendAdminToPatient({ patientId: selected.patientId, chatType: "clinic", body: draft });
@@ -186,11 +222,37 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      alert("Ошибка отправки сообщения: " + message);
+      showToast(
+        editingMessage ? "Ошибка изменения: " + message : "Ошибка отправки сообщения: " + message,
+        "error",
+      );
     } finally {
       setSending(false);
     }
   };
+
+  const handleDeleteMessage = async (m: ChatMessage) => {
+    if (!session) return;
+    if (!confirm("Удалить сообщение?")) return;
+    setSending(true);
+    try {
+      await deleteChatMessage(m.id);
+      if (editingMessage?.id === m.id) {
+        setEditingMessage(null);
+        setDraft("");
+      }
+      refreshThread();
+      refreshList();
+      showToast("Сообщение удалено", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      showToast("Ошибка удаления: " + message, "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const viewerCtx = buildChatViewerContext(session);
 
   const handleLogout = () => {
     logout();
@@ -416,14 +478,21 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
             <div className="rounded-[16px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 min-h-[280px] max-h-[52vh] overflow-y-auto px-3 py-3 space-y-3 mb-3 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
               {thread.map((m) => {
                 const isStaffSide = m.senderRole === "admin" || m.senderRole === "doctor";
+                const canManage = Boolean(
+                  viewerCtx &&
+                    (canEditDentalChatMessage(m, viewerCtx) || canDeleteDentalChatMessage(m, viewerCtx)),
+                );
+                const bubbleClass = `rounded-[14px] px-3.5 py-2.5 border break-words ${
+                  isStaffSide
+                    ? "max-w-[78%] bg-primary-light border-primary/25 text-[#0F172A] dark:text-white"
+                    : "max-w-[85%] bg-surface dark:bg-app-canvas border-slate-200 dark:border-slate-700"
+                }`;
                 return (
                   <div key={m.id} className={`flex w-full ${isStaffSide ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`rounded-[14px] px-3.5 py-2.5 border break-words ${
-                        isStaffSide
-                          ? "max-w-[78%] bg-primary-light border-primary/25 text-[#0F172A] dark:text-white"
-                          : "max-w-[85%] bg-surface dark:bg-app-canvas border-slate-200 dark:border-slate-700"
-                      }`}
+                    <LongPressBubble
+                      enabled={canManage}
+                      onLongPress={() => setMenuMessage(m)}
+                      className={bubbleClass}
                     >
                       {isStaffSide ? (
                         <p className="text-[10px] font-semibold text-secondary mb-0.5 uppercase tracking-wide">
@@ -440,19 +509,41 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
                         <p className="text-[11px] font-semibold text-secondary mb-1">Пациент</p>
                       )}
                       <p className="text-[14px] whitespace-pre-wrap leading-snug text-[#0F172A] dark:text-white">{m.text}</p>
-                      <p className="text-[10px] text-secondary mt-1 tabular-nums">{formatMsgTime(m.timestamp)}</p>
-                    </div>
+                      <ChatMessageMetaRow
+                        timestamp={m.timestamp}
+                        editedAt={m.editedAt}
+                        align={isStaffSide ? "right" : "left"}
+                        variant={isStaffSide ? "staff-outgoing" : "staff-incoming"}
+                        formatTime={formatMsgTime}
+                      />
+                    </LongPressBubble>
                   </div>
                 );
               })}
               <div ref={bottomRef} />
             </div>
 
+            {editingMessage ? (
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[12px] font-semibold text-primary">Редактирование</p>
+                <button
+                  type="button"
+                  className="text-[12px] font-semibold text-secondary interactive-press-sm"
+                  onClick={() => {
+                    setEditingMessage(null);
+                    setDraft("");
+                  }}
+                >
+                  Отмена
+                </button>
+              </div>
+            ) : null}
+
             <div className="flex gap-2 items-end">
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Ответ пациенту…"
+                placeholder={editingMessage ? "Новый текст…" : "Ответ пациенту…"}
                 rows={1}
                 className="flex-1 min-h-[44px] max-h-28 resize-none rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2.5 text-[14px] text-[#0F172A] dark:text-white placeholder:text-secondary shadow-raised-surface focus:outline-none focus:ring-2 focus:ring-primary/40 dark:focus:ring-slate-500/30"
                 onKeyDown={(e) => {
@@ -477,9 +568,33 @@ export default function StaffMessagesPage({ mode, embedded = false }: Props) {
       </div>
   );
 
-  return createElement(embedded ? "div" : "main", {
-    className: rootClass,
-    style: { fontFamily: "Manrope, sans-serif" },
-    children: inner,
-  });
+  return (
+    <>
+      {createElement(embedded ? "div" : "main", {
+        className: rootClass,
+        style: { fontFamily: "Manrope, sans-serif" },
+        children: inner,
+      })}
+      {menuMessage && viewerCtx ? (
+        <ChatMessageContextMenu
+          open
+          canEdit={canEditDentalChatMessage(menuMessage, viewerCtx)}
+          canDelete={canDeleteDentalChatMessage(menuMessage, viewerCtx)}
+          onClose={() => setMenuMessage(null)}
+          onEdit={() => {
+            setEditingMessage(menuMessage);
+            setDraft(menuMessage.text);
+          }}
+          onDelete={() => void handleDeleteMessage(menuMessage)}
+        />
+      ) : null}
+
+      <Toast
+        message={toastMessage}
+        visible={toastVisible}
+        tone={toastTone}
+        variant="staffPlain"
+      />
+    </>
+  );
 }

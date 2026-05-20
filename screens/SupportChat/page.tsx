@@ -3,17 +3,29 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import BottomBar from "@/components/layout/BottomBar";
+import { Toast } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
 import { ROUTES } from "@/lib/routes";
 import { getCurrentUserId, resolveHydratedSession, refreshDentalCaches } from "@/lib/auth";
+import { ChatMessageContextMenu } from "@/components/chat/ChatMessageContextMenu";
+import { ChatMessageMetaRow } from "@/components/chat/ChatMessageMetaRow";
+import { LongPressBubble } from "@/components/chat/LongPressBubble";
+import {
+  buildChatViewerContext,
+  canDeleteDentalChatMessage,
+  canEditDentalChatMessage,
+} from "@/lib/chatMessagePermissions";
 import {
   CHAT_UPDATED_EVENT,
   hydrateDentalMessages,
-  subscribeDentalMessagesRealtime,
+  acquireDentalMessagesRealtime,
+  deleteChatMessage,
   getPatientBranchMessages,
   getPatientUnread,
   markPatientConversationRead,
   resolveAttendingDoctor,
   sendPatientMessage,
+  updateChatMessageText,
   type PatientChatTab,
   type ChatMessage,
 } from "@/lib/supportChat";
@@ -37,7 +49,10 @@ export default function PatientSupportChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { toastMessage, toastVisible, toastTone, showToast } = useToast();
 
   useEffect(() => {
     void (async () => {
@@ -55,31 +70,39 @@ export default function PatientSupportChatPage() {
     refresh();
     if (!uid) return;
     markPatientConversationRead(uid, tab);
+    setMenuMessage(null);
+    setEditingMessage(null);
+    setDraft("");
   }, [uid, tab, refresh]);
 
   useEffect(() => {
     let cancelled = false;
-    let unsub: (() => void) | undefined;
+    let releaseRealtime: (() => void) | undefined;
+
+    const safeRefresh = () => {
+      if (cancelled) return;
+      refresh();
+    };
 
     void (async () => {
       await hydrateDentalMessages();
       if (cancelled) return;
-      refresh();
+      safeRefresh();
       if (cancelled) return;
-      unsub = subscribeDentalMessagesRealtime(refresh);
+      releaseRealtime = acquireDentalMessagesRealtime(safeRefresh);
       if (cancelled) {
-        unsub();
-        unsub = undefined;
+        releaseRealtime();
+        releaseRealtime = undefined;
       }
     })();
 
-    const onCustom = () => refresh();
+    const onCustom = () => safeRefresh();
     window.addEventListener(CHAT_UPDATED_EVENT, onCustom);
     window.addEventListener("appointmentsUpdated", onCustom);
     return () => {
       cancelled = true;
-      unsub?.();
-      unsub = undefined;
+      releaseRealtime?.();
+      releaseRealtime = undefined;
       window.removeEventListener(CHAT_UPDATED_EVENT, onCustom);
       window.removeEventListener("appointmentsUpdated", onCustom);
     };
@@ -93,6 +116,14 @@ export default function PatientSupportChatPage() {
     if (!draft.trim()) return;
     setSending(true);
     try {
+      if (editingMessage) {
+        await updateChatMessageText(editingMessage.id, draft);
+        setEditingMessage(null);
+        setDraft("");
+        refresh();
+        showToast("Сообщение изменено", "success");
+        return;
+      }
       await sendPatientMessage(tab, draft);
       setDraft("");
       refresh();
@@ -100,11 +131,43 @@ export default function PatientSupportChatPage() {
       if (u) markPatientConversationRead(u, tab);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      alert("Ошибка отправки сообщения: " + message);
+      showToast(
+        editingMessage ? "Ошибка изменения: " + message : "Ошибка отправки сообщения: " + message,
+        "error",
+      );
     } finally {
       setSending(false);
     }
   };
+
+  const handleDeleteMessage = async (m: ChatMessage) => {
+    if (!uid) return;
+    if (!confirm("Удалить сообщение?")) return;
+    setSending(true);
+    try {
+      await deleteChatMessage(m.id);
+      if (editingMessage?.id === m.id) {
+        setEditingMessage(null);
+        setDraft("");
+      }
+      refresh();
+      showToast("Сообщение удалено", "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      showToast("Ошибка удаления: " + message, "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const viewerCtx = uid
+    ? buildChatViewerContext({
+        id: uid,
+        role: "client",
+        fullName: "",
+        phone: "",
+      })
+    : null;
 
   const clinicUnread = Boolean(uid && tab !== "clinic" && getPatientUnread(uid, "clinic"));
   const supportUnread = Boolean(uid && tab !== "support" && getPatientUnread(uid, "support"));
@@ -201,17 +264,21 @@ export default function PatientSupportChatPage() {
             ) : (
               messages.map((m) => {
                 const mine = m.senderRole === "client" && m.senderId === uid;
+                const canManage = Boolean(viewerCtx && mine);
+                const bubbleClass = `max-w-[80%] break-words px-4 py-2 shadow-sm rounded-2xl ${
+                  mine
+                    ? "mr-2 ml-0 rounded-tr-none bg-primary text-white border border-primary-dark/30 dark:border-primary-dark/40 dark:text-white"
+                    : "ml-1 mr-0 rounded-tl-none border border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-100"
+                }`;
                 return (
                   <div
                     key={m.id}
                     className={`flex w-full shrink-0 ${mine ? "justify-end items-end pl-10" : "justify-start items-end pr-10"}`}
                   >
-                    <div
-                      className={`max-w-[80%] break-words px-4 py-2 shadow-sm rounded-2xl ${
-                        mine
-                          ? "mr-2 ml-0 rounded-tr-none bg-primary text-white border border-primary-dark/30 dark:border-primary-dark/40 dark:text-white"
-                          : "ml-1 mr-0 rounded-tl-none border border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-100"
-                      }`}
+                    <LongPressBubble
+                      enabled={canManage}
+                      onLongPress={() => setMenuMessage(m)}
+                      className={bubbleClass}
                     >
                       {!mine ? (
                         <p className="text-[11px] font-semibold text-primary mb-1 dark:text-[#94c4ee]">{m.senderName}</p>
@@ -221,12 +288,14 @@ export default function PatientSupportChatPage() {
                       >
                         {m.text}
                       </p>
-                      <p
-                        className={`text-[10px] mt-1.5 tabular-nums ${mine ? "text-right text-white/75" : "text-left text-slate-500 dark:text-secondary"}`}
-                      >
-                        {formatMsgTime(m.timestamp)}
-                      </p>
-                    </div>
+                      <ChatMessageMetaRow
+                        timestamp={m.timestamp}
+                        editedAt={m.editedAt}
+                        align={mine ? "right" : "left"}
+                        variant={mine ? "patient-outgoing" : "patient-incoming"}
+                        formatTime={formatMsgTime}
+                      />
+                    </LongPressBubble>
                   </div>
                 );
               })
@@ -236,11 +305,26 @@ export default function PatientSupportChatPage() {
         </div>
 
         <div className="shrink-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          {editingMessage ? (
+            <div className="mx-auto mb-2 flex max-w-[390px] items-center justify-between gap-2">
+              <p className="text-[12px] font-semibold text-primary">Редактирование</p>
+              <button
+                type="button"
+                className="text-[12px] font-semibold text-secondary interactive-press-sm"
+                onClick={() => {
+                  setEditingMessage(null);
+                  setDraft("");
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          ) : null}
           <div className="mx-auto flex w-full max-w-[390px] items-center gap-2">
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Сообщение…"
+              placeholder={editingMessage ? "Новый текст…" : "Сообщение…"}
               rows={1}
               className="min-h-[44px] max-h-28 flex-1 resize-none rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-[14px] leading-snug text-slate-800 shadow-sm placeholder:text-secondary focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/25 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:border-primary/40 dark:focus:ring-primary/30"
               onKeyDown={(e) => {
@@ -273,7 +357,27 @@ export default function PatientSupportChatPage() {
         </div>
       </div>
 
+      {menuMessage && viewerCtx ? (
+        <ChatMessageContextMenu
+          open
+          canEdit={canEditDentalChatMessage(menuMessage, viewerCtx)}
+          canDelete={canDeleteDentalChatMessage(menuMessage, viewerCtx)}
+          onClose={() => setMenuMessage(null)}
+          onEdit={() => {
+            setEditingMessage(menuMessage);
+            setDraft(menuMessage.text);
+          }}
+          onDelete={() => void handleDeleteMessage(menuMessage)}
+        />
+      ) : null}
+
       <BottomBar />
+      <Toast
+        message={toastMessage}
+        visible={toastVisible}
+        tone={toastTone}
+        variant="patientWithTabBar"
+      />
     </div>
   );
 }

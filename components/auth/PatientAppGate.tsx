@@ -151,10 +151,9 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
     const session = hydratedSession;
 
     if (pathname.startsWith(ADMIN_ROUTE_PREFIX)) {
-      const adminOk =
-        session?.role === "admin" ||
-        (typeof window !== "undefined" && localStorage.getItem("isAdmin") === "true");
-      if (!adminOk) router.replace(ROUTES.auth);
+      if (session?.role !== "admin") {
+        router.replace(ROUTES.auth);
+      }
       return;
     }
 

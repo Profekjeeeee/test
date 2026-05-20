@@ -7,6 +7,7 @@ import { logout, getDentalSession, getCurrentUserId, updateClientPersonalProfile
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
 import { Toast } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
 import {
   getProfile,
   saveProfile,
@@ -18,6 +19,7 @@ import {
 import { getNextAppointment, type Appointment } from "@/lib/appointments";
 import { ROUTES } from "@/lib/routes";
 import { formatRuPhoneInput, countPhoneDigits, RU_MOBILE_DIGIT_COUNT } from "@/lib/phone";
+import { usePatientUnreadCount } from "@/hooks/usePatientUnreadCount";
 
 // ─── Validation ────────────────────────────────────────────────────────────────
 
@@ -202,8 +204,9 @@ export default function ProfilePage() {
   }, []);
   const [touched, setTouched] = useState<Partial<Record<keyof UserProfile, boolean>>>({});
   const [saving, setSaving] = useState(false);
-  const [toastVisible, setToastVisible] = useState(false);
+  const { toastMessage, toastVisible, toastTone, showToast } = useToast();
   const [nextApt, setNextApt] = useState<Appointment | null>(null);
+  const chatUnreadCount = usePatientUnreadCount();
 
   useEffect(() => {
     const profile = getProfile();
@@ -243,15 +246,14 @@ export default function ProfilePage() {
         phoneDigits: form.phone,
       });
       saveProfile(form);
-      setToastVisible(true);
-      setTimeout(() => setToastVisible(false), 2500);
+      showToast("Данные успешно обновлены");
     } catch (err) {
       console.error("[Profile] сохранение в Supabase:", err);
       const msg =
         err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
           ? (err as { message: string }).message
           : "Не удалось сохранить. Проверьте связь.";
-      alert(msg);
+      showToast(msg, "error");
     } finally {
       setSaving(false);
     }
@@ -446,8 +448,16 @@ export default function ProfilePage() {
               href={item.href}
               className={`flex items-center gap-3 py-3 active:opacity-70 transition-opacity ${idx < CLINIC_LINKS.length - 1 ? "border-b border-[#F1F5F9] dark:border-[#334155]" : ""}`}
             >
-              <div className="w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 bg-primary-light dark:bg-[#163554]">
+              <div className="relative w-8 h-8 rounded-[8px] flex items-center justify-center flex-shrink-0 bg-primary-light dark:bg-[#163554]">
                 {item.icon}
+                {item.href === ROUTES.patientSupportChat && chatUnreadCount > 0 && (
+                  <span
+                    className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#248bcf] dark:bg-primary/90 px-1 text-[9px] font-bold leading-none text-white"
+                    aria-label={`Непрочитанных сообщений: ${chatUnreadCount}`}
+                  >
+                    {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
+                  </span>
+                )}
               </div>
               <span className="flex-1 text-[15px] font-medium text-[#0F172A] dark:text-white">{item.label}</span>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -467,7 +477,12 @@ export default function ProfilePage() {
       </main>
 
       <BottomBar />
-      <Toast message="Данные успешно обновлены" visible={toastVisible} variant="patientWithTabBar" />
+      <Toast
+        message={toastMessage}
+        visible={toastVisible}
+        tone={toastTone}
+        variant="patientWithTabBar"
+      />
     </div>
   );
 }

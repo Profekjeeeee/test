@@ -34,6 +34,12 @@
     -webkit-text-size-adjust: 100%;
     color-scheme: light;
     background-color: #f8fafc;
+    --chart-tooltip-bg: #ffffff;
+    --chart-tooltip-border: #e2e8f0;
+    --chart-tooltip-label: #0f172a;
+    --chart-tooltip-value: #248bcf;
+    --chart-tooltip-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+    --chart-tooltip-cursor: rgba(36, 139, 207, 0.08);
   }
 
   html.dark {
@@ -43,6 +49,12 @@
     --color-primary: #6d93bd;
     --color-primary-dark: #587fa5;
     --color-primary-light: #171f2f;
+    --chart-tooltip-bg: #1e293b;
+    --chart-tooltip-border: #334155;
+    --chart-tooltip-label: #f1f5f9;
+    --chart-tooltip-value: #94c4ee;
+    --chart-tooltip-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    --chart-tooltip-cursor: rgba(109, 147, 189, 0.12);
   }
 
   body {
@@ -115,6 +127,22 @@
     box-shadow:
       0 0 0 1px rgb(255 255 255 / 0.04),
       0 2px 10px rgb(0 0 0 / 0.28);
+  }
+
+  /* Recharts: fallback если inline-стили перебивают contentStyle */
+  html.dark .recharts-default-tooltip {
+    background-color: var(--chart-tooltip-bg) !important;
+    border-color: var(--chart-tooltip-border) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--chart-tooltip-shadow) !important;
+  }
+
+  html.dark .recharts-tooltip-label {
+    color: var(--chart-tooltip-label) !important;
+  }
+
+  html.dark .recharts-tooltip-item {
+    color: var(--chart-tooltip-value) !important;
   }
 
   /* Мягкая подсветка без синего свечения */

@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import Script from "next/script";
 import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { TelegramWebAppProvider } from "@/components/TelegramWebAppProvider";
 import PatientAppGate from "@/components/auth/PatientAppGate";
 
 const manrope = Manrope({
@@ -43,6 +45,17 @@ const themeBootstrapScript =
   "if(t==='dark')document.documentElement.classList.add('dark');" +
   "else document.documentElement.classList.remove('dark');}catch(e){}";
 
+/** Ранний фон по themeParams до гидрации React (меньше вспышки в WebView). */
+const telegramThemeBootstrapScript =
+  "try{var w=window.Telegram&&window.Telegram.WebApp;" +
+  "if(!w)return;var p=w.themeParams||{};" +
+  "var c=p.bg_color||p.secondary_bg_color;" +
+  "if(!c)return;document.documentElement.style.backgroundColor=c;" +
+  "if(document.body)document.body.style.backgroundColor=c;" +
+  "}catch(e){}";
+
+const TELEGRAM_WEB_APP_SDK = "https://telegram.org/js/telegram-web-app.js";
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru" className={`${manrope.variable} ${inter.variable}`} suppressHydrationWarning>
@@ -51,9 +64,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
       </head>
       <body className="font-sans">
-        <ThemeProvider>
-          <PatientAppGate>{children}</PatientAppGate>
-        </ThemeProvider>
+        <Script src={TELEGRAM_WEB_APP_SDK} strategy="beforeInteractive" />
+        <script dangerouslySetInnerHTML={{ __html: telegramThemeBootstrapScript }} />
+        <TelegramWebAppProvider>
+          <ThemeProvider>
+            <PatientAppGate>{children}</PatientAppGate>
+          </ThemeProvider>
+        </TelegramWebAppProvider>
       </body>
     </html>
   );

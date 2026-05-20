@@ -18,6 +18,7 @@ export type DoctorOrdinatorskayaMessage = {
   senderName: string;
   body: string;
   createdAt: number;
+  editedAt?: number | null;
   metadata: DoctorMessageMetadata | null;
 };
 
@@ -28,6 +29,7 @@ interface DoctorMessageRow {
   sender_name: string;
   body: string;
   created_at: string;
+  updated_at?: string | null;
   metadata?: unknown;
 }
 
@@ -60,13 +62,15 @@ export function parseDoctorMessageMetadata(raw: unknown): DoctorMessageMetadata 
 }
 
 function rowToMessage(row: DoctorMessageRow): DoctorOrdinatorskayaMessage {
+  const createdAt = new Date(row.created_at).getTime();
   return {
     id: row.id,
     roomId: row.room_id,
     senderId: row.sender_id,
     senderName: row.sender_name ?? "",
     body: row.body,
-    createdAt: new Date(row.created_at).getTime(),
+    createdAt,
+    editedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
     metadata: parseDoctorMessageMetadata(row.metadata),
   };
 }
@@ -226,7 +230,7 @@ export async function fetchDoctorRoomMessages(
 ): Promise<DoctorOrdinatorskayaMessage[]> {
   const { data, error } = await supabase
     .from("doctor_messages")
-    .select("id, room_id, sender_id, sender_name, body, created_at, metadata")
+    .select("id, room_id, sender_id, sender_name, body, created_at, updated_at, metadata")
     .eq("room_id", roomId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -240,7 +244,7 @@ export async function fetchDoctorRoomMessages(
   return rows.map(rowToMessage).sort((a, b) => a.createdAt - b.createdAt);
 }
 
-const GLOBAL_CHANNEL = "doctor_messages_global_inserts_v1";
+import { removeSupabaseChannel, uniqueRealtimeChannelName } from "@/lib/supabaseRealtime";
 
 function isCompleteDoctorMessageRow(row: DoctorMessageRow): boolean {
   return (
@@ -256,7 +260,7 @@ function isCompleteDoctorMessageRow(row: DoctorMessageRow): boolean {
  */
 export function subscribeAllDoctorMessageInserts(onInsert: (msg: DoctorOrdinatorskayaMessage) => void): () => void {
   const channel = supabase
-    .channel(GLOBAL_CHANNEL)
+    .channel(uniqueRealtimeChannelName("doctor_messages_inserts"))
     .on(
       "postgres_changes",
       {
@@ -274,7 +278,7 @@ export function subscribeAllDoctorMessageInserts(onInsert: (msg: DoctorOrdinator
     .subscribe();
 
   return () => {
-    void supabase.removeChannel(channel);
+    removeSupabaseChannel(channel);
   };
 }
 
@@ -301,7 +305,7 @@ export async function sendDoctorRoomMessage(payload: {
   const { data, error } = await supabase
     .from("doctor_messages")
     .insert(insertPayload)
-    .select("id, room_id, sender_id, sender_name, body, created_at, metadata")
+    .select("id, room_id, sender_id, sender_name, body, created_at, updated_at, metadata")
     .single();
 
   if (error) {
@@ -310,6 +314,35 @@ export async function sendDoctorRoomMessage(payload: {
   }
 
   return { message: rowToMessage(data as DoctorMessageRow), error: null };
+}
+
+export async function updateDoctorRoomMessage(
+  messageId: string,
+  body: string,
+): Promise<{ error: string | null }> {
+  const trimmed = body.trim();
+  if (!trimmed) return { error: "Пустое сообщение" };
+
+  const { error } = await supabase
+    .from("doctor_messages")
+    .update({ body: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", messageId);
+
+  if (error) {
+    console.error("[doctorOrdinatorskayaChat] update:", error);
+    return { error: error.message ?? "Не удалось изменить сообщение" };
+  }
+  return { error: null };
+}
+
+export async function deleteDoctorRoomMessage(messageId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from("doctor_messages").delete().eq("id", messageId);
+
+  if (error) {
+    console.error("[doctorOrdinatorskayaChat] delete:", error);
+    return { error: error.message ?? "Не удалось удалить сообщение" };
+  }
+  return { error: null };
 }
 
 /**

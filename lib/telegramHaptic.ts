@@ -16,3 +16,13 @@ export function tgHapticSuccess(): void {
     /* ignore */
   }
 }
+
+/** Лёгкий отклик при выборе из списка / переключении (no-op вне Telegram). */
+export function tgHapticSelection(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.Telegram?.WebApp?.HapticFeedback?.selectionChanged?.();
+  } catch {
+    /* ignore */
+  }
+}

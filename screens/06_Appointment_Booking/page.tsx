@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
+import { Toast } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/useToast";
 import {
   getAppointments,
   addAppointment,
@@ -22,6 +24,7 @@ import { addBillForAppointment } from "@/lib/bills";
 import { ROUTES } from "@/lib/routes";
 import { useClientNow } from "@/hooks/useClientNow";
 import { formatRuMonthYearTitleFromDate } from "@/lib/doctorSchedule";
+import { tgHapticSelection } from "@/lib/telegramHaptic";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -333,6 +336,32 @@ const MONTHS_SHORT = [
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ];
 
+const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+type PickedDate = { year: number; month: number; day: number };
+
+function monthMatrix(year: number, month: number): (number | null)[] {
+  const first = new Date(year, month, 1);
+  const dow = first.getDay();
+  const mondayOffset = (dow + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < mondayOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
+function isSamePickedDate(a: PickedDate | null, year: number, month: number, day: number): boolean {
+  return a?.year === year && a?.month === month && a?.day === day;
+}
+
+function isPastCalendarDay(year: number, month: number, day: number, now: Date): boolean {
+  const cell = new Date(year, month, day);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return cell < today;
+}
+
 // ─── Stepper ──────────────────────────────────────────────────────────────────
 
 function Stepper({ currentIdx }: { currentIdx: number }) {
@@ -475,7 +504,8 @@ function BookingContent() {
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
     null
   );
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<PickedDate | null>(null);
+  const [viewMonth, setViewMonth] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successModal, setSuccessModal] = useState<{
@@ -483,6 +513,7 @@ function BookingContent() {
     subtitle: string;
   } | null>(null);
   const [successModalEntered, setSuccessModalEntered] = useState(false);
+  const { toastMessage, toastVisible, toastTone, showToast } = useToast();
 
   const clientClock = useClientNow();
 
@@ -516,11 +547,22 @@ function BookingContent() {
         const found = all.find((a) => a.id === appointmentId);
         if (found) {
           setCurrentAppointment(found);
-          setSelectedDay(found.day);
+          setSelectedDate({
+            year: found.year,
+            month: found.monthNum - 1,
+            day: found.day,
+          });
+          setViewMonth(new Date(found.year, found.monthNum - 1, 1));
         }
       });
     }
   }, [isRescheduling, appointmentId]);
+
+  useEffect(() => {
+    if (clientClock && viewMonth === null) {
+      setViewMonth(new Date(clientClock.getFullYear(), clientClock.getMonth(), 1));
+    }
+  }, [clientClock, viewMonth]);
 
   useEffect(() => {
     if (!successModal) {
@@ -540,24 +582,24 @@ function BookingContent() {
   };
 
   const handleConfirm = async () => {
-    if (!selectedDay || !selectedTime) return;
+    if (!selectedDate || !selectedTime) return;
     setLoading(true);
 
     const clientPhone = resolveClientPhoneForAppointment();
     if (!clientPhone) {
       setLoading(false);
-      alert(
-        "Не удалось определить аккаунт. Пожалуйста, перезайдите в приложение."
+      showToast(
+        "Не удалось определить аккаунт. Пожалуйста, перезайдите в приложение.",
+        "error"
       );
       return;
     }
 
-    const now = new Date();
-    const monthNum = now.getMonth() + 1;
-    const monthName = MONTHS_SHORT[now.getMonth()];
-    const year = now.getFullYear();
+    const monthNum = selectedDate.month + 1;
+    const monthName = MONTHS_SHORT[selectedDate.month];
+    const year = selectedDate.year;
 
-    const daySnap = selectedDay;
+    const daySnap = selectedDate.day;
     const timeSnap = selectedTime;
 
     try {
@@ -573,7 +615,7 @@ function BookingContent() {
         const all = getAppointments();
         const updated = all.find((a) => a.id === appointmentId);
         if (updated) setCurrentAppointment(updated);
-        setSelectedDay(null);
+        setSelectedDate(null);
         setSelectedTime(null);
         setStep("date");
       } else {
@@ -602,7 +644,7 @@ function BookingContent() {
         setSelectedCategory(null);
         setSelectedDoctorId(null);
         setSelectedServiceId(null);
-        setSelectedDay(null);
+        setSelectedDate(null);
         setSelectedTime(null);
         setStep("category");
       }
@@ -613,20 +655,25 @@ function BookingContent() {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      alert("Ошибка записи: " + message);
+      showToast("Ошибка записи: " + message, "error");
     } finally {
       setLoading(false);
     }
   };
 
   const confirmDate =
-    selectedDay && selectedTime && clientClock
-      ? `${selectedDay} ${MONTHS_SHORT[clientClock.getMonth()]} ${clientClock.getFullYear()}, ${selectedTime}`
-      : selectedDay && selectedTime
-      ? `${selectedDay} · ${selectedTime}`
-      : selectedDay
-      ? `${selectedDay} — выберите время`
+    selectedDate && selectedTime
+      ? `${selectedDate.day} ${MONTHS_SHORT[selectedDate.month]} ${selectedDate.year}, ${selectedTime}`
+      : selectedDate
+      ? `${selectedDate.day} ${MONTHS_SHORT[selectedDate.month]} — выберите время`
       : "Не выбрано";
+
+  const canGoPrevMonth =
+    viewMonth &&
+    clientClock &&
+    (viewMonth.getFullYear() > clientClock.getFullYear() ||
+      (viewMonth.getFullYear() === clientClock.getFullYear() &&
+        viewMonth.getMonth() > clientClock.getMonth()));
 
   return (
     <div className="min-h-dvh bg-slate-50 dark:bg-app-canvas pb-safe transition-colors duration-150">
@@ -692,7 +739,7 @@ function BookingContent() {
                   // Reset downstream selections on category change
                   setSelectedDoctorId(null);
                   setSelectedServiceId(null);
-                  setSelectedDay(null);
+                  setSelectedDate(null);
                   setSelectedTime(null);
                   setTimeout(() => setStep("doctor"), 120);
                 }}
@@ -830,41 +877,85 @@ function BookingContent() {
             </div>
 
             <Card className="shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)]">
-              {clientClock ? (
+              {clientClock && viewMonth ? (
                 <>
-                  <p className="text-[15px] font-semibold dark:text-white mb-3">
-                    {formatRuMonthYearTitleFromDate(clientClock)}
-                  </p>
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      type="button"
+                      disabled={!canGoPrevMonth}
+                      onClick={() =>
+                        setViewMonth(
+                          new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)
+                        )
+                      }
+                      className="interactive-press-sm min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+                      aria-label="Предыдущий месяц"
+                    >
+                      ‹
+                    </button>
+                    <p className="text-[15px] font-semibold dark:text-white">
+                      {formatRuMonthYearTitleFromDate(viewMonth)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setViewMonth(
+                          new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)
+                        )
+                      }
+                      className="interactive-press-sm min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-secondary flex items-center justify-center shadow-raised-surface"
+                      aria-label="Следующий месяц"
+                    >
+                      ›
+                    </button>
+                  </div>
                   <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-gray-400 mb-2">
-                    {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
-                      <span key={d}>{d}</span>
+                    {WEEKDAYS.map((d) => (
+                      <span key={d} className="py-1 font-semibold uppercase tracking-wide">
+                        {d}
+                      </span>
                     ))}
                   </div>
                   <div className="grid grid-cols-7 gap-1">
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
-                      const today = clientClock.getDate();
-                      const isPast = day < today;
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          disabled={isPast}
-                          className={`h-8 w-full rounded-[4px] text-[13px] font-medium border transition-all duration-150 ease-out disabled:active:scale-100 ${
-                            selectedDay === day
-                              ? "bg-primary text-white border-primary shadow-[0_2px_8px_rgba(36,139,207,0.25)] dark:shadow-none active:scale-[0.98]"
-                              : isPast
-                                ? "text-gray-300 dark:text-slate-600 cursor-not-allowed border-slate-200/60 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40"
-                                : "border-slate-200 dark:border-slate-600 hover:bg-primary-light dark:hover:bg-primary/20 text-[#0F172A] dark:text-slate-200 bg-white dark:bg-slate-800 shadow-raised-surface active:scale-[0.98]"
-                          }`}
-                          onClick={() => {
-                            setSelectedDay(day);
-                            setSelectedTime(null);
-                          }}
-                        >
-                          {day}
-                        </button>
-                      );
-                    })}
+                    {monthMatrix(viewMonth.getFullYear(), viewMonth.getMonth()).map(
+                      (day, idx) => {
+                        if (day === null) {
+                          return <div key={`empty-${idx}`} className="min-h-[44px]" aria-hidden />;
+                        }
+
+                        const y = viewMonth.getFullYear();
+                        const m = viewMonth.getMonth();
+                        const isPast = isPastCalendarDay(y, m, day, clientClock);
+                        const isSelected = isSamePickedDate(selectedDate, y, m, day);
+                        const isToday =
+                          clientClock.getFullYear() === y &&
+                          clientClock.getMonth() === m &&
+                          clientClock.getDate() === day;
+
+                        return (
+                          <button
+                            key={`${y}-${m}-${day}`}
+                            type="button"
+                            disabled={isPast}
+                            className={`min-h-[44px] w-full rounded-[4px] text-[13px] font-medium border transition-all duration-150 ease-out disabled:active:scale-100 touch-manipulation ${
+                              isSelected
+                                ? "bg-primary text-white border-primary shadow-[0_2px_8px_rgba(36,139,207,0.25)] dark:shadow-none active:scale-[0.98]"
+                                : isPast
+                                  ? "text-gray-300 dark:text-slate-600 cursor-not-allowed border-slate-200/60 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40"
+                                  : isToday
+                                    ? "border-primary/70 bg-primary-light/50 dark:bg-primary/10 text-[#0F172A] dark:text-slate-200 shadow-raised-surface active:scale-[0.98]"
+                                    : "border-slate-200 dark:border-slate-600 hover:bg-primary-light dark:hover:bg-primary/20 text-[#0F172A] dark:text-slate-200 bg-white dark:bg-slate-800 shadow-raised-surface active:scale-[0.98]"
+                            }`}
+                            onClick={() => {
+                              setSelectedDate({ year: y, month: m, day });
+                              setSelectedTime(null);
+                            }}
+                          >
+                            {day}
+                          </button>
+                        );
+                      }
+                    )}
                   </div>
                 </>
               ) : (
@@ -874,18 +965,20 @@ function BookingContent() {
               )}
             </Card>
 
-            {selectedDay !== null && clientClock && (
+            {selectedDate !== null && clientClock && (
               <Card className="shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.28)]">
                 <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white mb-3">
-                  Доступное время · {selectedDay}{" "}
-                  {MONTHS_SHORT[clientClock.getMonth()]}
+                  Доступное время · {selectedDate.day}{" "}
+                  {MONTHS_SHORT[selectedDate.month]}
                 </p>
                 <div className="grid grid-cols-4 gap-2">
                   {timeSlots.map((slot) => {
                     const isBusy = BUSY_SLOTS.has(slot);
                     const isCurrent =
                       isRescheduling &&
-                      selectedDay === currentAppointment.day &&
+                      selectedDate.year === currentAppointment.year &&
+                      selectedDate.month === currentAppointment.monthNum - 1 &&
+                      selectedDate.day === currentAppointment.day &&
                       slot === currentAppointment.time;
                     const isSelected = selectedTime === slot;
 
@@ -895,11 +988,12 @@ function BookingContent() {
                         type="button"
                         disabled={isBusy || isCurrent}
                         onClick={() => {
+                          tgHapticSelection();
                           setSelectedTime(slot);
                           setTimeout(() => setStep("confirm"), 120);
                         }}
                         className={`
-                          h-10 rounded-[4px] text-[13px] font-semibold border transition-all duration-150 ease-out disabled:active:scale-100
+                          min-h-[44px] rounded-[4px] text-[13px] font-semibold border transition-all duration-150 ease-out disabled:active:scale-100 touch-manipulation
                           ${
                             isBusy
                               ? "border-slate-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-300 dark:text-slate-600 cursor-not-allowed line-through"
@@ -1011,7 +1105,7 @@ function BookingContent() {
             <Button
               size="full"
               className="!active:scale-[0.98]"
-              disabled={!selectedDay || !selectedTime}
+              disabled={!selectedDate || !selectedTime}
               loading={loading}
               onClick={handleConfirm}
             >
@@ -1094,6 +1188,13 @@ function BookingContent() {
           </div>
         </div>
       )}
+
+      <Toast
+        message={toastMessage}
+        visible={toastVisible}
+        tone={toastTone}
+        variant="patientWithTabBar"
+      />
     </div>
   );
 }

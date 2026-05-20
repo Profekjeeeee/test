@@ -16,21 +16,23 @@ import {
   isAdminLoginDigits,
   isCompleteRuMobileDigits,
   normalizePhone,
-  phoneDigitsSuffixPattern,
 } from "@/lib/phone";
-import { supabase } from "@/lib/supabaseClient";
+import { lookupAuthByPhoneViaApi } from "@/lib/auth/lookupByPhoneApi";
 import { ROUTES } from "@/lib/routes";
 import { log } from "@/lib/logger";
+import { isSupabaseConfigured, supabaseNetworkErrorHint } from "@/lib/supabase/publicConfig";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 
 /** Длина поля OTP в UI (maxLength инпута). */
 const OTP_INPUT_MAX_LENGTH = 6;
 
-/** Сквозные демо-коды: 4 или 6 цифр под длину поля. */
-const MASTER_SMS_CODES = new Set(["1234", "123456"]);
+/** Сквозные демо-коды: только dev; на продакшене отключены. */
+const MASTER_SMS_CODES = new Set(
+  process.env.NODE_ENV === "production" ? [] : ["1234", "123456"],
+);
 
 function isMasterSmsCode(digits: string): boolean {
-  return MASTER_SMS_CODES.has(digits);
+  return MASTER_SMS_CODES.size > 0 && MASTER_SMS_CODES.has(digits);
 }
 
 /** Номер между шагами авторизации (только цифры; без запросов к БД на шаге 1). */
@@ -175,7 +177,7 @@ export default function AuthPage() {
     const activePhone = fromLs || authPhoneRef.current || authCleanPhone;
     if (!activePhone) {
       console.error("Телефон потерян! Невозможно проверить роль.");
-      alert("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
+      setError("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
       log("ERROR", "auth_master_phone_lost", {
         role: "guest",
         userId: "",
@@ -201,60 +203,29 @@ export default function AuthPage() {
     const phoneRaw = readAuthPhone();
     console.log("[AUTH MASTER] Телефон из localStorage auth_phone:", phoneRaw || "(пусто)");
 
-    const empPattern = phoneDigitsSuffixPattern(cleanDbPhone);
-
-    let employee: Record<string, unknown> | null = null;
-    try {
-      console.log("[AUTH MASTER] Ищем сотрудника dental_employees ilike:", empPattern);
-      const { data, error: empErr } = await supabase
-        .from("dental_employees")
-        .select("*")
-        .ilike("phone", empPattern)
-        .limit(1)
-        .maybeSingle();
-
-      console.log("[AUTH MASTER] Ответ dental_employees:", {
-        employee: data ?? null,
-        empErr: empErr
-          ? { message: empErr.message, code: empErr.code, details: empErr.details }
-          : null,
-      });
-
-      if (empErr) {
-        console.error(
-          "[AUTH MASTER] Supabase dental_employees:",
-          empErr.message,
-          "| details:",
-          empErr.details ?? "(нет)",
-          "| code:",
-          empErr.code ?? "(нет)",
-          "| hint:",
-          empErr.hint ?? "(нет)"
-        );
-        setError("Не удалось проверить номер. Попробуйте позже.");
-        log("ERROR", "auth_master_emp_failed", {
-          role: "guest",
-          userId: "",
-          details: `${empErr.message} [${empErr.code}] ${empErr.details ?? ""}`,
-        });
-        return;
-      }
-      employee = (data as Record<string, unknown>) ?? null;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const details =
-        err && typeof err === "object" && "details" in err
-          ? String((err as { details?: unknown }).details ?? "")
-          : "";
-      console.error("[AUTH MASTER] Исключение dental_employees:", msg, "| details:", details || "(нет)", err);
-      log("ERROR", "auth_master_emp_exception", {
-        role: "guest",
-        userId: "",
-        details: `${msg} ${details}`,
-      });
-      setError("Ошибка при входе. Попробуйте позже.");
+    if (!isSupabaseConfigured()) {
+      console.error("[AUTH MASTER] Supabase env не задан");
+      setError(supabaseNetworkErrorHint());
       return;
     }
+
+    console.log("[AUTH MASTER] lookup-by-phone API, phone:", cleanDbPhone);
+    const lookup = await lookupAuthByPhoneViaApi(cleanDbPhone);
+
+    console.log("[AUTH MASTER] Ответ lookup-by-phone:", lookup);
+
+    if (!lookup.ok) {
+      console.error("[AUTH MASTER] lookup-by-phone:", lookup.error);
+      log("ERROR", "auth_master_lookup_failed", {
+        role: "guest",
+        userId: "",
+        details: lookup.error,
+      });
+      setError(lookup.network ? supabaseNetworkErrorHint() : "Не удалось проверить номер. Попробуйте позже.");
+      return;
+    }
+
+    const employee = lookup.employee;
 
     if (employee) {
       console.log("[AUTH MASTER] Сотрудник найден:", employee);
@@ -279,59 +250,7 @@ export default function AuthPage() {
       return;
     }
 
-    console.log("[AUTH MASTER] Сотрудник не найден. Ищем клиента в БД...");
-
-    let client: Record<string, unknown> | null = null;
-    try {
-      const { data, error: cliErr } = await supabase
-        .from("dental_clients")
-        .select("*")
-        .ilike("phone", empPattern)
-        .limit(1)
-        .maybeSingle();
-
-      console.log("[AUTH MASTER] Ответ dental_clients:", {
-        client: data ?? null,
-        cliErr: cliErr
-          ? { message: cliErr.message, code: cliErr.code, details: cliErr.details }
-          : null,
-      });
-
-      if (cliErr) {
-        console.error(
-          "[AUTH MASTER] Supabase dental_clients:",
-          cliErr.message,
-          "| details:",
-          cliErr.details ?? "(нет)",
-          "| code:",
-          cliErr.code ?? "(нет)",
-          "| hint:",
-          cliErr.hint ?? "(нет)"
-        );
-        setError("Не удалось проверить номер. Попробуйте позже.");
-        log("ERROR", "auth_master_client_failed", {
-          role: "guest",
-          userId: "",
-          details: `${cliErr.message} [${cliErr.code}] ${cliErr.details ?? ""}`,
-        });
-        return;
-      }
-      client = (data as Record<string, unknown>) ?? null;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const details =
-        err && typeof err === "object" && "details" in err
-          ? String((err as { details?: unknown }).details ?? "")
-          : "";
-      console.error("[AUTH MASTER] Исключение dental_clients:", msg, "| details:", details || "(нет)", err);
-      log("ERROR", "auth_master_client_exception", {
-        role: "guest",
-        userId: "",
-        details: `${msg} ${details}`,
-      });
-      setError("Ошибка при входе. Попробуйте позже.");
-      return;
-    }
+    const client = lookup.client;
 
     if (client) {
       console.log("[AUTH MASTER] Клиент найден:", client);

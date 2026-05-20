@@ -8,6 +8,7 @@ import { log } from "@/lib/logger";
 import { getAppointments, getNextAppointment } from "@/lib/appointments";
 import type { ChatMessage } from "@/types";
 import type { Appointment } from "@/lib/appointments";
+import { removeSupabaseChannel, uniqueRealtimeChannelName } from "@/lib/supabaseRealtime";
 import { supabase } from "@/lib/supabaseClient";
 
 export type { ChatMessage };
@@ -39,11 +40,14 @@ interface DbMessageRow {
   sender_role: string;
   sender_name: string;
   created_at: string;
+  updated_at?: string | null;
 }
 
 let messagesCache: ChatMessage[] = [];
 
 function dbRowToChatMessage(row: DbMessageRow): ChatMessage {
+  const timestamp = new Date(row.created_at).getTime();
+  const editedAt = row.updated_at ? new Date(row.updated_at).getTime() : null;
   return {
     id: row.id,
     senderId: row.sender_id,
@@ -51,7 +55,8 @@ function dbRowToChatMessage(row: DbMessageRow): ChatMessage {
     senderName: row.sender_name,
     recipientId: row.recipient_id,
     text: row.text,
-    timestamp: new Date(row.created_at).getTime(),
+    timestamp,
+    editedAt,
     chatType: row.chat_type as ChatMessage["chatType"],
   };
 }
@@ -83,12 +88,7 @@ export async function hydrateDentalMessages(): Promise<void> {
  * «cannot add postgres_changes callbacks after subscribe».
  */
 export function subscribeDentalMessagesRealtime(onReloaded: () => void): () => void {
-  const instanceId =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-
-  const channel = supabase.channel(`chat_messages_changes:${instanceId}`);
+  const channel = supabase.channel(uniqueRealtimeChannelName("chat_messages_changes"));
 
   channel.on(
     "postgres_changes",
@@ -126,10 +126,53 @@ export function subscribeDentalMessagesRealtime(onReloaded: () => void): () => v
     }
   );
 
+  channel.on(
+    "postgres_changes",
+    { event: "DELETE", schema: "public", table: "chat_messages" },
+    () => {
+      void hydrateDentalMessages().then(() => {
+        emitUpdated();
+        onReloaded();
+      });
+    }
+  );
+
   channel.subscribe();
 
   return () => {
-    void supabase.removeChannel(channel);
+    removeSupabaseChannel(channel);
+  };
+}
+
+let sharedDentalRealtimeUnsub: (() => void) | null = null;
+const dentalRealtimeListeners = new Set<() => void>();
+
+function notifyDentalRealtimeListeners(): void {
+  for (const fn of dentalRealtimeListeners) {
+    try {
+      fn();
+    } catch {
+      /* слушатель мог быть снят при unmount */
+    }
+  }
+}
+
+/**
+ * Ref-counted подписка на chat_messages: один WebSocket-канал на все экраны чата.
+ * При размонтировании последнего потребителя вызывается removeChannel.
+ */
+export function acquireDentalMessagesRealtime(onReloaded: () => void): () => void {
+  dentalRealtimeListeners.add(onReloaded);
+  if (!sharedDentalRealtimeUnsub) {
+    sharedDentalRealtimeUnsub = subscribeDentalMessagesRealtime(notifyDentalRealtimeListeners);
+  }
+
+  return () => {
+    dentalRealtimeListeners.delete(onReloaded);
+    if (dentalRealtimeListeners.size === 0 && sharedDentalRealtimeUnsub) {
+      sharedDentalRealtimeUnsub();
+      sharedDentalRealtimeUnsub = null;
+    }
   };
 }
 
@@ -206,10 +249,11 @@ export function resolveAttendingDoctor(): {
   };
 }
 
-export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
-  const uid = getCurrentUserId();
-  if (!uid) return [];
-  const all = getAllMessages();
+function filterPatientBranchMessages(
+  all: ChatMessage[],
+  uid: string,
+  tab: PatientChatTab
+): ChatMessage[] {
   const doc = resolveAttendingDoctor();
   const dPhone = normalizeDoctorPhone(doc.doctorPhone);
   const doctorId = doc.doctorId;
@@ -235,6 +279,12 @@ export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
         (doctorPeerMatches(doctorId, dPhone, m.senderId) && m.recipientId === uid))
     );
   });
+}
+
+export function getPatientBranchMessages(tab: PatientChatTab): ChatMessage[] {
+  const uid = getCurrentUserId();
+  if (!uid) return [];
+  return filterPatientBranchMessages(getAllMessages(), uid, tab);
 }
 
 export interface SupportAuditEntry {
@@ -322,45 +372,63 @@ function lastUnreadFromPeer(
   return max;
 }
 
-export function getPatientUnread(uid: string, tab: PatientChatTab): boolean {
-  const all = getAllMessages();
+function countUnreadFromPeer(
+  messages: ChatMessage[],
+  uid: string,
+  lastRead: number,
+  peerIsClientViewer: boolean
+): number {
+  let count = 0;
+  for (const m of messages) {
+    const fromStaff = m.senderRole === "admin" || m.senderRole === "doctor";
+    if (peerIsClientViewer && fromStaff && m.recipientId === uid && m.timestamp > lastRead) {
+      count++;
+    }
+    if (
+      !peerIsClientViewer &&
+      m.senderRole === "client" &&
+      m.senderId === uid &&
+      m.timestamp > lastRead
+    ) {
+      count++;
+    }
+  }
+  return count;
+}
+
+function patientTabReadKey(tab: PatientChatTab): string {
   const doc = resolveAttendingDoctor();
   const dPhone = normalizeDoctorPhone(doc.doctorPhone);
   const doctorId = doc.doctorId;
-  const msgs = all.filter((m) => {
-    if (tab === "clinic")
-      return (
-        m.chatType === "clinic" &&
-        ((m.senderId === uid && m.recipientId === "clinic") ||
-          (m.recipientId === uid && (m.senderRole === "admin" || m.senderRole === "doctor")))
-      );
-    if (tab === "support") {
-      return (
-        m.chatType === "support" &&
-        ((m.senderId === uid && isSupportInboxRecipient(m.recipientId)) ||
-          (m.senderRole === "admin" && m.recipientId === uid))
-      );
-    }
-    return (
-      m.chatType === "doctor" &&
-      ((m.senderId === uid && doctorPeerMatches(doctorId, dPhone, m.recipientId)) ||
-        (doctorPeerMatches(doctorId, dPhone, m.senderId) && m.recipientId === uid))
-    );
-  });
-  const readMap = getPatientReadMap();
-  const key = patientReadKey(tab, tab === "doctor" ? doctorId || dPhone : undefined);
-  const lastRead = readMap[key] ?? 0;
-  return lastUnreadFromPeer(msgs, uid, true) > lastRead;
+  return patientReadKey(tab, tab === "doctor" ? doctorId || dPhone : undefined);
+}
+
+export function getPatientUnreadCount(uid: string, tab: PatientChatTab): number {
+  const msgs = filterPatientBranchMessages(getAllMessages(), uid, tab);
+  const lastRead = getPatientReadMap()[patientTabReadKey(tab)] ?? 0;
+  return countUnreadFromPeer(msgs, uid, lastRead, true);
+}
+
+/** Сумма непрочитанных входящих по всем вкладкам чата пациента. */
+export function getPatientTotalUnreadCount(uid: string): number {
+  const tabs: PatientChatTab[] = ["clinic", "support", "doctor"];
+  return tabs.reduce((sum, tab) => sum + getPatientUnreadCount(uid, tab), 0);
+}
+
+export function getPatientUnread(uid: string, tab: PatientChatTab): boolean {
+  return getPatientUnreadCount(uid, tab) > 0;
 }
 
 export function markPatientConversationRead(uid: string, tab: PatientChatTab): void {
   if (typeof window === "undefined") return;
-  const doc = resolveAttendingDoctor();
-  const dPhone = normalizeDoctorPhone(doc.doctorPhone);
-  const doctorId = doc.doctorId;
+  const msgs = filterPatientBranchMessages(getAllMessages(), uid, tab);
   const map = getPatientReadMap();
-  const key = patientReadKey(tab, tab === "doctor" ? doctorId || dPhone : undefined);
-  map[key] = Date.now();
+  const key = patientTabReadKey(tab);
+  let watermark = Date.now();
+  for (const m of msgs) {
+    watermark = Math.max(watermark, m.timestamp);
+  }
+  map[key] = watermark;
   setPatientReadMap(map);
   emitUpdated();
 }
@@ -456,6 +524,36 @@ export async function appendChatMessage(
 
   emitUpdated();
   return full;
+}
+
+export async function updateChatMessageText(messageId: string, text: string): Promise<void> {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("Текст сообщения не может быть пустым");
+
+  const { error } = await supabase
+    .from("chat_messages")
+    .update({ text: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", messageId);
+
+  if (error) {
+    console.error("[supportChat update]", error);
+    throw new Error(error.message ?? "Не удалось изменить сообщение");
+  }
+
+  await hydrateDentalMessages();
+  emitUpdated();
+}
+
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  const { error } = await supabase.from("chat_messages").delete().eq("id", messageId);
+
+  if (error) {
+    console.error("[supportChat delete]", error);
+    throw new Error(error.message ?? "Не удалось удалить сообщение");
+  }
+
+  await hydrateDentalMessages();
+  emitUpdated();
 }
 
 function clientSenderName(uid: string): string {

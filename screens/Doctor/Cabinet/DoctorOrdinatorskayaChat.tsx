@@ -12,13 +12,18 @@ import type { ToothStatus } from "@/types";
 import type { ToastTone } from "@/components/ui/Toast";
 import type { DentalEmployeeRecord, DentalSession } from "@/lib/auth";
 import { getDentalEmployees, refreshDentalCaches } from "@/lib/auth";
+import { ChatMessageContextMenu } from "@/components/chat/ChatMessageContextMenu";
+import { ChatMessageMetaRow } from "@/components/chat/ChatMessageMetaRow";
+import { LongPressBubble } from "@/components/chat/LongPressBubble";
 import {
+  deleteDoctorRoomMessage,
   fetchDoctorRoomMessages,
   ensureGeneralDoctorRoom,
   fetchMyDirectRoomPeerMap,
   findOrCreatePrivateDoctorRoom,
   sendDoctorRoomMessage,
   subscribeAllDoctorMessageInserts,
+  updateDoctorRoomMessage,
   type DoctorOrdinatorskayaMessage,
 } from "@/lib/doctorOrdinatorskayaChat";
 import ConsiliumFormulaPreview from "@/screens/Doctor/Cabinet/ConsiliumFormulaPreview";
@@ -58,6 +63,8 @@ export default function DoctorOrdinatorskayaChat({
   const [roomLoading, setRoomLoading] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [menuMessage, setMenuMessage] = useState<DoctorOrdinatorskayaMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<DoctorOrdinatorskayaMessage | null>(null);
   const [unreadByRoom, setUnreadByRoom] = useState<Record<string, number>>({});
   const [consiliumPreview, setConsiliumPreview] = useState<{
     patientId: string;
@@ -129,6 +136,9 @@ export default function DoctorOrdinatorskayaChat({
   /** Подгрузка сообщений при смене активной комнаты. */
   useEffect(() => {
     if (!activeRoomId || loading) return;
+    setMenuMessage(null);
+    setEditingMessage(null);
+    setDraft("");
     let cancelled = false;
     void (async () => {
       setRoomLoading(true);
@@ -199,6 +209,23 @@ export default function DoctorOrdinatorskayaChat({
 
     setSending(true);
     try {
+      if (editingMessage) {
+        const { error } = await updateDoctorRoomMessage(editingMessage.id, text);
+        if (error) {
+          showToast(error, "error");
+          return;
+        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === editingMessage.id ? { ...m, body: text, editedAt: Date.now() } : m,
+          ),
+        );
+        setEditingMessage(null);
+        setDraft("");
+        showToast("Сообщение изменено", "success");
+        return;
+      }
+
       const { message, error } = await sendDoctorRoomMessage({
         roomId: activeRoomId,
         senderId: session.id,
@@ -216,7 +243,30 @@ export default function DoctorOrdinatorskayaChat({
     } finally {
       setSending(false);
     }
-  }, [draft, activeRoomId, sending, session, showToast]);
+  }, [draft, activeRoomId, editingMessage, sending, session, showToast]);
+
+  const handleDeleteMessage = useCallback(
+    async (m: DoctorOrdinatorskayaMessage) => {
+      if (!confirm("Удалить сообщение?")) return;
+      setSending(true);
+      try {
+        const { error } = await deleteDoctorRoomMessage(m.id);
+        if (error) {
+          showToast(error, "error");
+          return;
+        }
+        setMessages((prev) => prev.filter((x) => x.id !== m.id));
+        if (editingMessage?.id === m.id) {
+          setEditingMessage(null);
+          setDraft("");
+        }
+        showToast("Сообщение удалено", "success");
+      } finally {
+        setSending(false);
+      }
+    },
+    [editingMessage, showToast],
+  );
 
   const headerTitle =
     surface.kind === "general"
@@ -377,14 +427,18 @@ export default function DoctorOrdinatorskayaChat({
           messages.map((m) => {
             const mine = m.senderId === session.id;
             const consilium = m.metadata?.type === "consilium" ? m.metadata : null;
+            const canManage = mine && !consilium;
+            const bubbleShell = `rounded-[18px] px-2.5 py-2 shadow-sm ${
+              mine
+                ? "max-w-[78%] bg-primary text-white rounded-br-md"
+                : "max-w-[85%] bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white border border-slate-200/90 dark:border-slate-700 rounded-bl-md"
+            }`;
             return (
               <div key={m.id} className={`flex w-full ${mine ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`rounded-[18px] px-2.5 py-2 shadow-sm ${
-                    mine
-                      ? "max-w-[78%] bg-primary text-white rounded-br-md"
-                      : "max-w-[85%] bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white border border-slate-200/90 dark:border-slate-700 rounded-bl-md"
-                  }`}
+                <LongPressBubble
+                  enabled={canManage}
+                  onLongPress={() => setMenuMessage(m)}
+                  className={bubbleShell}
                 >
                   {!mine && (
                     <p className="text-[11px] font-semibold text-primary dark:text-primary/90 mb-1 truncate px-1">
@@ -447,19 +501,37 @@ export default function DoctorOrdinatorskayaChat({
                       {m.body}
                     </p>
                   )}
-                  <p
-                    className={`text-[10px] mt-1 tabular-nums px-1 ${
-                      mine ? "text-white/75 text-right" : "text-secondary text-right"
-                    }`}
-                  >
-                    {formatBubbleTime(m.createdAt)}
-                  </p>
-                </div>
+                  <div className="px-1">
+                    <ChatMessageMetaRow
+                      timestamp={m.createdAt}
+                      editedAt={m.editedAt}
+                      align={mine ? "right" : "left"}
+                      variant={mine ? "doctor-outgoing" : "doctor-incoming"}
+                      formatTime={formatBubbleTime}
+                    />
+                  </div>
+                </LongPressBubble>
               </div>
             );
           })}
         <div ref={endRef} className="h-1 shrink-0" />
       </div>
+
+      {editingMessage ? (
+        <div className="mt-2 flex items-center justify-between gap-2 shrink-0">
+          <p className="text-[12px] font-semibold text-primary">Редактирование</p>
+          <button
+            type="button"
+            className="text-[12px] font-semibold text-secondary interactive-press-sm"
+            onClick={() => {
+              setEditingMessage(null);
+              setDraft("");
+            }}
+          >
+            Отмена
+          </button>
+        </div>
+      ) : null}
 
       <div className="flex gap-2 mt-3 shrink-0 pt-1">
         <input
@@ -472,7 +544,7 @@ export default function DoctorOrdinatorskayaChat({
               void handleSend();
             }
           }}
-          placeholder="Сообщение…"
+          placeholder={editingMessage ? "Новый текст…" : "Сообщение…"}
           disabled={!activeRoomId || sending}
           className="flex-1 min-w-0 h-11 rounded-[14px] border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3.5 text-[15px] text-[#0F172A] dark:text-white placeholder:text-secondary/70"
         />
@@ -485,6 +557,20 @@ export default function DoctorOrdinatorskayaChat({
           {sending ? "…" : "→"}
         </button>
       </div>
+
+      {menuMessage ? (
+        <ChatMessageContextMenu
+          open
+          canEdit
+          canDelete
+          onClose={() => setMenuMessage(null)}
+          onEdit={() => {
+            setEditingMessage(menuMessage);
+            setDraft(menuMessage.body);
+          }}
+          onDelete={() => void handleDeleteMessage(menuMessage)}
+        />
+      ) : null}
 
       <ConsiliumFormulaPreview
         open={consiliumPreview != null}

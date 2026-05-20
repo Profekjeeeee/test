@@ -1,25 +1,29 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ScrollText } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { logout } from "@/lib/auth";
 import { getDashboardStats } from "@/lib/admin/dashboard";
 import type { DashboardAppointmentRow, DashboardChartPoint, DashboardStats } from "@/lib/admin/types";
 import { ROUTES } from "@/lib/routes";
 import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
+
+function ChartSkeleton() {
+  return <div className="h-[180px] rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />;
+}
+
+const DashboardRevenueChart = dynamic(
+  () => import("@/components/admin/DashboardRevenueChart"),
+  { ssr: false, loading: ChartSkeleton }
+);
+
+const DashboardAppointmentsChart = dynamic(
+  () => import("@/components/admin/DashboardAppointmentsChart"),
+  { ssr: false, loading: ChartSkeleton }
+);
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   done: { label: "Выполнено", cls: "bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400" },
@@ -73,6 +77,7 @@ export default function AdminDashboardPage() {
   const [dashError, setDashError] = useState("");
 
   const statCards = useMemo(() => (stats ? buildStatCards(stats) : []), [stats]);
+  const chartData = useMemo(() => chart, [chart]);
 
   const loadDashboard = useCallback(async () => {
     setDashLoading(true);
@@ -158,30 +163,11 @@ export default function AdminDashboardPage() {
 
       <div className="px-5 mb-4 space-y-3">
         <ChartCard title="Выручка по дням (месяц)" loading={dashLoading}>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={chart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} width={42} />
-              <Tooltip
-                formatter={(v) => [`${formatRub(Number(v))} ₽`, "Выручка"]}
-                labelFormatter={(l) => `День ${l}`}
-              />
-              <Bar dataKey="revenue" fill="#248BCF" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {!dashLoading && <DashboardRevenueChart data={chartData} />}
         </ChartCard>
 
         <ChartCard title="Записи по дням (месяц)" loading={dashLoading}>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={chart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
-              <Tooltip labelFormatter={(l) => `День ${l}`} />
-              <Line type="monotone" dataKey="appointments" stroke="#248BCF" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          {!dashLoading && <DashboardAppointmentsChart data={chartData} />}
         </ChartCard>
       </div>
 

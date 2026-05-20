@@ -66,12 +66,12 @@ const ADMIN_TABS: { id: string; label: string; href: string; icon: React.FC<Icon
     icon: ({ active }) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" aria-hidden>
         <path
-          d="M4 14V18L8 14H18C18.5523 14 19 13.5523 19 13V7C19 6.44772 18.5523 6 18 6H6C5.44772 6 5 6.44772 5 7V14H4Z"
+          d="M5 17V20L9 17H17C18.1046 17 19 16.1046 19 15V8C19 6.89543 18.1046 6 17 6H7C5.89543 6 5 6.89543 5 8V17Z"
           stroke="currentColor"
           strokeWidth="1.5"
           strokeLinejoin="round"
           fill={active ? "currentColor" : "none"}
-          fillOpacity={active ? 0.1 : undefined}
+          fillOpacity={active ? 0.12 : undefined}
         />
         <path
           d="M8 10H16M8 12.5H13"

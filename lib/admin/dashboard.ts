@@ -75,7 +75,7 @@ function scheduleUiStatus(status: string, dateIso: string, time: string): string
   return "upcoming";
 }
 
-export async function getDashboardStats(): Promise<{
+export async function fetchDashboardStats(): Promise<{
   stats: DashboardStats;
   chart: DashboardChartPoint[];
   today: DashboardAppointmentRow[];
@@ -182,4 +182,30 @@ export async function getDashboardStats(): Promise<{
     today: todayRows,
     error: doctorsRes.error?.message ?? null,
   };
+}
+
+export type DashboardStatsResult = Awaited<ReturnType<typeof fetchDashboardStats>>;
+
+const DASHBOARD_CACHE_TTL_MS = 60_000;
+let dashboardCache: DashboardStatsResult | null = null;
+let dashboardCacheAt = 0;
+
+/** In-memory TTL cache — повторный mount дашборда в течение 1 мин не бьёт в Supabase. */
+export async function getDashboardStats(): Promise<DashboardStatsResult> {
+  const now = Date.now();
+  if (dashboardCache && now - dashboardCacheAt < DASHBOARD_CACHE_TTL_MS) {
+    return dashboardCache;
+  }
+
+  const res = await fetchDashboardStats();
+  if (!res.error) {
+    dashboardCache = res;
+    dashboardCacheAt = now;
+  }
+  return res;
+}
+
+export function invalidateDashboardCache(): void {
+  dashboardCache = null;
+  dashboardCacheAt = 0;
 }

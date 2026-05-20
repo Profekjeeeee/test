@@ -45,6 +45,7 @@ export default function RegistrationPage() {
   const [form, setForm] = useState<FormState>({ firstName: "", lastName: "", email: "" });
   const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
   const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     let stored = "";
@@ -80,6 +81,7 @@ export default function RegistrationPage() {
     }
 
     setSaving(true);
+    setSubmitError("");
     try {
       // insert в dental_clients делает createUser: { phone, name, role: 'client' }
       const user = await createUser(phoneForDb, {
@@ -115,7 +117,7 @@ export default function RegistrationPage() {
           : err instanceof Error
             ? err.message
             : String(err);
-      alert(`Ошибка базы данных: ${message}`);
+      setSubmitError(`Ошибка базы данных: ${message}`);
     } finally {
       setSaving(false);
     }
@@ -145,6 +147,12 @@ export default function RegistrationPage() {
           Вы новый пациент. Заполните данные для создания личного кабинета.
         </p>
       </div>
+
+      {submitError ? (
+        <p className="text-[13px] font-medium text-[#EF4444] mb-2" role="alert">
+          {submitError}
+        </p>
+      ) : null}
 
       <div className="flex flex-col gap-4">
         {/* Phone (readonly) */}
