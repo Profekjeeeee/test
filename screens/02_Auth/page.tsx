@@ -23,22 +23,20 @@ import { log } from "@/lib/logger";
 import { isSupabaseConfigured, supabaseNetworkErrorHint } from "@/lib/supabase/publicConfig";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 
-/** Длина поля OTP в UI (maxLength инпута). */
 const OTP_INPUT_MAX_LENGTH = 6;
+const AUTH_PHONE_STORAGE_KEY = "auth_phone";
 
-/** Сквозные демо-коды: только dev; на продакшене отключены. */
-const MASTER_SMS_CODES = new Set(
-  process.env.NODE_ENV === "production" ? [] : ["1234", "123456"],
-);
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+/** Демо-коды СМС: только в development; на production отключены. */
+const MASTER_SMS_CODES: ReadonlySet<string> = IS_DEV
+  ? new Set(["1234", "123456"])
+  : new Set();
 
 function isMasterSmsCode(digits: string): boolean {
   return MASTER_SMS_CODES.size > 0 && MASTER_SMS_CODES.has(digits);
 }
 
-/** Номер между шагами авторизации (только цифры; без запросов к БД на шаге 1). */
-const AUTH_PHONE_STORAGE_KEY = "auth_phone";
-
-/** Нормализация живого инпута OTP (до String() в verify). */
 function normalizeSmsCodeInput(raw: string): string {
   return raw.normalize("NFC").replace(/\D/g, "").slice(0, OTP_INPUT_MAX_LENGTH);
 }
@@ -46,9 +44,8 @@ function normalizeSmsCodeInput(raw: string): string {
 function persistAuthPhone(cleanPhone: string): void {
   try {
     localStorage.setItem(AUTH_PHONE_STORAGE_KEY, cleanPhone);
-    console.log("[AUTH] записан auth_phone:", cleanPhone);
   } catch (err) {
-    console.warn("[AUTH] persistAuthPhone ошибка доступа:", err);
+    console.warn("[AUTH] persistAuthPhone:", err);
   }
 }
 
@@ -63,13 +60,11 @@ function readAuthPhone(): string {
 function clearAuthPhone(): void {
   try {
     localStorage.removeItem(AUTH_PHONE_STORAGE_KEY);
-    console.log("[AUTH] очищен auth_phone");
   } catch (err) {
-    console.warn("[AUTH] clearAuthPhone ошибка:", err);
+    console.warn("[AUTH] clearAuthPhone:", err);
   }
 }
 
-/** После навигации: `storage` и смена step не должны мешать редиректу Next.js. */
 function scheduleClearAuthPhone(): void {
   if (typeof window === "undefined") return;
   window.setTimeout(() => {
@@ -77,7 +72,6 @@ function scheduleClearAuthPhone(): void {
   }, 0);
 }
 
-/** Строки из dental_employees — поле имени как в lib/auth.ts (`name`). */
 function sessionFromEmployeeRow(row: Record<string, unknown>): {
   id: string;
   role: "admin" | "doctor";
@@ -103,23 +97,19 @@ export default function AuthPage() {
   const router = useRouter();
   const [step, setStep] = useState<AuthStep>("phone");
   const [phone, setPhone] = useState("");
-  /** Номер после шага 1 (синхронизируется с localStorage). */
   const [authCleanPhone, setAuthCleanPhone] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [demoBypassNotice, setDemoBypassNotice] = useState(false);
   const bypassInFlightRef = useRef(false);
-  /** Синхронный якорь номера между шагами (переживает async-gap и частичные потери setState при ремоунте). */
   const authPhoneRef = useRef("");
 
-  /** Восстановление после ремоунта Strict Mode и т.п. */
   useEffect(() => {
     if (step !== "code") return;
     const pinned = readAuthPhone();
     if (isCompleteRuMobileDigits(authCleanPhone)) return;
     if (isCompleteRuMobileDigits(pinned)) {
-      console.log("[AUTH] восстановлен телефон из localStorage для шага кода:", pinned);
       authPhoneRef.current = pinned;
       setAuthCleanPhone(pinned);
     }
@@ -151,7 +141,8 @@ export default function AuthPage() {
           });
           router.push(ROUTES.adminDashboard);
           scheduleClearAuthPhone();
-        } catch {
+        } catch (err) {
+          console.warn("[AUTH] admin backdoor:", err);
           setError("Не удалось войти как администратор");
         } finally {
           setLoading(false);
@@ -176,7 +167,6 @@ export default function AuthPage() {
     const fromLs = readAuthPhone();
     const activePhone = fromLs || authPhoneRef.current || authCleanPhone;
     if (!activePhone) {
-      console.error("Телефон потерян! Невозможно проверить роль.");
       setError("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
       log("ERROR", "auth_master_phone_lost", {
         role: "guest",
@@ -198,24 +188,15 @@ export default function AuthPage() {
     return cleanDbPhone;
   };
 
-  /** Общая логика мастер-кода (Supabase + редирект), без управления loading/ref. */
   const executeMasterAuth = async (cleanDbPhone: string): Promise<void> => {
-    const phoneRaw = readAuthPhone();
-    console.log("[AUTH MASTER] Телефон из localStorage auth_phone:", phoneRaw || "(пусто)");
-
     if (!isSupabaseConfigured()) {
-      console.error("[AUTH MASTER] Supabase env не задан");
       setError(supabaseNetworkErrorHint());
       return;
     }
 
-    console.log("[AUTH MASTER] lookup-by-phone API, phone:", cleanDbPhone);
     const lookup = await lookupAuthByPhoneViaApi(cleanDbPhone);
 
-    console.log("[AUTH MASTER] Ответ lookup-by-phone:", lookup);
-
     if (!lookup.ok) {
-      console.error("[AUTH MASTER] lookup-by-phone:", lookup.error);
       log("ERROR", "auth_master_lookup_failed", {
         role: "guest",
         userId: "",
@@ -226,11 +207,8 @@ export default function AuthPage() {
     }
 
     const employee = lookup.employee;
-
     if (employee) {
-      console.log("[AUTH MASTER] Сотрудник найден:", employee);
       const s = sessionFromEmployeeRow(employee);
-      /** Шаг A: `dental_session` + `dental_user_session` { id, name, role, phone } — см. setDentalSession в lib/auth. */
       setDentalSession({
         id: s.id,
         role: s.role,
@@ -239,7 +217,6 @@ export default function AuthPage() {
         specialization: s.specialization,
       });
       await syncTelegramIdToSupabaseIfNeeded();
-      /** Шаг Б: AuthContext в проекте нет — PatientAppGate подписан на `dental_session_changed`. */
       log("INFO", "auth_success_master_direct", {
         role: s.role,
         userId: cleanDbPhone,
@@ -251,12 +228,9 @@ export default function AuthPage() {
     }
 
     const client = lookup.client;
-
     if (client) {
-      console.log("[AUTH MASTER] Клиент найден:", client);
       const cid = String(client.id ?? "");
       if (!cid) {
-        console.error("[AUTH MASTER] В ответе нет client.id:", client);
         setError("Некорректные данные клиента.");
         return;
       }
@@ -273,13 +247,11 @@ export default function AuthPage() {
       return;
     }
 
-    console.log("[AUTH MASTER] Номер не найден. Переход к регистрации.");
     log("INFO", "auth_master_new_client_redirect", {
       role: "guest",
       userId: "",
       details: `cleanPhone=${cleanDbPhone}`,
     });
-    /** Не очищаем auth_phone здесь — номер нужен до завершения регистрации (см. screens/02_Registration). */
     router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(cleanDbPhone)}`);
   };
 
@@ -290,7 +262,6 @@ export default function AuthPage() {
 
     bypassInFlightRef.current = true;
     if (options.instantUi) {
-      console.log("🔥 INSTANT BYPASS TRIGGERED 🔥");
       setDemoBypassNotice(true);
     }
     setLoading(true);
@@ -298,6 +269,9 @@ export default function AuthPage() {
 
     try {
       await executeMasterAuth(cleanDbPhone);
+    } catch (err) {
+      console.warn("[AUTH] master auth session:", err);
+      setError("Не удалось выполнить вход. Попробуйте позже.");
     } finally {
       setLoading(false);
       bypassInFlightRef.current = false;
@@ -305,24 +279,10 @@ export default function AuthPage() {
     }
   };
 
-  /** Проверка кода: мастер-код — тот же пайплайн, что и мгновенный onChange (кнопка необязательна). */
   const handleVerify = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const enteredCode: unknown = code;
-    const normalizedCode = String(enteredCode)
-      .replace(/\D/g, "")
-      .slice(0, OTP_INPUT_MAX_LENGTH);
-
-    console.log("=== AUTH DEBUG ===");
-    console.log("Введенный код (сырой):", enteredCode);
-    console.log("Код (нормализованный):", normalizedCode);
-    console.log(
-      "Телефон (стейт / ref / LS auth_phone):",
-      authCleanPhone,
-      authPhoneRef.current,
-      readAuthPhone()
-    );
+    const normalizedCode = normalizeSmsCodeInput(String(code));
 
     if (isMasterSmsCode(normalizedCode)) {
       await runMasterAuthSession({ instantUi: false });
@@ -334,22 +294,21 @@ export default function AuthPage() {
       log("WARN", "validation_code_empty", {
         role: "guest",
         userId: "",
-        details: `raw_type=${typeof enteredCode}`,
+        details: "empty code",
       });
       return;
     }
 
-    setError("Неверный код. Демо: 1234 или 123456");
+    setError(IS_DEV ? "Неверный код. Демо: 1234 или 123456" : "Неверный код подтверждения.");
     log("WARN", "validation_code_invalid", {
       role: "guest",
       userId: "",
-      details: `digits=${normalizedCode} len_raw_state=${typeof code}`,
+      details: `digits=${normalizedCode}`,
     });
   };
 
   const digitsNormalized = normalizePhone(phone);
   const digitLen = digitsNormalized.length;
-  /** Номер для подписи на шаге OTP (стейт мог обнулиться при ремоунте — читаем LS). */
   const otpScreenPhone = authCleanPhone || readAuthPhone() || authPhoneRef.current || phone;
 
   return (
@@ -367,7 +326,7 @@ export default function AuthPage() {
         <p className="text-[15px] text-secondary mt-2 leading-relaxed">
           {step === "phone"
             ? "Один номер для пациентов и сотрудников клиники — после СМС вы попадёте в нужный раздел."
-            : `Код отправлен на\u00a0${formatRuPhoneInput(otpScreenPhone || "") || "…"} (демо: до 6 цифр)`}
+            : `Код отправлен на\u00a0${formatRuPhoneInput(otpScreenPhone || "") || "…"}${IS_DEV ? " (демо: до 6 цифр)" : ""}`}
         </p>
         {step === "phone" && (
           <div className="flex flex-wrap gap-2 mt-4">
@@ -397,19 +356,21 @@ export default function AuthPage() {
             error={error}
             inputMode="tel"
           />
-          <p className="text-[12px] text-secondary -mt-2">
-            Демо:{" "}
-            <span className="font-mono text-[#0F172A] dark:text-white">1234</span>
-            {" или "}
-            <span className="font-mono text-[#0F172A] dark:text-white">123456</span>
-            {digitLen >= 11 ? (
-              <>
-                {" · "}
-                В БД сохранится:{" "}
-                <span className="font-mono text-[#0F172A] dark:text-white">{digitsNormalized}</span>
-              </>
-            ) : null}
-          </p>
+          {IS_DEV ? (
+            <p className="text-[12px] text-secondary -mt-2">
+              Демо:{" "}
+              <span className="font-mono text-[#0F172A] dark:text-white">1234</span>
+              {" или "}
+              <span className="font-mono text-[#0F172A] dark:text-white">123456</span>
+              {digitLen >= 11 ? (
+                <>
+                  {" · "}
+                  В БД сохранится:{" "}
+                  <span className="font-mono text-[#0F172A] dark:text-white">{digitsNormalized}</span>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           <Button type="submit" size="full" loading={loading}>
             Далее
           </Button>

@@ -52,7 +52,7 @@ const telegramThemeBootstrapScript =
   "var c=p.bg_color||p.secondary_bg_color;" +
   "if(c){document.documentElement.style.backgroundColor=c;" +
   "if(document.body)document.body.style.backgroundColor=c;}}}" +
-  "}catch(e){}";
+  "catch(e){}";
 
 const TELEGRAM_WEB_APP_SDK = "https://telegram.org/js/telegram-web-app.js";
 
