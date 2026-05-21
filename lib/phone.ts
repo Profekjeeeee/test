@@ -4,9 +4,6 @@
 
 export const RU_MOBILE_DIGIT_COUNT = 11;
 
-/** Нормализованный «магический» номер админа (11 цифр), совпадает с seed `dental_employees.phone`. */
-export const ADMIN_LOGIN_DIGITS = "77777777777";
-
 /** Только цифры; ведущая 8 заменяется на 7 (как в Supabase `phone` у клиентов). */
 export function normalizePhone(raw: string): string {
   let digits = raw.replace(/\D/g, "");
@@ -21,10 +18,6 @@ export function isCompleteRuMobileDigits(digits: string): boolean {
     digits.startsWith("7") &&
     /^7\d{10}$/.test(digits)
   );
-}
-
-export function isAdminLoginDigits(digits: string): boolean {
-  return normalizePhone(digits) === ADMIN_LOGIN_DIGITS;
 }
 
 /** Маска отображения при вводе (как в профиле). */

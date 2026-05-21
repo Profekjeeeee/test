@@ -8,7 +8,7 @@ import { DentalGateError, verifyDentalGateRequest } from "@/lib/server/dentalGat
 import { phoneDigitsNormalizedServer } from "@/lib/server/normalizePhoneDigitsServer";
 import { getSupabaseServiceRole } from "@/lib/supabase/serverAdmin";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ADMIN_LOGIN_DIGITS, normalizePhone, phoneDigitsSuffixPattern } from "@/lib/phone";
+import { isCompleteRuMobileDigits, normalizePhone, phoneDigitsSuffixPattern } from "@/lib/phone";
 
 function gw(status: number, msg: string): never {
   throw new DentalGateError(status, msg);
@@ -322,7 +322,7 @@ export async function dentalDbGateway(body: DentalGatewayRequestBody): Promise<u
   switch (op) {
     case "authLookupEmployeeClient": {
       const digits = normalizePhone(typeof payload.cleanPhone === "string" ? payload.cleanPhone : "");
-      if (digits !== ADMIN_LOGIN_DIGITS && digits.length < 10) gw(400, "Телефон некорректен.");
+      if (!isCompleteRuMobileDigits(digits)) gw(400, "Телефон некорректен.");
       const pat = phoneDigitsSuffixPattern(digits);
       let employee = null as Record<string, unknown> | null;
 

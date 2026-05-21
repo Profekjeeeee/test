@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { profileHasPinHash } from "@/lib/server/authProfilePin";
+import { ensureProfileRowExists, profileHasPinHash } from "@/lib/server/authProfilePin";
 import { clientRowToPayload } from "@/lib/server/authSessionPayload";
 import { issueSupabaseSessionForUserId } from "@/lib/server/issueSupabaseSession";
 import { verifyDentalGateRequest } from "@/lib/server/dentalGateVerify";
@@ -67,6 +67,7 @@ export async function POST(req: Request) {
     }
 
     const authId = ua.user.id;
+    await ensureProfileRowExists(authId);
     const insertPayload: Record<string, unknown> = {
       id: authId,
       auth_user_id: authId,

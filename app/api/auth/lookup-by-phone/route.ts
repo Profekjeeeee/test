@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isCompleteRuMobileDigits, normalizePhone, phoneDigitsSuffixPattern } from "@/lib/phone";
 import { isSupabaseConfigured } from "@/lib/supabase/publicConfig";
-import { getSupabaseAnonServer } from "@/lib/server/supabaseAnon";
+import { getSupabaseServiceRole } from "@/lib/supabase/serverAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const pattern = phoneDigitsSuffixPattern(cleanPhone);
 
   try {
-    const supabase = getSupabaseAnonServer();
+    const supabase = getSupabaseServiceRole();
 
     const [empRes, cliRes] = await Promise.all([
       supabase.from("dental_employees").select("*").ilike("phone", pattern).limit(1).maybeSingle(),

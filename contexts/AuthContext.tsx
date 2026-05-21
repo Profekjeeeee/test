@@ -17,7 +17,13 @@ import {
   redirectForRole,
   type ClientAuthSessionPayload,
 } from "@/lib/auth/applyAuthSession";
-import { fetchProfileHasPin, rpcSetUserPin, rpcVerifyUserPin } from "@/lib/auth/pinApi";
+import {
+  ensureProfileForAuthUser,
+  fetchProfileHasPin,
+  getAuthUserIdOrError,
+  rpcSetUserPin,
+  rpcVerifyUserPin,
+} from "@/lib/auth/pinApi";
 import { logout as clearDentalSession, getDentalSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabaseClient";
 import { getTelegramInitData } from "@/lib/telegramWebApp";
@@ -40,6 +46,8 @@ type AuthContextValue = {
   pinRemaining: number | undefined;
   pinBusy: boolean;
   signInWithTelegram: () => Promise<SignInResult>;
+  signInEmployeeByPhone: (phone: string, role: "admin" | "doctor") => Promise<SignInResult>;
+  /** @deprecated используйте signInEmployeeByPhone(phone, "admin") */
   signInAdminByPhone: (phone: string) => Promise<SignInResult>;
   completeRegistration: (payload: ClientAuthSessionPayload) => Promise<SignInResult>;
   submitCreatePin: (pin: string) => Promise<{ error?: string }>;
@@ -160,6 +168,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("authenticated");
   }, []);
 
+  /** profiles.pin_hash IS NOT NULL → verify, иначе create. */
+  const startPinGate = useCallback(
+    async (userId: string, redirect: string): Promise<{ error?: string }> => {
+      const profile = await ensureProfileForAuthUser();
+      if (profile.error) return { error: profile.error };
+      const profileHasPin = await fetchProfileHasPin(userId);
+      beginPinFlow(userId, profileHasPin, redirect);
+      return {};
+    },
+    [beginPinFlow],
+  );
+
   const finishPinFlow = useCallback(() => {
     setPinUnlocked(true);
     setPinPhase("none");
@@ -174,14 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (applied.error) return { error: applied.error };
 
       const redirect = redirectForRole(session.role);
-      if (!session.has_pin) {
-        beginPinFlow(session.auth_user_id, false, redirect);
-        return { redirectTo: ROUTES.auth };
-      }
-      beginPinFlow(session.auth_user_id, true, redirect);
+      const pin = await startPinGate(session.auth_user_id, redirect);
+      if (pin.error) return { error: pin.error };
       return { redirectTo: ROUTES.auth };
     },
-    [beginPinFlow],
+    [startPinGate],
   );
 
   useEffect(() => {
@@ -203,20 +220,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const hp = await fetchProfileHasPin(uid);
-        if (!cancelled) {
+        const pin = await startPinGate(uid, redirectForRole(dental.role));
+        if (pin.error && !cancelled) {
           setAuthUserId(uid);
-          setHasPin(hp);
           setStatus("authenticated");
           setPinUnlocked(false);
           setPendingRedirect(redirectForRole(dental.role));
-          setPinPhase(hp ? "verify" : "create");
+          setPinError(pin.error);
         }
-      } catch {
+      } catch (e) {
+        console.warn("[auth] pin session bootstrap:", e);
         if (!cancelled) {
+          setAuthUserId(uid);
           setStatus("authenticated");
-          setPinUnlocked(true);
-          setPinPhase("none");
+          setPinUnlocked(false);
+          setPendingRedirect(redirectForRole(dental.role));
+          setPinPhase("verify");
+          setHasPin(true);
         }
       }
     })();
@@ -234,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [startPinGate]);
 
   const signInWithTelegram = useCallback(async (): Promise<SignInResult> => {
     const initData = getTelegramInitData();
@@ -250,14 +270,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return afterSessionPayload(res.session);
   }, [afterSessionPayload]);
 
-  const signInAdminByPhone = useCallback(
-    async (phone: string): Promise<SignInResult> => {
-      const res = await postAuthJson("/api/auth/admin-phone", { phone: normalizePhone(phone) });
+  const signInEmployeeByPhone = useCallback(
+    async (phone: string, role: "admin" | "doctor"): Promise<SignInResult> => {
+      const endpoint = role === "admin" ? "/api/auth/admin-phone" : "/api/auth/doctor-phone";
+      const res = await postAuthJson(endpoint, { phone: normalizePhone(phone) });
       if (!res.ok) return { error: res.error };
       if (!res.session) return { error: "Пустой ответ сервера." };
       return afterSessionPayload(res.session);
     },
     [afterSessionPayload],
+  );
+
+  const signInAdminByPhone = useCallback(
+    async (phone: string): Promise<SignInResult> => signInEmployeeByPhone(phone, "admin"),
+    [signInEmployeeByPhone],
   );
 
   const completeRegistration = useCallback(
@@ -269,15 +295,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const submitCreatePin = useCallback(
     async (pin: string): Promise<{ error?: string }> => {
-      if (!authUserId) return { error: "Нет сессии Auth." };
+      const auth = await getAuthUserIdOrError();
+      if ("error" in auth) return { error: auth.error };
       setPinBusy(true);
       setPinError("");
       try {
-        const { error } = await rpcSetUserPin(authUserId, pin);
+        const { error } = await rpcSetUserPin(pin);
         if (error) {
           setPinError(error);
           return { error };
         }
+        setAuthUserId(auth.userId);
         setHasPin(true);
         finishPinFlow();
         return {};
@@ -285,18 +313,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPinBusy(false);
       }
     },
-    [authUserId, finishPinFlow],
+    [finishPinFlow],
   );
 
   const submitVerifyPin = useCallback(
     async (pin: string): Promise<{ error?: string }> => {
-      if (!authUserId) return { error: "Нет сессии Auth." };
+      const auth = await getAuthUserIdOrError();
+      if ("error" in auth) return { error: auth.error };
       setPinBusy(true);
       setPinError("");
       try {
-        const result = await rpcVerifyUserPin(authUserId, pin);
+        const result = await rpcVerifyUserPin(pin);
         if (result.ok) {
+          setAuthUserId(auth.userId);
           finishPinFlow();
+          return {};
+        }
+        if (result.error === "no_pin") {
+          setHasPin(false);
+          setPinPhase("create");
+          setPinError("");
           return {};
         }
         const ui = verifyResultToUi(result);
@@ -308,7 +344,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPinBusy(false);
       }
     },
-    [authUserId, finishPinFlow],
+    [finishPinFlow],
   );
 
   const cancelPinFlow = useCallback(() => {
@@ -329,6 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pinRemaining,
       pinBusy,
       signInWithTelegram,
+      signInEmployeeByPhone,
       signInAdminByPhone,
       completeRegistration,
       submitCreatePin,
@@ -347,6 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pinRemaining,
       pinBusy,
       signInWithTelegram,
+      signInEmployeeByPhone,
       signInAdminByPhone,
       completeRegistration,
       submitCreatePin,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { profileHasPinHash } from "@/lib/server/authProfilePin";
+import { ensureProfileRowExists, profileHasPinHash } from "@/lib/server/authProfilePin";
 import {
   clientRowToPayload,
   employeeRowToPayload,
@@ -60,6 +60,7 @@ export async function POST(req: Request) {
 
     if (emp) {
       const authId = await ensureShadowAuthForRow("dental_employees", String(emp.id));
+      await ensureProfileRowExists(authId);
       const tokens = await issueSupabaseSessionForUserId(authId);
       const hasPin = await profileHasPinHash(authId);
       payload = employeeRowToPayload(emp as Record<string, unknown>, tokens, hasPin);
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
         });
       }
       const authId = await ensureShadowAuthForRow("dental_clients", String(cli.id));
+      await ensureProfileRowExists(authId);
       const tokens = await issueSupabaseSessionForUserId(authId);
       const hasPin = await profileHasPinHash(authId);
       payload = clientRowToPayload(cli as Record<string, unknown>, tokens, hasPin);

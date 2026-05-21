@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const phone = typeof body.phone === "string" ? body.phone : "";
 
   try {
-    const session = await loginEmployeeByPhone(phone, "admin");
+    const session = await loginEmployeeByPhone(phone, "doctor");
     return NextResponse.json({ ok: true, session });
   } catch (e) {
     if (e instanceof EmployeePhoneLoginError) {

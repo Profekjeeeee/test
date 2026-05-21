@@ -12,11 +12,13 @@ import { isSupabaseConfigured, supabaseNetworkErrorHint } from "@/lib/supabase/p
 import { isTelegramMiniApp } from "@/lib/telegramWebApp";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 
+type StaffLoginMode = "admin" | "doctor" | null;
+
 export default function AuthPage() {
   const router = useRouter();
-  const { status, signInWithTelegram, signInAdminByPhone } = useAuth();
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [adminPhone, setAdminPhone] = useState("");
+  const { status, signInWithTelegram, signInEmployeeByPhone } = useAuth();
+  const [staffMode, setStaffMode] = useState<StaffLoginMode>(null);
+  const [staffPhone, setStaffPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -47,21 +49,22 @@ export default function AuthPage() {
     }
   };
 
-  const handleAdminFallback = async (e: FormEvent<HTMLFormElement>) => {
+  const handleStaffLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!staffMode) return;
     if (!isSupabaseConfigured()) {
       setError(supabaseNetworkErrorHint());
       return;
     }
-    const digits = adminPhone.replace(/\D/g, "");
+    const digits = staffPhone.replace(/\D/g, "");
     if (!isCompleteRuMobileDigits(digits.startsWith("7") ? digits : `7${digits}`)) {
-      setError("Введите корректный номер администратора");
+      setError(staffMode === "admin" ? "Введите корректный номер администратора" : "Введите корректный номер врача");
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const { error: err, redirectTo } = await signInAdminByPhone(adminPhone);
+      const { error: err, redirectTo } = await signInEmployeeByPhone(staffPhone, staffMode);
       if (err) {
         setError(err);
         return;
@@ -70,6 +73,11 @@ export default function AuthPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleStaffMode = (mode: StaffLoginMode) => {
+    setStaffMode((prev) => (prev === mode ? null : mode));
+    setError("");
   };
 
   if (status === "loading") {
@@ -104,40 +112,56 @@ export default function AuthPage() {
           Войти через Telegram
         </Button>
 
-        {error ? (
+        {error && !staffMode ? (
           <p className="text-[13px] text-red-600 dark:text-red-400 text-center" role="alert">
             {error}
           </p>
         ) : null}
 
         <div className="border-t border-[#E2E8F0] dark:border-[#334155] pt-4">
-          <button
-            type="button"
-            className="w-full text-[13px] font-medium text-secondary hover:text-primary transition-colors"
-            onClick={() => {
-              setAdminOpen((v) => !v);
-              setError("");
-            }}
-          >
-            {adminOpen ? "Скрыть резервный вход" : "Резервный вход для администратора"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={`flex-1 text-[12px] font-medium px-2 py-2 rounded-xl transition-colors ${
+                staffMode === "admin"
+                  ? "text-primary bg-primary/10"
+                  : "text-secondary hover:text-primary"
+              }`}
+              onClick={() => toggleStaffMode("admin")}
+            >
+              {staffMode === "admin" ? "Скрыть" : "Резервный вход администратора"}
+            </button>
+            <button
+              type="button"
+              className={`flex-1 text-[12px] font-medium px-2 py-2 rounded-xl transition-colors ${
+                staffMode === "doctor"
+                  ? "text-primary bg-primary/10"
+                  : "text-secondary hover:text-primary"
+              }`}
+              onClick={() => toggleStaffMode("doctor")}
+            >
+              {staffMode === "doctor" ? "Скрыть" : "Вход для врача"}
+            </button>
+          </div>
 
-          {adminOpen ? (
-            <form className="flex flex-col gap-4 mt-4" onSubmit={handleAdminFallback} noValidate>
+          {staffMode ? (
+            <form className="flex flex-col gap-4 mt-4" onSubmit={handleStaffLogin} noValidate>
               <Input
-                label="Телефон администратора"
+                label={staffMode === "admin" ? "Телефон администратора" : "Телефон врача"}
                 type="tel"
                 placeholder="+7 (___) ___-__-__"
-                value={adminPhone}
+                value={staffPhone}
                 onChange={(e) => {
-                  setAdminPhone(formatRuPhoneInput(e.target.value));
+                  setStaffPhone(formatRuPhoneInput(e.target.value));
                   setError("");
                 }}
-                error={error && adminOpen ? error : undefined}
+                error={error && staffMode ? error : undefined}
                 inputMode="tel"
               />
               <p className="text-[12px] text-secondary -mt-2">
-                Только для сотрудников с ролью admin в dental_employees. Без СМС и демо-кодов.
+                {staffMode === "admin"
+                  ? "Только для сотрудников с ролью admin в dental_employees."
+                  : "Только для сотрудников с ролью doctor в dental_employees."}
               </p>
               <Button type="submit" variant="secondary" size="full" loading={loading}>
                 Войти по номеру

@@ -1,4 +1,5 @@
 import { setDentalSession, refreshDentalCaches, type DentalSession } from "@/lib/auth";
+import { ensureProfileForAuthUser } from "@/lib/auth/pinApi";
 import { supabase } from "@/lib/supabaseClient";
 
 export type ClientAuthSessionPayload = {
@@ -41,6 +42,17 @@ export function payloadToDentalSession(p: ClientAuthSessionPayload): DentalSessi
 export async function applyAuthSessionPayload(p: ClientAuthSessionPayload): Promise<{ error?: string }> {
   const tok = await applySupabaseAuthTokens(p.access_token, p.refresh_token);
   if (tok.error) return tok;
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) return { error: userErr.message };
+  if (!userData.user?.id) return { error: "Сессия Auth не активна." };
+  if (userData.user.id !== p.auth_user_id) {
+    return { error: "Несовпадение auth_user_id и сессии Supabase." };
+  }
+
+  const profile = await ensureProfileForAuthUser();
+  if (profile.error) return { error: profile.error };
+
   setDentalSession(payloadToDentalSession(p));
   try {
     await refreshDentalCaches();

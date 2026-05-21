@@ -4,7 +4,6 @@ import { getTelegramUserId } from "@/lib/telegramWebApp";
 import {
   normalizePhone,
   phoneDigitsSuffixPattern,
-  ADMIN_LOGIN_DIGITS,
 } from "@/lib/phone";
 
 export { normalizePhone, phoneDigitsSuffixPattern } from "@/lib/phone";
@@ -761,29 +760,4 @@ export function logout(): void {
   localStorage.removeItem(USER_SESSION_STORAGE_KEY);
   localStorage.removeItem(DENTAL_SESSION_STORAGE_KEY);
   localStorage.removeItem(DENTAL_USER_SESSION_STORAGE_KEY);
-}
-
-export const ADMIN_PHONE = ADMIN_LOGIN_DIGITS;
-
-export async function setAdminMode(): Promise<void> {
-  const emp = await findEmployeeByPhone(ADMIN_PHONE);
-  if (emp) {
-    setDentalSession({
-      id: emp.id,
-      role: "admin",
-      fullName: emp.fullName,
-      phone: emp.phone,
-    });
-    return;
-  }
-  localStorage.setItem("isAdmin", "true");
-  localStorage.setItem("isLoggedIn", "true");
-}
-
-export function isAdminMode(): boolean {
-  return getDentalSession()?.role === "admin";
-}
-
-export function clearAdminMode(): void {
-  logout();
 }
