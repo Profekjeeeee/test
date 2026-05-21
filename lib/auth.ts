@@ -754,6 +754,7 @@ export async function setCurrentUser(id: string): Promise<void> {
 }
 
 export function logout(): void {
+  void supabase.auth.signOut();
   localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
   localStorage.removeItem("isLoggedIn");
   localStorage.removeItem("isAdmin");

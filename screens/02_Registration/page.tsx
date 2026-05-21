@@ -1,29 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createUser, setCurrentUser } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
+import type { ClientAuthSessionPayload } from "@/lib/auth/applyAuthSession";
 import { ROUTES } from "@/lib/routes";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 import { saveProfile } from "@/lib/userProfile";
 import { formatRuPhoneInput, isCompleteRuMobileDigits, normalizePhone } from "@/lib/phone";
+import { getTelegramInitData } from "@/lib/telegramWebApp";
 
 const NAME_RE = /^[а-яёА-ЯЁa-zA-Z][а-яёА-ЯЁa-zA-Z\s-]{1,}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Ключ совпадает с `screens/02_Auth/page.tsx`; хранится до успешной регистрации. */
-const AUTH_PHONE_STORAGE_KEY = "auth_phone";
 
 interface FormState {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string;
 }
 
 interface FormErrors {
   firstName?: string;
   lastName?: string;
   email?: string;
+  phone?: string;
 }
 
 function validate(form: FormState): FormErrors {
@@ -31,36 +32,32 @@ function validate(form: FormState): FormErrors {
   if (!NAME_RE.test(form.firstName.trim())) errors.firstName = "Только буквы, минимум 2 символа";
   if (!NAME_RE.test(form.lastName.trim())) errors.lastName = "Только буквы, минимум 2 символа";
   if (!EMAIL_RE.test(form.email.trim())) errors.email = "Некорректный email";
+  const digits = normalizePhone(form.phone);
+  if (!isCompleteRuMobileDigits(digits)) errors.phone = "Введите корректный номер";
   return errors;
 }
 
-export default function RegistrationPage() {
+function RegistrationPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { completeRegistration } = useAuth();
   const phoneParam = searchParams.get("phone") ?? "";
 
-  /** Номер из query или из `auth_phone` (пока не очищен на шаге успешной регистрации). */
-  const [savedPhone, setSavedPhone] = useState<string | null>(null);
-
-  const [form, setForm] = useState<FormState>({ firstName: "", lastName: "", email: "" });
+  const [form, setForm] = useState<FormState>({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: phoneParam ? formatRuPhoneInput(normalizePhone(phoneParam)) : "",
+  });
   const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    let stored = "";
-    try {
-      stored = localStorage.getItem(AUTH_PHONE_STORAGE_KEY) ?? "";
-    } catch {
-      /* noop */
+    if (phoneParam) {
+      setForm((f) => ({ ...f, phone: formatRuPhoneInput(normalizePhone(phoneParam)) }));
     }
-    const normalized = normalizePhone(phoneParam || stored);
-    if (!isCompleteRuMobileDigits(normalized)) {
-      router.replace(ROUTES.auth);
-      return;
-    }
-    setSavedPhone(normalized);
-  }, [phoneParam, router]);
+  }, [phoneParam]);
 
   const errors = validate(form);
   const hasErrors = Object.keys(errors).length > 0;
@@ -71,62 +68,56 @@ export default function RegistrationPage() {
   };
 
   const handleSubmit = async () => {
-    setTouched({ firstName: true, lastName: true, email: true });
+    setTouched({ firstName: true, lastName: true, email: true, phone: true });
     if (hasErrors) return;
-    const phoneForDb = savedPhone ?? "";
-    if (!phoneForDb) {
-      setTouched({ firstName: true, lastName: true, email: true });
-      router.replace(ROUTES.auth);
-      return;
-    }
 
+    const cleanPhone = normalizePhone(form.phone);
     setSaving(true);
     setSubmitError("");
     try {
-      // insert в dental_clients делает createUser: { phone, name, role: 'client' }
-      const user = await createUser(phoneForDb, {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        email: form.email.trim(),
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          email: form.email.trim(),
+          initData: getTelegramInitData() ?? "",
+        }),
       });
-
-      await setCurrentUser(user.id);
+      const json = (await res.json()) as {
+        ok?: boolean;
+        session?: ClientAuthSessionPayload;
+        error?: string;
+      };
+      if (!res.ok || !json.ok || !json.session) {
+        setSubmitError(json.error ?? "Ошибка регистрации");
+        return;
+      }
 
       saveProfile({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        phone: phoneForDb,
+        phone: cleanPhone,
         email: form.email.trim(),
       });
 
-      router.replace(ROUTES.clientHome);
-
-      try {
-        localStorage.removeItem(AUTH_PHONE_STORAGE_KEY);
-        console.log("[AUTH] очищен auth_phone после регистрации");
-      } catch {
-        /* noop */
+      const { error, redirectTo } = await completeRegistration(json.session);
+      if (error) {
+        setSubmitError(error);
+        return;
       }
+      router.replace(redirectTo ?? ROUTES.auth);
     } catch (err: unknown) {
-      const message =
-        err &&
-        typeof err === "object" &&
-        "message" in err &&
-        typeof (err as { message: unknown }).message === "string"
-          ? (err as { message: string }).message
-          : err instanceof Error
-            ? err.message
-            : String(err);
-      setSubmitError(`Ошибка базы данных: ${message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      setSubmitError(`Ошибка: ${message}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const saveDisabled =
-    saving ||
-    savedPhone === null ||
-    (Object.keys(touched).length === 3 && hasErrors);
+  const saveDisabled = saving || (Object.keys(touched).length === 4 && hasErrors);
 
   return (
     <main
@@ -144,7 +135,7 @@ export default function RegistrationPage() {
           Регистрация
         </h1>
         <p className="text-[15px] text-gray-500 dark:text-slate-500 mt-2 leading-relaxed">
-          Вы новый пациент. Заполните данные для создания личного кабинета.
+          Заполните данные. После регистрации задайте PIN для входа.
         </p>
       </div>
 
@@ -155,21 +146,16 @@ export default function RegistrationPage() {
       ) : null}
 
       <div className="flex flex-col gap-4">
-        {/* Phone (readonly) */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-widest text-[#94A3B8] dark:text-slate-400">
-            Телефон
-          </label>
-          <input
-            type="tel"
-            value={formatRuPhoneInput(savedPhone ?? "")}
-            readOnly
-            className="h-12 px-4 text-[15px] font-medium rounded-[8px] border-[1.5px] border-[#E2E8F0] bg-[#F1F5F9] text-[#94A3B8] dark:bg-[#1E293B] dark:border-[#334155] dark:text-slate-500 cursor-not-allowed outline-none"
-            style={{ fontFamily: "Manrope, sans-serif" }}
-          />
-        </div>
+        <RegistrationField
+          label="Телефон"
+          value={form.phone}
+          onChange={(v) => setField("phone", formatRuPhoneInput(v))}
+          error={touched.phone ? errors.phone : undefined}
+          placeholder="+7 (___) ___-__-__"
+          type="tel"
+          inputMode="tel"
+        />
 
-        {/* First name */}
         <RegistrationField
           label="Имя"
           value={form.firstName}
@@ -178,7 +164,6 @@ export default function RegistrationPage() {
           placeholder="Александр"
         />
 
-        {/* Last name */}
         <RegistrationField
           label="Фамилия"
           value={form.lastName}
@@ -187,7 +172,6 @@ export default function RegistrationPage() {
           placeholder="Коновалов"
         />
 
-        {/* Email */}
         <RegistrationField
           label="Email"
           value={form.email}
@@ -209,29 +193,33 @@ export default function RegistrationPage() {
             fontFamily: "Manrope, sans-serif",
           }}
         >
-          {saving ? (
-            <>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="animate-spin">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeOpacity="0.3" />
-                <path d="M12 3C12 3 16.5 3 19.5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              Создаём профиль...
-            </>
-          ) : (
-            "Создать профиль"
-          )}
+          {saving ? "Создаём профиль…" : "Создать профиль"}
         </button>
 
         <button
           type="button"
           onClick={() => router.push(ROUTES.auth)}
-          className="mt-4 w-full min-h-[44px] py-3 px-4 flex items-center justify-center text-[15px] font-semibold text-primary active:scale-95 transition-transform rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white/90 dark:bg-slate-800/90 hover:bg-primary-light dark:hover:bg-slate-700"
+          className="mt-4 w-full min-h-[44px] py-3 px-4 flex items-center justify-center text-[15px] font-semibold text-primary active:scale-95 transition-transform rounded-[12px] border border-slate-200 dark:border-slate-600 bg-white/90 dark:bg-slate-800/90"
           style={{ fontFamily: "Manrope, sans-serif" }}
         >
           Назад к входу
         </button>
       </div>
     </main>
+  );
+}
+
+export default function RegistrationPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-dvh flex items-center justify-center text-secondary text-[15px]">
+          Загрузка…
+        </main>
+      }
+    >
+      <RegistrationPageInner />
+    </Suspense>
   );
 }
 
@@ -245,7 +233,15 @@ interface FieldProps {
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
 }
 
-function RegistrationField({ label, value, onChange, error, placeholder, type = "text", inputMode }: FieldProps) {
+function RegistrationField({
+  label,
+  value,
+  onChange,
+  error,
+  placeholder,
+  type = "text",
+  inputMode,
+}: FieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-[11px] font-bold uppercase tracking-widest text-[#94A3B8] dark:text-slate-500">
@@ -266,9 +262,7 @@ function RegistrationField({ label, value, onChange, error, placeholder, type = 
         ].join(" ")}
         style={{ fontFamily: "Manrope, sans-serif" }}
       />
-      {error && (
-        <p className="text-[12px] font-medium text-[#EF4444]">{error}</p>
-      )}
+      {error && <p className="text-[12px] font-medium text-[#EF4444]">{error}</p>}
     </div>
   );
 }

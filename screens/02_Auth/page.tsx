@@ -1,315 +1,84 @@
 "use client";
 
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import {
-  applyLoggedInClientFromSupabaseRow,
-  refreshDentalCaches,
-  setAdminMode,
-  setDentalSession,
-  syncTelegramIdToSupabaseIfNeeded,
-} from "@/lib/auth";
-import {
-  formatRuPhoneInput,
-  isAdminLoginDigits,
-  isCompleteRuMobileDigits,
-  normalizePhone,
-} from "@/lib/phone";
-import { lookupAuthByPhoneViaApi } from "@/lib/auth/lookupByPhoneApi";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatRuPhoneInput, isCompleteRuMobileDigits } from "@/lib/phone";
 import { ROUTES } from "@/lib/routes";
 import { log } from "@/lib/logger";
 import { isSupabaseConfigured, supabaseNetworkErrorHint } from "@/lib/supabase/publicConfig";
+import { isTelegramMiniApp } from "@/lib/telegramWebApp";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
-
-const OTP_INPUT_MAX_LENGTH = 6;
-const AUTH_PHONE_STORAGE_KEY = "auth_phone";
-
-const IS_DEV = process.env.NODE_ENV !== "production";
-
-/** Демо-коды СМС: только в development; на production отключены. */
-const MASTER_SMS_CODES: ReadonlySet<string> = IS_DEV
-  ? new Set(["1234", "123456"])
-  : new Set();
-
-function isMasterSmsCode(digits: string): boolean {
-  return MASTER_SMS_CODES.size > 0 && MASTER_SMS_CODES.has(digits);
-}
-
-function normalizeSmsCodeInput(raw: string): string {
-  return raw.normalize("NFC").replace(/\D/g, "").slice(0, OTP_INPUT_MAX_LENGTH);
-}
-
-function persistAuthPhone(cleanPhone: string): void {
-  try {
-    localStorage.setItem(AUTH_PHONE_STORAGE_KEY, cleanPhone);
-  } catch (err) {
-    console.warn("[AUTH] persistAuthPhone:", err);
-  }
-}
-
-function readAuthPhone(): string {
-  try {
-    return localStorage.getItem(AUTH_PHONE_STORAGE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function clearAuthPhone(): void {
-  try {
-    localStorage.removeItem(AUTH_PHONE_STORAGE_KEY);
-  } catch (err) {
-    console.warn("[AUTH] clearAuthPhone:", err);
-  }
-}
-
-function scheduleClearAuthPhone(): void {
-  if (typeof window === "undefined") return;
-  window.setTimeout(() => {
-    clearAuthPhone();
-  }, 0);
-}
-
-function sessionFromEmployeeRow(row: Record<string, unknown>): {
-  id: string;
-  role: "admin" | "doctor";
-  fullName: string;
-  phone: string;
-  specialization?: string;
-} {
-  return {
-    id: String(row.id),
-    phone: String(row.phone),
-    role: row.role as "admin" | "doctor",
-    fullName: String(row.name ?? ""),
-    specialization:
-      row.specialization === null || row.specialization === undefined
-        ? undefined
-        : String(row.specialization),
-  };
-}
-
-type AuthStep = "phone" | "code";
 
 export default function AuthPage() {
   const router = useRouter();
-  const [step, setStep] = useState<AuthStep>("phone");
-  const [phone, setPhone] = useState("");
-  const [authCleanPhone, setAuthCleanPhone] = useState("");
-  const [code, setCode] = useState("");
+  const { status, signInWithTelegram, signInAdminByPhone } = useAuth();
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminPhone, setAdminPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [demoBypassNotice, setDemoBypassNotice] = useState(false);
-  const bypassInFlightRef = useRef(false);
-  const authPhoneRef = useRef("");
 
-  useEffect(() => {
-    if (step !== "code") return;
-    const pinned = readAuthPhone();
-    if (isCompleteRuMobileDigits(authCleanPhone)) return;
-    if (isCompleteRuMobileDigits(pinned)) {
-      authPhoneRef.current = pinned;
-      setAuthCleanPhone(pinned);
-    }
-  }, [step, authCleanPhone]);
-
-  const handlePhoneSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const cleanPhone = normalizePhone(phone);
-    if (!isCompleteRuMobileDigits(cleanPhone)) {
-      setError("Введите корректный номер телефона");
-      log("WARN", "validation_phone", {
-        role: "guest",
-        userId: "",
-        details: `Номер телефона не РФ 11 цифр | raw=${phone} | cleanPhone=${cleanPhone}`,
-      });
-      return;
-    }
-    setError("");
-
-    if (isAdminLoginDigits(cleanPhone)) {
-      void (async () => {
-        setLoading(true);
-        try {
-          await setAdminMode();
-          log("INFO", "auth_admin_backdoor", {
-            role: "admin",
-            userId: cleanPhone,
-            details: "phone step",
-          });
-          router.push(ROUTES.adminDashboard);
-          scheduleClearAuthPhone();
-        } catch (err) {
-          console.warn("[AUTH] admin backdoor:", err);
-          setError("Не удалось войти как администратор");
-        } finally {
-          setLoading(false);
-        }
-      })();
-      return;
-    }
-
-    persistAuthPhone(cleanPhone);
-    authPhoneRef.current = cleanPhone;
-    setAuthCleanPhone(cleanPhone);
-    setStep("code");
-
-    log("INFO", "auth_phone_step_ok", {
-      role: "guest",
-      userId: "",
-      details: `cleanPhone=${cleanPhone}`,
-    });
-  };
-
-  const resolveCleanPhoneForMaster = (): string | null => {
-    const fromLs = readAuthPhone();
-    const activePhone = fromLs || authPhoneRef.current || authCleanPhone;
-    if (!activePhone) {
-      setError("Ошибка сессии. Пожалуйста, вернитесь на шаг назад и введите телефон заново.");
-      log("ERROR", "auth_master_phone_lost", {
-        role: "guest",
-        userId: "",
-        details: "auth_phone (localStorage) и стейт пусты",
-      });
-      return null;
-    }
-    const cleanDbPhone = normalizePhone(activePhone);
-    if (!isCompleteRuMobileDigits(cleanDbPhone)) {
-      setError("Введите номер телефона на прошлом шаге ещё раз.");
-      log("WARN", "auth_master_phone_short", {
-        role: "guest",
-        userId: "",
-        details: cleanDbPhone,
-      });
-      return null;
-    }
-    return cleanDbPhone;
-  };
-
-  const executeMasterAuth = async (cleanDbPhone: string): Promise<void> => {
+  const handleTelegramSignIn = async () => {
     if (!isSupabaseConfigured()) {
       setError(supabaseNetworkErrorHint());
       return;
     }
-
-    const lookup = await lookupAuthByPhoneViaApi(cleanDbPhone);
-
-    if (!lookup.ok) {
-      log("ERROR", "auth_master_lookup_failed", {
-        role: "guest",
-        userId: "",
-        details: lookup.error,
-      });
-      setError(lookup.network ? supabaseNetworkErrorHint() : "Не удалось проверить номер. Попробуйте позже.");
-      return;
-    }
-
-    const employee = lookup.employee;
-    if (employee) {
-      const s = sessionFromEmployeeRow(employee);
-      setDentalSession({
-        id: s.id,
-        role: s.role,
-        fullName: s.fullName,
-        phone: s.phone,
-        specialization: s.specialization,
-      });
-      await syncTelegramIdToSupabaseIfNeeded();
-      log("INFO", "auth_success_master_direct", {
-        role: s.role,
-        userId: cleanDbPhone,
-        details: `id=${s.id} | ${s.fullName}`,
-      });
-      router.push(s.role === "admin" ? ROUTES.adminDashboard : ROUTES.doctorCabinet);
-      scheduleClearAuthPhone();
-      return;
-    }
-
-    const client = lookup.client;
-    if (client) {
-      const cid = String(client.id ?? "");
-      if (!cid) {
-        setError("Некорректные данные клиента.");
+    setLoading(true);
+    setError("");
+    try {
+      const { error: err, redirectTo, needsRegistration } = await signInWithTelegram();
+      if (err) {
+        setError(err);
+        log("ERROR", "auth_telegram_failed", { role: "guest", userId: "", details: err });
         return;
       }
-      applyLoggedInClientFromSupabaseRow(client);
-      await refreshDentalCaches();
-      await syncTelegramIdToSupabaseIfNeeded();
-      log("INFO", "auth_success_master_direct", {
-        role: "client",
-        userId: cleanDbPhone,
-        details: `id=${cid}`,
-      });
-      router.push(ROUTES.clientHome);
-      scheduleClearAuthPhone();
-      return;
+      if (needsRegistration) {
+        router.replace(ROUTES.registration);
+        return;
+      }
+      if (redirectTo) router.push(redirectTo);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
-
-    log("INFO", "auth_master_new_client_redirect", {
-      role: "guest",
-      userId: "",
-      details: `cleanPhone=${cleanDbPhone}`,
-    });
-    router.replace(`${ROUTES.registration}?phone=${encodeURIComponent(cleanDbPhone)}`);
   };
 
-  const runMasterAuthSession = async (options: { instantUi: boolean }): Promise<void> => {
-    if (bypassInFlightRef.current) return;
-    const cleanDbPhone = resolveCleanPhoneForMaster();
-    if (!cleanDbPhone) return;
-
-    bypassInFlightRef.current = true;
-    if (options.instantUi) {
-      setDemoBypassNotice(true);
+  const handleAdminFallback = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!isSupabaseConfigured()) {
+      setError(supabaseNetworkErrorHint());
+      return;
+    }
+    const digits = adminPhone.replace(/\D/g, "");
+    if (!isCompleteRuMobileDigits(digits.startsWith("7") ? digits : `7${digits}`)) {
+      setError("Введите корректный номер администратора");
+      return;
     }
     setLoading(true);
     setError("");
-
     try {
-      await executeMasterAuth(cleanDbPhone);
-    } catch (err) {
-      console.warn("[AUTH] master auth session:", err);
-      setError("Не удалось выполнить вход. Попробуйте позже.");
+      const { error: err, redirectTo } = await signInAdminByPhone(adminPhone);
+      if (err) {
+        setError(err);
+        return;
+      }
+      if (redirectTo) router.push(redirectTo);
     } finally {
       setLoading(false);
-      bypassInFlightRef.current = false;
-      setDemoBypassNotice(false);
     }
   };
 
-  const handleVerify = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const normalizedCode = normalizeSmsCodeInput(String(code));
-
-    if (isMasterSmsCode(normalizedCode)) {
-      await runMasterAuthSession({ instantUi: false });
-      return;
-    }
-
-    if (!normalizedCode) {
-      setError("Введите код из СМС");
-      log("WARN", "validation_code_empty", {
-        role: "guest",
-        userId: "",
-        details: "empty code",
-      });
-      return;
-    }
-
-    setError(IS_DEV ? "Неверный код. Демо: 1234 или 123456" : "Неверный код подтверждения.");
-    log("WARN", "validation_code_invalid", {
-      role: "guest",
-      userId: "",
-      details: `digits=${normalizedCode}`,
-    });
-  };
-
-  const digitsNormalized = normalizePhone(phone);
-  const digitLen = digitsNormalized.length;
-  const otpScreenPhone = authCleanPhone || readAuthPhone() || authPhoneRef.current || phone;
+  if (status === "loading") {
+    return (
+      <main className="min-h-dvh bg-surface dark:bg-app-canvas flex items-center justify-center px-6">
+        <p className="text-[15px] text-secondary">Проверяем сессию…</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-dvh bg-surface dark:bg-app-canvas flex flex-col justify-center px-6 pb-8">
@@ -321,107 +90,62 @@ export default function AuthPage() {
           />
         </div>
         <h1 className="text-[28px] font-bold text-[#0F172A] dark:text-white leading-tight tracking-tight">
-          {step === "phone" ? "Вход в кабинет" : "Код из СМС"}
+          Вход в кабинет
         </h1>
         <p className="text-[15px] text-secondary mt-2 leading-relaxed">
-          {step === "phone"
-            ? "Один номер для пациентов и сотрудников клиники — после СМС вы попадёте в нужный раздел."
-            : `Код отправлен на\u00a0${formatRuPhoneInput(otpScreenPhone || "") || "…"}${IS_DEV ? " (демо: до 6 цифр)" : ""}`}
+          {isTelegramMiniApp()
+            ? "Войдите через Telegram — профиль подтянется из Mini App автоматически."
+            : "Войдите через Telegram OAuth. Роль (пациент, врач, админ) определяется по записи в базе клиники."}
         </p>
-        {step === "phone" && (
-          <div className="flex flex-wrap gap-2 mt-4">
-            {(["Пациент", "Врач", "Админ"] as const).map((label) => (
-              <span
-                key={label}
-                className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-lg border border-[#E2E8F0] dark:border-[#334155] text-secondary"
-              >
-                {label}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
-      {step === "phone" ? (
-        <form className="flex flex-col gap-5" onSubmit={handlePhoneSubmit} noValidate>
-          <Input
-            label="Телефон"
-            type="tel"
-            placeholder="+7 (___) ___-__-__"
-            value={phone}
-            onChange={(e) => {
-              setPhone(formatRuPhoneInput(e.target.value));
-              setError("");
-            }}
-            error={error}
-            inputMode="tel"
-          />
-          {IS_DEV ? (
-            <p className="text-[12px] text-secondary -mt-2">
-              Демо:{" "}
-              <span className="font-mono text-[#0F172A] dark:text-white">1234</span>
-              {" или "}
-              <span className="font-mono text-[#0F172A] dark:text-white">123456</span>
-              {digitLen >= 11 ? (
-                <>
-                  {" · "}
-                  В БД сохранится:{" "}
-                  <span className="font-mono text-[#0F172A] dark:text-white">{digitsNormalized}</span>
-                </>
-              ) : null}
-            </p>
-          ) : null}
-          <Button type="submit" size="full" loading={loading}>
-            Далее
-          </Button>
-        </form>
-      ) : (
-        <form className="flex flex-col gap-5" onSubmit={handleVerify}>
-          {demoBypassNotice ? (
-            <p className="text-[13px] font-semibold text-primary text-center animate-pulse">
-              Вход по демо-коду...
-            </p>
-          ) : null}
-          <Input
-            label="Код подтверждения"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder={Array.from({ length: OTP_INPUT_MAX_LENGTH }, () => "•").join(" ")}
-            maxLength={OTP_INPUT_MAX_LENGTH}
-            value={code}
-            onChange={(e) => {
-              const next = normalizeSmsCodeInput(e.target.value);
-              setCode(next);
-              setError("");
-              if (isMasterSmsCode(next)) {
-                void runMasterAuthSession({ instantUi: true });
-              }
-            }}
-            error={error}
-          />
-          <Button type="submit" size="full" loading={loading}>
-            Войти
-          </Button>
-          <Button
+      <div className="flex flex-col gap-5">
+        <Button type="button" size="full" loading={loading} onClick={() => void handleTelegramSignIn()}>
+          Войти через Telegram
+        </Button>
+
+        {error ? (
+          <p className="text-[13px] text-red-600 dark:text-red-400 text-center" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="border-t border-[#E2E8F0] dark:border-[#334155] pt-4">
+          <button
             type="button"
-            variant="ghost"
-            className="w-full !h-auto min-h-[44px] py-3 text-[15px] font-medium border-slate-200 dark:border-slate-700"
+            className="w-full text-[13px] font-medium text-secondary hover:text-primary transition-colors"
             onClick={() => {
-              bypassInFlightRef.current = false;
-              authPhoneRef.current = "";
-              setDemoBypassNotice(false);
-              setStep("phone");
-              clearAuthPhone();
-              setAuthCleanPhone("");
-              setCode("");
+              setAdminOpen((v) => !v);
               setError("");
             }}
           >
-            Изменить номер
-          </Button>
-        </form>
-      )}
+            {adminOpen ? "Скрыть резервный вход" : "Резервный вход для администратора"}
+          </button>
+
+          {adminOpen ? (
+            <form className="flex flex-col gap-4 mt-4" onSubmit={handleAdminFallback} noValidate>
+              <Input
+                label="Телефон администратора"
+                type="tel"
+                placeholder="+7 (___) ___-__-__"
+                value={adminPhone}
+                onChange={(e) => {
+                  setAdminPhone(formatRuPhoneInput(e.target.value));
+                  setError("");
+                }}
+                error={error && adminOpen ? error : undefined}
+                inputMode="tel"
+              />
+              <p className="text-[12px] text-secondary -mt-2">
+                Только для сотрудников с ролью admin в dental_employees. Без СМС и демо-кодов.
+              </p>
+              <Button type="submit" variant="secondary" size="full" loading={loading}>
+                Войти по номеру
+              </Button>
+            </form>
+          ) : null}
+        </div>
+      </div>
     </main>
   );
 }

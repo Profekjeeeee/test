@@ -24,6 +24,7 @@ import {
   DOCTOR_ROUTE_PREFIX,
   ROUTES,
 } from "@/lib/routes";
+import { useAuth } from "@/contexts/AuthContext";
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_ROUTE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -43,6 +44,7 @@ const SESSION_SYNC_STORAGE_KEYS = new Set([
 export default function PatientAppGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { pinPhase, pinUnlocked, status: authStatus } = useAuth();
 
   /** undefined — гидратация клиента не завершена; не считаем пользователя разлогиненным до чтения localStorage */
   const [hydratedSession, setHydratedSession] = useState<DentalSession | null | undefined>(undefined);
@@ -148,6 +150,11 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
     if (hydratedSession === undefined) return;
     if (isPublicPath(pathname)) return;
 
+    if (authStatus === "authenticated" && pinPhase !== "none" && !pinUnlocked) {
+      router.replace(ROUTES.auth);
+      return;
+    }
+
     const session = hydratedSession;
 
     if (pathname.startsWith(ADMIN_ROUTE_PREFIX)) {
@@ -165,7 +172,7 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
     if (matchesAnyPrefix(pathname, PATIENT_ROUTE_PREFIXES)) {
       if (!session || session.role !== "client") router.replace(ROUTES.auth);
     }
-  }, [pathname, router, hydratedSession]);
+  }, [pathname, router, hydratedSession, authStatus, pinPhase, pinUnlocked]);
 
   if (hydratedSession === undefined && !isPublicPath(pathname)) {
     return (
