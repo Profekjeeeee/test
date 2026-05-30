@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ensureProfileRowExists, profileHasPinHash } from "@/lib/server/authProfilePin";
-import {
-  clientRowToPayload,
-  employeeRowToPayload,
-  type AuthSessionPayload,
-} from "@/lib/server/authSessionPayload";
+import { clientRowToPayload, type AuthSessionPayload } from "@/lib/server/authSessionPayload";
 import { ensureShadowAuthForRow } from "@/lib/server/ensureShadowAuth";
 import { issueSupabaseSessionForUserId } from "@/lib/server/issueSupabaseSession";
 import { verifyDentalGateRequest } from "@/lib/server/dentalGateVerify";
@@ -46,46 +42,28 @@ export async function POST(req: Request) {
   try {
     const supabase = getSupabaseAnonServer();
 
-    const { data: emp, error: eErr } = await supabase
-      .from("dental_employees")
+    // Кнопка «Войти через Telegram» — только для пациентов. Врач/админ входят по номеру телефона.
+    const { data: cli, error: cErr } = await supabase
+      .from("dental_clients")
       .select("*")
       .eq("telegram_id", tgDigits)
       .limit(1)
       .maybeSingle();
-    if (eErr) {
-      return NextResponse.json({ ok: false, error: eErr.message }, { status: 502 });
+    if (cErr) {
+      return NextResponse.json({ ok: false, error: cErr.message }, { status: 502 });
+    }
+    if (!cli) {
+      return NextResponse.json({
+        ok: true,
+        needs_registration: true,
+      });
     }
 
-    let payload: AuthSessionPayload | null = null;
-
-    if (emp) {
-      const authId = await ensureShadowAuthForRow("dental_employees", String(emp.id));
-      await ensureProfileRowExists(authId);
-      const tokens = await issueSupabaseSessionForUserId(authId);
-      const hasPin = await profileHasPinHash(authId);
-      payload = employeeRowToPayload(emp as Record<string, unknown>, tokens, hasPin);
-    } else {
-      const { data: cli, error: cErr } = await supabase
-        .from("dental_clients")
-        .select("*")
-        .eq("telegram_id", tgDigits)
-        .limit(1)
-        .maybeSingle();
-      if (cErr) {
-        return NextResponse.json({ ok: false, error: cErr.message }, { status: 502 });
-      }
-      if (!cli) {
-        return NextResponse.json({
-          ok: true,
-          needs_registration: true,
-        });
-      }
-      const authId = await ensureShadowAuthForRow("dental_clients", String(cli.id));
-      await ensureProfileRowExists(authId);
-      const tokens = await issueSupabaseSessionForUserId(authId);
-      const hasPin = await profileHasPinHash(authId);
-      payload = clientRowToPayload(cli as Record<string, unknown>, tokens, hasPin);
-    }
+    const authId = await ensureShadowAuthForRow("dental_clients", String(cli.id));
+    await ensureProfileRowExists(authId);
+    const tokens = await issueSupabaseSessionForUserId(authId);
+    const hasPin = await profileHasPinHash(authId);
+    const payload: AuthSessionPayload = clientRowToPayload(cli as Record<string, unknown>, tokens, hasPin);
 
     return NextResponse.json({ ok: true, session: payload });
   } catch (e) {

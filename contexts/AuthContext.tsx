@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -144,8 +145,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [pinLockedUntil, setPinLockedUntil] = useState<string | null>(null);
   const [pinRemaining, setPinRemaining] = useState<number | undefined>(undefined);
   const [pinBusy, setPinBusy] = useState(false);
+  /** Инкремент при новом входе — отменяет устаревший bootstrap startPinGate (гонка с Telegram). */
+  const loginGenerationRef = useRef(0);
+
+  const prepareFreshSignIn = useCallback(async () => {
+    loginGenerationRef.current += 1;
+    await supabase.auth.signOut();
+    clearDentalSession();
+    setPendingRedirect(null);
+    setPinPhase("none");
+    setPinUnlocked(false);
+    setAuthUserId(null);
+  }, []);
 
   const signOutInternal = useCallback(async () => {
+    loginGenerationRef.current += 1;
     await supabase.auth.signOut();
     clearDentalSession();
     setStatus("anonymous");
@@ -170,10 +184,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** profiles.pin_hash IS NOT NULL → verify, иначе create. */
   const startPinGate = useCallback(
-    async (userId: string, redirect: string): Promise<{ error?: string }> => {
+    async (
+      userId: string,
+      redirect: string,
+      expectedGeneration?: number,
+    ): Promise<{ error?: string; cancelled?: boolean }> => {
+      if (expectedGeneration !== undefined && expectedGeneration !== loginGenerationRef.current) {
+        return { cancelled: true };
+      }
       const profile = await ensureProfileForAuthUser();
+      if (expectedGeneration !== undefined && expectedGeneration !== loginGenerationRef.current) {
+        return { cancelled: true };
+      }
       if (profile.error) return { error: profile.error };
       const profileHasPin = await fetchProfileHasPin(userId);
+      if (expectedGeneration !== undefined && expectedGeneration !== loginGenerationRef.current) {
+        return { cancelled: true };
+      }
       beginPinFlow(userId, profileHasPin, redirect);
       return {};
     },
@@ -190,11 +217,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const afterSessionPayload = useCallback(
     async (session: ClientAuthSessionPayload): Promise<SignInResult> => {
+      const loginGen = loginGenerationRef.current;
       const applied = await applyAuthSessionPayload(session);
       if (applied.error) return { error: applied.error };
+      if (loginGen !== loginGenerationRef.current) return { error: "Вход отменён." };
 
       const redirect = redirectForRole(session.role);
-      const pin = await startPinGate(session.auth_user_id, redirect);
+      const pin = await startPinGate(session.auth_user_id, redirect, loginGen);
+      if (pin.cancelled) return { error: "Вход отменён." };
+      if (loginGen !== loginGenerationRef.current) return { error: "Вход отменён." };
       if (pin.error) return { error: pin.error };
       return { redirectTo: ROUTES.auth };
     },
@@ -203,14 +234,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    const bootstrapGen = loginGenerationRef.current;
 
     void (async () => {
+      if (cancelled || bootstrapGen !== loginGenerationRef.current) return;
+
       const { data } = await supabase.auth.getSession();
       const uid = data.session?.user?.id ?? null;
       const dental = getDentalSession();
 
       if (!uid || !dental) {
-        if (!cancelled) {
+        if (!cancelled && bootstrapGen === loginGenerationRef.current) {
           setStatus("anonymous");
           setPinPhase("none");
           setPinUnlocked(false);
@@ -219,9 +253,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (cancelled || bootstrapGen !== loginGenerationRef.current) return;
+
       try {
-        const pin = await startPinGate(uid, redirectForRole(dental.role));
-        if (pin.error && !cancelled) {
+        const pin = await startPinGate(uid, redirectForRole(dental.role), bootstrapGen);
+        if (cancelled || bootstrapGen !== loginGenerationRef.current || pin.cancelled) return;
+        if (pin.error) {
           setAuthUserId(uid);
           setStatus("authenticated");
           setPinUnlocked(false);
@@ -230,14 +267,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (e) {
         console.warn("[auth] pin session bootstrap:", e);
-        if (!cancelled) {
-          setAuthUserId(uid);
-          setStatus("authenticated");
-          setPinUnlocked(false);
-          setPendingRedirect(redirectForRole(dental.role));
-          setPinPhase("verify");
-          setHasPin(true);
-        }
+        if (cancelled || bootstrapGen !== loginGenerationRef.current) return;
+        setAuthUserId(uid);
+        setStatus("authenticated");
+        setPinUnlocked(false);
+        setPendingRedirect(redirectForRole(dental.role));
+        setPinPhase("verify");
+        setHasPin(true);
       }
     })();
 
@@ -261,6 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!initData) {
       return { error: "Откройте приложение из Telegram Mini App." };
     }
+    await prepareFreshSignIn();
     const res = await postAuthJson("/api/auth/telegram", { initData });
     if (!res.ok) return { error: res.error };
     if (res.needs_registration) {
@@ -268,17 +305,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (!res.session) return { error: "Пустой ответ сервера." };
     return afterSessionPayload(res.session);
-  }, [afterSessionPayload]);
+  }, [afterSessionPayload, prepareFreshSignIn]);
 
   const signInEmployeeByPhone = useCallback(
     async (phone: string, role: "admin" | "doctor"): Promise<SignInResult> => {
+      await prepareFreshSignIn();
       const endpoint = role === "admin" ? "/api/auth/admin-phone" : "/api/auth/doctor-phone";
       const res = await postAuthJson(endpoint, { phone: normalizePhone(phone) });
       if (!res.ok) return { error: res.error };
       if (!res.session) return { error: "Пустой ответ сервера." };
       return afterSessionPayload(res.session);
     },
-    [afterSessionPayload],
+    [afterSessionPayload, prepareFreshSignIn],
   );
 
   const signInAdminByPhone = useCallback(
@@ -288,9 +326,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const completeRegistration = useCallback(
     async (session: ClientAuthSessionPayload): Promise<SignInResult> => {
+      await prepareFreshSignIn();
       return afterSessionPayload({ ...session, has_pin: false });
     },
-    [afterSessionPayload],
+    [afterSessionPayload, prepareFreshSignIn],
   );
 
   const submitCreatePin = useCallback(

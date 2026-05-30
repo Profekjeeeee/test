@@ -1,5 +1,6 @@
 import { setDentalSession, refreshDentalCaches, type DentalSession } from "@/lib/auth";
 import { ensureProfileForAuthUser } from "@/lib/auth/pinApi";
+import { ROUTES } from "@/lib/routes";
 import { supabase } from "@/lib/supabaseClient";
 
 export type ClientAuthSessionPayload = {
@@ -63,7 +64,7 @@ export async function applyAuthSessionPayload(p: ClientAuthSessionPayload): Prom
 }
 
 export function redirectForRole(role: ClientAuthSessionPayload["role"]): string {
-  if (role === "admin") return "/screens/admin/dashboard";
-  if (role === "doctor") return "/screens/doctor/cabinet";
-  return "/screens/03_Main";
+  if (role === "admin") return ROUTES.adminDashboard;
+  if (role === "doctor") return ROUTES.doctorCabinet;
+  return ROUTES.clientHome;
 }
