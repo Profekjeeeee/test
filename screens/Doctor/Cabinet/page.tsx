@@ -526,13 +526,13 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
             ) : null}
           </div>
 
-          <nav className="layout-sidebar-nav flex flex-col" aria-label="Навигация кабинета">
+          <nav className="layout-sidebar-nav flex flex-col gap-1" aria-label="Навигация кабинета">
             {desktopNavItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => handleDesktopNav(item.id)}
-                className={`layout-sidebar-nav-item w-full rounded-lg text-[13px] font-semibold transition-colors text-left shrink-0 ${
+                className={`layout-sidebar-nav-item flex h-9 items-center py-1.5 w-full rounded-lg text-[13px] font-semibold transition-colors text-left shrink-0 ${
                   isDesktopNavActive(item.id)
                     ? "bg-primary text-white shadow-[0_4px_12px_rgba(36,139,207,0.35)]"
                     : "text-secondary dark:text-slate-400 bg-transparent"
