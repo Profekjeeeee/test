@@ -43,9 +43,6 @@ function parsePrice(v: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function isRevenueStatus(status: string): boolean {
-  return status === "completed" || status === "done";
-}
 
 function isUnprocessedStatus(status: string): boolean {
   return status === "pending" || status === "scheduled" || status === "rescheduled";
@@ -105,6 +102,8 @@ export async function fetchDashboardStats(): Promise<{
         appointmentsToday: 0,
         activeDoctors: 0,
         totalDoctors: 0,
+        pendingDebt: 0,
+        paymentsMonth: 0,
       },
       chart: [],
       today: [],
@@ -117,7 +116,6 @@ export async function fetchDashboardStats(): Promise<{
 
   const monthStartTs = new Date(start).getTime();
 
-  let revenueMonth = 0;
   let newAppointmentsMonth = 0;
   let unprocessedCount = 0;
   let appointmentsToday = 0;
@@ -125,8 +123,6 @@ export async function fetchDashboardStats(): Promise<{
   const byDay = new Map<string, { revenue: number; appointments: number }>();
 
   for (const row of rows) {
-    const price = parsePrice(resolveService(row)?.price);
-    if (isRevenueStatus(row.status)) revenueMonth += price;
     if (isUnprocessedStatus(row.status)) unprocessedCount += 1;
     if (row.appointment_date === today) appointmentsToday += 1;
 
@@ -136,8 +132,40 @@ export async function fetchDashboardStats(): Promise<{
     const dayKey = row.appointment_date;
     const bucket = byDay.get(dayKey) ?? { revenue: 0, appointments: 0 };
     bucket.appointments += 1;
-    if (isRevenueStatus(row.status)) bucket.revenue += price;
     byDay.set(dayKey, bucket);
+  }
+
+  const [paymentsRes, billsRes] = await Promise.all([
+    supabase
+      .from("payments")
+      .select("amount, completed_at")
+      .eq("status", "succeeded")
+      .gte("completed_at", `${start}T00:00:00`)
+      .lte("completed_at", `${end}T23:59:59`),
+    supabase.from("bills").select("amount, paid_amount, status"),
+  ]);
+
+  let revenueMonth = 0;
+  let paymentsMonth = 0;
+  for (const p of paymentsRes.data ?? []) {
+    const amt = parsePrice(p.amount);
+    revenueMonth += amt;
+    paymentsMonth += 1;
+    const dayKey = (p.completed_at as string).split("T")[0];
+    const bucket = byDay.get(dayKey) ?? { revenue: 0, appointments: 0 };
+    bucket.revenue += amt;
+    byDay.set(dayKey, bucket);
+  }
+
+  let pendingDebt = 0;
+  for (const b of billsRes.data ?? []) {
+    const remaining = parsePrice(b.amount) - parsePrice(b.paid_amount);
+    if (
+      (b.status === "pending" || b.status === "partial" || b.status === "overdue") &&
+      remaining > 0
+    ) {
+      pendingDebt += remaining;
+    }
   }
 
   const chart: DashboardChartPoint[] = Array.from(byDay.entries())
@@ -177,10 +205,12 @@ export async function fetchDashboardStats(): Promise<{
       appointmentsToday,
       activeDoctors,
       totalDoctors,
+      pendingDebt,
+      paymentsMonth,
     },
     chart,
     today: todayRows,
-    error: doctorsRes.error?.message ?? null,
+    error: doctorsRes.error?.message ?? paymentsRes.error?.message ?? billsRes.error?.message ?? null,
   };
 }
 

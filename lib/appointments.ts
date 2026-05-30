@@ -1,3 +1,6 @@
+import { dentalApiFetch } from "@/lib/api/fetchApi";
+import { buildTimeSlotsFromConfig } from "@/lib/clinic/bookingSlots";
+import { DEFAULT_CLINIC_SETTINGS } from "@/lib/clinic/defaults";
 import { supabase } from "@/lib/supabaseClient";
 import {
   DENTAL_USER_SESSION_STORAGE_KEY,
@@ -15,6 +18,8 @@ export type AppointmentStatus =
   | "completed"
   | "cancelled"
   | "rescheduled";
+
+export type VisitMode = "in_person" | "video";
 
 /** Телефоны врачей (seed `dental_employees`) — id как на экране записи (d1…d10). */
 export const DOCTOR_BOOKING_ID_TO_PHONE: Record<string, string> = {
@@ -44,6 +49,7 @@ export interface Appointment {
   cabinet: string;
   status: AppointmentStatus;
   patientId?: string;
+  visitMode?: VisitMode;
 }
 
 /** То же поле, что раньше; источник — таблица `appointments` в Supabase. */
@@ -80,15 +86,10 @@ export const RU_MONTHS_GENITIVE = [
   "декабря",
 ] as const;
 
-/** Слоты расписания клиники (как на экране записи). */
-export const CLINIC_TIME_SLOTS: string[] = (() => {
-  const slots: string[] = [];
-  for (let h = 9; h < 17; h++) {
-    slots.push(`${String(h).padStart(2, "0")}:00`);
-    slots.push(`${String(h).padStart(2, "0")}:30`);
-  }
-  return slots;
-})();
+/** Слоты по умолчанию (до загрузки настроек клиники). В UI предпочтительно useClinicTimeSlots. */
+export const CLINIC_TIME_SLOTS: string[] = buildTimeSlotsFromConfig(
+  DEFAULT_CLINIC_SETTINGS.bookingSlots,
+);
 
 export function formatAppointmentDateRu(apt: Pick<Appointment, "day" | "monthNum" | "year">): string {
   const m = RU_MONTHS_GENITIVE[apt.monthNum - 1] ?? "";
@@ -109,6 +110,7 @@ interface AppointmentRow {
   service: string | null;
   price: number | string | null;
   cabinet: string | null;
+  visit_mode?: string | null;
 }
 
 function isoDateLocal(year: number, monthNum: number, day: number): string {
@@ -147,22 +149,31 @@ function rowToAppointment(row: AppointmentRow): Appointment {
     cabinet: row.cabinet ?? "",
     status: row.status as AppointmentStatus,
     patientId: row.client_id ?? undefined,
+    visitMode: row.visit_mode === "video" ? "video" : "in_person",
   };
 }
 
 let clinicCache: ClinicAppointment[] | null = null;
 
 export async function refreshAppointmentsCache(): Promise<void> {
-  const { data, error } = await supabase
-    .from("appointments")
-    .select("*")
-    .order("appointment_date", { ascending: true })
-    .order("appointment_time", { ascending: true });
-  if (error) {
-    console.error("[appointments]", error);
-    return;
+  try {
+    const result = await dentalApiFetch<{ rows: AppointmentRow[] }>("/api/appointments", {
+      method: "GET",
+    });
+    clinicCache = (result.rows ?? []).map(rowToAppointment);
+  } catch (e) {
+    console.error("[appointments] API refresh:", e);
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .order("appointment_date", { ascending: true })
+      .order("appointment_time", { ascending: true });
+    if (error) {
+      console.error("[appointments]", error);
+      return;
+    }
+    clinicCache = ((data ?? []) as AppointmentRow[]).map(rowToAppointment);
   }
-  clinicCache = ((data ?? []) as AppointmentRow[]).map(rowToAppointment);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("appointmentsUpdated"));
   }
@@ -211,6 +222,8 @@ export type NewAppointmentInput = {
   /** Телефон для поиска строки в `dental_clients` (в `client_id` уходит только её `id`). */
   clientPhone?: string | null;
   status?: AppointmentStatus;
+  visitMode?: VisitMode;
+  service?: string;
 };
 
 /**
@@ -227,6 +240,19 @@ async function resolveDentalClientPrimaryKeyForInsert(
   const uid = getCurrentUserId();
   const phoneFromArg = explicitPhone?.trim() || null;
   const phoneFromSession = resolveClientPhoneForAppointment();
+
+  try {
+    const { clientId } = await dentalApiFetch<{ clientId: string }>("/api/clients/resolve", {
+      method: "POST",
+      body: {
+        uid: uid ?? undefined,
+        explicitPhone: phoneFromArg ?? phoneFromSession ?? undefined,
+      },
+    });
+    if (clientId) return clientId;
+  } catch {
+    /* fallback ниже */
+  }
 
   if (uid) {
     const { data, error } = await supabase
@@ -304,23 +330,44 @@ export async function addAppointment(apt: NewAppointmentInput): Promise<Appointm
 
   const clientId = await resolveDentalClientPrimaryKeyForInsert(apt.clientPhone);
 
-  const { data, error } = await supabase
-    .from("appointments")
-    .insert([
-      {
-        client_id: clientId,
-        doctor_name: name,
-        appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
-        appointment_time: apt.time,
+  try {
+    const { row } = await dentalApiFetch<{ row: AppointmentRow }>("/api/appointments", {
+      method: "POST",
+      body: {
+        day: apt.day,
+        monthNum: apt.monthNum,
+        year: apt.year,
+        time: apt.time,
+        doctorName: name,
         status,
+        clientPhone: apt.clientPhone ?? undefined,
+        visitMode: apt.visitMode ?? "in_person",
+        service: apt.service,
       },
-    ])
-    .select("*")
-    .single();
+    });
+    await refreshAppointmentsCache();
+    return rowToAppointment(row);
+  } catch (apiErr) {
+    const { data, error } = await supabase
+      .from("appointments")
+      .insert([
+        {
+          client_id: clientId,
+          doctor_name: name,
+          appointment_date: isoDateLocal(apt.year, apt.monthNum, apt.day),
+          appointment_time: apt.time,
+          status,
+          visit_mode: apt.visitMode ?? "in_person",
+          ...(apt.service ? { service: apt.service } : {}),
+        },
+      ])
+      .select("*")
+      .single();
 
-  if (error) throw error;
-  await refreshAppointmentsCache();
-  return rowToAppointment(data as AppointmentRow);
+    if (error) throw apiErr instanceof Error ? apiErr : error;
+    await refreshAppointmentsCache();
+    return rowToAppointment(data as AppointmentRow);
+  }
 }
 
 export function getAllClinicAppointments(): ClinicAppointment[] {
@@ -328,8 +375,12 @@ export function getAllClinicAppointments(): ClinicAppointment[] {
 }
 
 export async function cancelAppointment(id: string): Promise<void> {
-  const { error } = await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
-  if (error) throw error;
+  try {
+    await dentalApiFetch(`/api/appointments/${encodeURIComponent(id)}`, { method: "POST" });
+  } catch {
+    const { error } = await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
+    if (error) throw error;
+  }
   await refreshAppointmentsCache();
 }
 
@@ -337,15 +388,27 @@ export async function rescheduleAppointment(
   id: string,
   updates: Pick<Appointment, "day" | "monthNum" | "month" | "year" | "time">
 ): Promise<void> {
-  const { error } = await supabase
-    .from("appointments")
-    .update({
-      appointment_date: isoDateLocal(updates.year, updates.monthNum, updates.day),
-      appointment_time: updates.time,
-      status: "scheduled",
-    })
-    .eq("id", id);
-  if (error) throw error;
+  try {
+    await dentalApiFetch(`/api/appointments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: {
+        day: updates.day,
+        monthNum: updates.monthNum,
+        year: updates.year,
+        time: updates.time,
+      },
+    });
+  } catch {
+    const { error } = await supabase
+      .from("appointments")
+      .update({
+        appointment_date: isoDateLocal(updates.year, updates.monthNum, updates.day),
+        appointment_time: updates.time,
+        status: "scheduled",
+      })
+      .eq("id", id);
+    if (error) throw error;
+  }
   await refreshAppointmentsCache();
 }
 

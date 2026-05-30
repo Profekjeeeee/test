@@ -16,16 +16,13 @@ import {
   refreshAppointmentsCache,
   cancelAppointment,
   rescheduleAppointment,
-  CLINIC_TIME_SLOTS,
   RU_MONTHS_SHORT,
   type ClinicAppointment,
 } from "@/lib/appointments";
-import {
-  notifyPatientScheduleCancelledAsync,
-  notifyPatientScheduleRescheduledAsync,
-} from "@/lib/tgNotifications";
+import { postAppointmentNotifyAsync } from "@/lib/appointmentNotify";
 import { Toast } from "@/components/ui/Toast";
 import { useToast } from "@/hooks/useToast";
+import { useClinicTimeSlots } from "@/hooks/useClinicTimeSlots";
 import {
   filterAppointmentsByDoctor,
   isSameCalendarDay,
@@ -33,6 +30,7 @@ import {
   appointmentStatusLabelRu,
   formatScheduleHeaderDateStable,
 } from "@/lib/doctorSchedule";
+import { canJoinVideoWindow } from "@/lib/videoConsultation";
 import DoctorMonthCalendar from "@/screens/Doctor/Cabinet/DoctorMonthCalendar";
 import DoctorOrdinatorskayaChat from "@/screens/Doctor/Cabinet/DoctorOrdinatorskayaChat";
 import PatientMedicalSheet from "@/screens/Doctor/Cabinet/PatientMedicalSheet";
@@ -85,6 +83,7 @@ function isAppointmentDoctorEditable(status: ClinicAppointment["status"]): boole
 
 function DoctorCabinetInner({ anchor }: { anchor: Date }) {
   const router = useRouter();
+  const clinicTimeSlots = useClinicTimeSlots();
   const { toastMessage, toastVisible, toastTone, showToast } = useToast();
   const [session, setSession] = useState<DentalSession | null>(null);
   const [dataRev, setDataRev] = useState(0);
@@ -207,14 +206,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
       });
       closeRescheduleModal();
       showToast("Время приёма обновлено");
-      const fresh = getAllClinicAppointments().find((x) => x.id === a.id);
-      if (fresh && a.patientId) {
-        notifyPatientScheduleRescheduledAsync({
-          patientClientId: a.patientId,
-          doctorName: doctorName || a.doctor,
-          appointment: fresh,
-        });
-      }
+      postAppointmentNotifyAsync("doctor_reschedule", a.id);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка";
       alert(msg);
@@ -243,10 +235,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
       try {
         await cancelAppointment(a.id);
         showToast("Запись отменена");
-        notifyPatientScheduleCancelledAsync({
-          patientClientId: a.patientId,
-          doctorName: doctorName || a.doctor,
-        });
+        postAppointmentNotifyAsync("doctor_cancel", a.id);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Ошибка";
         alert(msg);
@@ -394,6 +383,11 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
                           {patientShortName(a.patientId)}
                         </p>
                         <p className="text-[13px] text-secondary mt-1 leading-snug">{a.service}</p>
+                        {a.visitMode === "video" && (
+                          <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary-light text-primary">
+                            Онлайн
+                          </span>
+                        )}
                         {!a.patientId && (
                           <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
                             Запись без patientId — карта недоступна. Новые записи из ЛК пациента содержат ID.
@@ -404,7 +398,17 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
                         <p className="text-[11px] font-semibold text-primary mt-2">Отправка в базу…</p>
                       )}
                       {canEdit && !busy && (
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                          {a.visitMode === "video" && canJoinVideoWindow(a) && (
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/consultation/${a.id}`)}
+                              className="w-full h-11 rounded-[10px] text-[12px] font-semibold bg-primary text-white active:scale-[0.98]"
+                            >
+                              Начать видеоконсультацию
+                            </button>
+                          )}
+                          <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => openRescheduleModal(a)}
@@ -419,6 +423,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
                           >
                             Отменить
                           </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -514,7 +519,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
               onChange={(e) => setRescheduleTimePick(e.target.value)}
               className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-[14px] mb-5"
             >
-              {CLINIC_TIME_SLOTS.map((slot) => (
+              {clinicTimeSlots.map((slot) => (
                 <option key={slot} value={slot}>
                   {slot}
                 </option>

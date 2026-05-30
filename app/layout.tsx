@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { TelegramWebAppProvider } from "@/components/TelegramWebAppProvider";
 import PatientAppGate from "@/components/auth/PatientAppGate";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ClinicProvider } from "@/contexts/ClinicProvider";
+import ClinicBrandingStyles from "@/components/ClinicBrandingStyles";
 
 const manrope = Manrope({
   subsets: ["latin", "cyrillic"],
@@ -68,11 +70,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Script src={TELEGRAM_WEB_APP_SDK} strategy="beforeInteractive" />
         <script dangerouslySetInnerHTML={{ __html: telegramThemeBootstrapScript }} />
         <TelegramWebAppProvider>
-          <ThemeProvider>
-            <AuthProvider>
-              <PatientAppGate>{children}</PatientAppGate>
-            </AuthProvider>
-          </ThemeProvider>
+          <ClinicProvider>
+            <ClinicBrandingStyles />
+            <ThemeProvider>
+              <AuthProvider>
+                <PatientAppGate>{children}</PatientAppGate>
+              </AuthProvider>
+            </ThemeProvider>
+          </ClinicProvider>
         </TelegramWebAppProvider>
       </body>
     </html>

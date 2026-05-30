@@ -11,7 +11,9 @@ import {
   cancelAppointment,
   type Appointment,
 } from "@/lib/appointments";
-import { getBills, removeBillByAppointmentId, type Bill } from "@/lib/bills";
+import { canJoinVideoWindow } from "@/lib/videoConsultation";
+import { postAppointmentNotifyAsync } from "@/lib/appointmentNotify";
+import { getBills, initBills, removeBillByAppointmentId, type Bill } from "@/lib/bills";
 import { Toast } from "@/components/ui/Toast";
 import { useToast } from "@/hooks/useToast";
 
@@ -104,7 +106,7 @@ export default function AppointmentsPage() {
   const { toastMessage, toastVisible, toastTone, showToast } = useToast();
 
   useEffect(() => {
-    void initAppointments().then(() => {
+    void Promise.all([initAppointments(), initBills()]).then(() => {
       setAppointments(getAppointments());
       setBills(getBills());
     });
@@ -112,7 +114,8 @@ export default function AppointmentsPage() {
 
   const handleCancel = async (id: string) => {
     await cancelAppointment(id);
-    const billRemoved = removeBillByAppointmentId(id);
+    postAppointmentNotifyAsync("patient_cancel", id);
+    const billRemoved = await removeBillByAppointmentId(id);
     setAppointments(getAppointments());
     setBills(getBills());
     showToast(billRemoved ? "Запись отменена, счёт отозван" : "Запись отменена");
@@ -197,6 +200,11 @@ export default function AppointmentsPage() {
 
                 {/* Row 2: doctor */}
                 <p className="text-[13px] text-gray-500 dark:text-slate-400 mb-2">{apt.doctor}</p>
+                {apt.visitMode === "video" && (
+                  <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary-light text-primary mb-2">
+                    Онлайн-консультация
+                  </span>
+                )}
 
                 {/* Row 3: date + price */}
                 <div className="flex items-center justify-between gap-2">
@@ -229,7 +237,17 @@ export default function AppointmentsPage() {
                 {(apt.status === "scheduled" ||
                   apt.status === "pending" ||
                   apt.status === "rescheduled") && (
-                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex gap-2">
+                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-2">
+                    {apt.visitMode === "video" && canJoinVideoWindow(apt) && (
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/consultation/${apt.id}`)}
+                        className="w-full h-10 rounded-[8px] bg-primary text-white text-[13px] font-semibold shadow-[0_2px_10px_rgba(36,139,207,0.28)] active:scale-[0.98]"
+                      >
+                        Войти в консультацию
+                      </button>
+                    )}
+                    <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => handleReschedule(apt)}
@@ -244,6 +262,7 @@ export default function AppointmentsPage() {
                     >
                       Отменить
                     </button>
+                    </div>
                   </div>
                 )}
               </Card>

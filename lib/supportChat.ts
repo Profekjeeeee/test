@@ -1,3 +1,4 @@
+import { dentalApiFetch } from "@/lib/api/fetchApi";
 import {
   getCurrentUserId,
   getDentalClients,
@@ -66,8 +67,18 @@ function emitUpdated(): void {
   window.dispatchEvent(new Event(DENTAL_CHAT_UPDATED_EVENT));
 }
 
-/** Загрузить все сообщения из Supabase (`chat_messages`) в память. */
+/** Загрузить все сообщения из API (`chat_messages`) в память. */
 export async function hydrateDentalMessages(): Promise<void> {
+  try {
+    const result = await dentalApiFetch<{ rows: DbMessageRow[] }>("/api/chat/messages", {
+      method: "GET",
+    });
+    messagesCache = (result.rows ?? []).map(dbRowToChatMessage);
+    return;
+  } catch (e) {
+    console.warn("[supportChat] API hydrate fallback:", e);
+  }
+
   const { data, error } = await supabase
     .from("chat_messages")
     .select("*")
@@ -474,7 +485,34 @@ export function markStaffConversationRead(
 export async function appendChatMessage(
   msg: Omit<ChatMessage, "id" | "timestamp">
 ): Promise<ChatMessage> {
-  // id генерирует БД (DEFAULT / GENERATED); не передаём id в insert.
+  try {
+    const { row } = await dentalApiFetch<{ row: DbMessageRow }>("/api/chat/messages", {
+      method: "POST",
+      body: {
+        senderId: msg.senderId,
+        recipientId: msg.recipientId,
+        text: msg.text,
+        senderRole: msg.senderRole,
+        chatType: msg.chatType,
+        senderName: msg.senderName,
+      },
+    });
+    const full = dbRowToChatMessage(row);
+    await hydrateDentalMessages();
+    if (full.chatType === "support") {
+      appendSupportAudit({
+        at: new Date(full.timestamp).toISOString(),
+        patientId: full.senderRole === "client" ? full.senderId : full.recipientId,
+        channel: "support",
+        sender: full.senderRole === "client" ? "patient" : "staff",
+        preview: full.text.slice(0, 280),
+      });
+    }
+    return full;
+  } catch (apiErr) {
+    console.warn("[supportChat] API insert fallback:", apiErr);
+  }
+
   const { data: row, error } = await supabase
     .from("chat_messages")
     .insert({
@@ -530,14 +568,21 @@ export async function updateChatMessageText(messageId: string, text: string): Pr
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Текст сообщения не может быть пустым");
 
-  const { error } = await supabase
-    .from("chat_messages")
-    .update({ text: trimmed, updated_at: new Date().toISOString() })
-    .eq("id", messageId);
+  try {
+    await dentalApiFetch("/api/chat/messages", {
+      method: "PATCH",
+      body: { messageId, text: trimmed },
+    });
+  } catch (apiErr) {
+    const { error } = await supabase
+      .from("chat_messages")
+      .update({ text: trimmed, updated_at: new Date().toISOString() })
+      .eq("id", messageId);
 
-  if (error) {
-    console.error("[supportChat update]", error);
-    throw new Error(error.message ?? "Не удалось изменить сообщение");
+    if (error) {
+      console.error("[supportChat update]", error);
+      throw apiErr instanceof Error ? apiErr : new Error(error.message ?? "Не удалось изменить сообщение");
+    }
   }
 
   await hydrateDentalMessages();
@@ -545,11 +590,16 @@ export async function updateChatMessageText(messageId: string, text: string): Pr
 }
 
 export async function deleteChatMessage(messageId: string): Promise<void> {
-  const { error } = await supabase.from("chat_messages").delete().eq("id", messageId);
-
-  if (error) {
-    console.error("[supportChat delete]", error);
-    throw new Error(error.message ?? "Не удалось удалить сообщение");
+  try {
+    await dentalApiFetch(`/api/chat/messages?messageId=${encodeURIComponent(messageId)}`, {
+      method: "DELETE",
+    });
+  } catch (apiErr) {
+    const { error } = await supabase.from("chat_messages").delete().eq("id", messageId);
+    if (error) {
+      console.error("[supportChat delete]", error);
+      throw apiErr instanceof Error ? apiErr : new Error(error.message ?? "Не удалось удалить сообщение");
+    }
   }
 
   await hydrateDentalMessages();

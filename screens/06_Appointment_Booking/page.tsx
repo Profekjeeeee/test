@@ -16,10 +16,7 @@ import {
   resolveClientPhoneForAppointment,
   type Appointment,
 } from "@/lib/appointments";
-import {
-  notifyDoctorNewBookingAsync,
-  resolveCurrentClientDisplayName,
-} from "@/lib/tgNotifications";
+import { postAppointmentNotifyAsync } from "@/lib/appointmentNotify";
 import { addBillForAppointment } from "@/lib/bills";
 import { ROUTES } from "@/lib/routes";
 import { useClientNow } from "@/hooks/useClientNow";
@@ -295,6 +292,13 @@ const SERVICES_MOCK: ServiceMock[] = [
     price: 35000,
     durationMin: 120,
   },
+  {
+    id: "s21",
+    title: "Предварительная консультация (онлайн)",
+    category: "Терапия",
+    price: 1500,
+    durationMin: 30,
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -507,6 +511,7 @@ function BookingContent() {
   const [selectedDate, setSelectedDate] = useState<PickedDate | null>(null);
   const [viewMonth, setViewMonth] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [visitMode, setVisitMode] = useState<"in_person" | "video">("in_person");
   const [loading, setLoading] = useState(false);
   const [successModal, setSuccessModal] = useState<{
     kind: "new" | "reschedule";
@@ -611,6 +616,7 @@ function BookingContent() {
           year,
           time: timeSnap,
         });
+        postAppointmentNotifyAsync("patient_reschedule", appointmentId);
         await refreshAppointmentsCache();
         const all = getAppointments();
         const updated = all.find((a) => a.id === appointmentId);
@@ -631,15 +637,16 @@ function BookingContent() {
           time: timeSnap,
           doctorName: selectedDoctor?.name ?? "Врач не выбран",
           clientPhone,
+          visitMode,
+          service:
+            visitMode === "video"
+              ? "Предварительная консультация (онлайн)"
+              : serviceTitle,
         });
 
-        addBillForAppointment(newApt.id, serviceTitle, price);
+        await addBillForAppointment(newApt.id, serviceTitle, price);
 
-        notifyDoctorNewBookingAsync({
-          bookingDoctorId: selectedDoctorId,
-          clientName: resolveCurrentClientDisplayName(),
-          appointment: newApt,
-        });
+        postAppointmentNotifyAsync("booking_created", newApt.id);
 
         setSelectedCategory(null);
         setSelectedDoctorId(null);
@@ -1076,7 +1083,11 @@ function BookingContent() {
                       value={selectedService?.title ?? "—"}
                     />
                     <ConfirmRow label="Дата" value={confirmDate} accent />
-                    <ConfirmRow label="Кабинет" value="№ 5" />
+                    <ConfirmRow
+                      label="Формат"
+                      value={visitMode === "video" ? "Онлайн-консультация" : "Очный приём"}
+                    />
+                    <ConfirmRow label="Кабинет" value={visitMode === "video" ? "—" : "№ 5"} />
                     {selectedService && (
                       <>
                         <div className="h-px bg-gray-100 dark:bg-slate-700" />
@@ -1094,6 +1105,46 @@ function BookingContent() {
                 )}
               </div>
             </Card>
+
+            {!isRescheduling && (
+              <Card className="shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white mb-3">
+                  Формат приёма
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisitMode("in_person")}
+                    className={`flex-1 min-h-[44px] rounded-xl text-[13px] font-semibold border active:scale-[0.98] ${
+                      visitMode === "in_person"
+                        ? "bg-primary text-white border-primary"
+                        : "border-slate-200 dark:border-slate-600 text-secondary"
+                    }`}
+                  >
+                    В клинике
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVisitMode("video");
+                      setSelectedServiceId("s21");
+                    }}
+                    className={`flex-1 min-h-[44px] rounded-xl text-[13px] font-semibold border active:scale-[0.98] ${
+                      visitMode === "video"
+                        ? "bg-primary text-white border-primary"
+                        : "border-slate-200 dark:border-slate-600 text-secondary"
+                    }`}
+                  >
+                    Онлайн
+                  </button>
+                </div>
+                {visitMode === "video" && (
+                  <p className="text-[12px] text-secondary mt-2 leading-snug">
+                    Видеосвязь через Mini App: разбор снимков и обмен файлами во время консультации
+                  </p>
+                )}
+              </Card>
+            )}
 
             <button
               className="text-[13px] text-primary font-medium text-center py-1 active:opacity-70 transition-opacity"

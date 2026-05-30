@@ -6,48 +6,61 @@ import { Card } from "@/components/ui/Card";
 import BottomBar from "@/components/layout/BottomBar";
 import {
   initBills,
-  saveBills,
+  getBills,
   payBillById,
-  payAllPendingBills,
   getTotalPending,
   formatBillDate,
 } from "@/lib/bills";
+import { getPatientPayments, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/payments";
 import { getProfile, saveProfile } from "@/lib/userProfile";
-import type { Bill } from "@/types";
+import type { Bill, Payment } from "@/types";
 
 type FilterTab = "all" | "pending" | "paid";
 
 export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payingAll, setPayingAll] = useState(false);
 
   useEffect(() => {
-    setBills(initBills());
+    void initBills().then(async (loaded) => {
+      setBills(loaded);
+      const p = await getPatientPayments();
+      setPayments(p);
+    });
   }, []);
 
   const totalPending = getTotalPending(bills);
 
   const handlePayOne = (id: string) => {
     setPayingId(id);
-    setTimeout(() => {
-      const updated = payBillById(bills, id);
-      saveBills(updated);
-      setBills(updated);
-      setPayingId(null);
-    }, 700);
+    void payBillById(id)
+      .then(() => setBills(getBills()))
+      .catch((e: unknown) => {
+        console.error("[bills] pay", e);
+      })
+      .finally(() => setPayingId(null));
   };
 
   const handlePayAll = () => {
     if (totalPending === 0) return;
     setPayingAll(true);
-    setTimeout(() => {
-      const updated = payAllPendingBills(bills);
-      saveBills(updated);
-      setBills(updated);
-      setPayingAll(false);
-    }, 800);
+    void (async () => {
+      try {
+        for (const bill of bills.filter(
+          (b) => b.status === "pending" || b.status === "overdue" || b.status === "partial"
+        )) {
+          await payBillById(bill.id);
+        }
+        setBills(getBills());
+      } catch (e) {
+        console.error("[bills] payAll", e);
+      } finally {
+        setPayingAll(false);
+      }
+    })();
   };
 
   const filtered = bills.filter((b) => {
@@ -204,12 +217,54 @@ export default function BillsPage() {
           </div>
         )}
 
+        {payments.length > 0 && (
+          <section>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2.5 px-0.5">
+              История оплат
+            </p>
+            <div className="flex flex-col gap-3">
+              {payments.map((payment) => (
+                <PaymentCard key={payment.id} payment={payment} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Tax deduction card */}
         <TaxDeductionCard />
       </main>
 
       <BottomBar />
     </div>
+  );
+}
+
+// ── PaymentCard ─────────────────────────────────────────────────────────────
+
+function PaymentCard({ payment }: { payment: Payment }) {
+  const isSuccess = payment.status === "succeeded";
+  const dateStr = payment.completedAt ?? payment.createdAt;
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white">
+            {payment.amount.toLocaleString("ru-RU")} ₽
+          </p>
+          <p className="text-[12px] text-gray-400 mt-0.5">
+            {PAYMENT_METHOD_LABELS[payment.method]} · {formatBillDate(dateStr)}
+          </p>
+        </div>
+        <span
+          className={`text-[12px] font-semibold shrink-0 ${
+            isSuccess ? "text-primary" : "text-gray-400"
+          }`}
+        >
+          {PAYMENT_STATUS_LABELS[payment.status]}
+        </span>
+      </div>
+    </Card>
   );
 }
 

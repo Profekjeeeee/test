@@ -155,6 +155,65 @@ const ADMIN_TABS: { id: string; label: string; href: string; icon: React.FC<Icon
     ),
   },
   {
+    id: "crm",
+    label: "CRM",
+    href: "/screens/admin/crm",
+    icon: ({ active }) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 2C8.5 2 6 4.5 6 8C6 11.5 8.5 14 12 14C15.5 14 18 11.5 18 8C18 4.5 15.5 2 12 2Z"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          fill={active ? "currentColor" : "none"}
+          fillOpacity={active ? 0.12 : undefined}
+        />
+        <path
+          d="M3 20C3 16.5 7 14 12 14C17 14 21 16.5 21 20"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M17 6L19 8M19 6L17 8"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: "finance",
+    label: "Финансы",
+    href: "/screens/admin/finance",
+    icon: ({ active }) => (
+      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <rect
+          x="2"
+          y="5"
+          width="20"
+          height="14"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          fill={active ? "currentColor" : "none"}
+          fillOpacity={active ? 0.12 : undefined}
+        />
+        <path
+          d="M2 10H22"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <path
+          d="M6 15H10"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "price",
     label: "Прайс",
     href: "/screens/admin/price",

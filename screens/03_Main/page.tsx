@@ -50,14 +50,12 @@ export default function MainPage() {
 
   useEffect(() => {
     setCurrentDateStr(formatCurrentDate());
-    void initPlanSources().then(() => {
+    void Promise.all([initPlanSources(), initBills()]).then(() => {
       setNextApt(getNextAppointment());
       setUpcomingCount(getUpcomingCount());
       setPlanStats(getMergedPlanStats());
+      setPendingAmount(getTotalPending(getBills()));
     });
-
-    initBills();
-    setPendingAmount(getTotalPending(getBills()));
 
     const syncHelloName = (): void => {
       const profile = getProfile();

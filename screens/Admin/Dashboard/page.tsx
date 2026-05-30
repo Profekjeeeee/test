@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ScrollText } from "lucide-react";
+import { ScrollText, Settings, ShieldCheck } from "lucide-react";
 import { logout } from "@/lib/auth";
 import { getDashboardStats } from "@/lib/admin/dashboard";
-import type { DashboardAppointmentRow, DashboardChartPoint, DashboardStats } from "@/lib/admin/types";
+import { fetchAnalyticsOverview } from "@/lib/admin/analytics";
+import type { AnalyticsOverview, DashboardAppointmentRow, DashboardChartPoint, DashboardStats } from "@/lib/admin/types";
 import { ROUTES } from "@/lib/routes";
 import ThemeToggleButton from "@/components/ui/ThemeToggleButton";
 
@@ -35,35 +36,49 @@ function formatRub(n: number): string {
   return n.toLocaleString("ru-RU");
 }
 
-function buildStatCards(stats: DashboardStats) {
+function buildStatCards(stats: DashboardStats, analytics: AnalyticsOverview | null) {
   return [
     {
       label: "Выручка, ₽",
       value: formatRub(stats.revenueMonth),
-      sub: "за текущий месяц",
+      sub: `${stats.paymentsMonth} оплат · из payments`,
       color: "bg-primary-light",
       textColor: "text-primary",
+      href: "/screens/admin/finance",
     },
     {
-      label: "Новые записи",
-      value: String(stats.newAppointmentsMonth),
-      sub: "созданы в этом месяце",
+      label: "Дебиторка",
+      value: formatRub(stats.pendingDebt),
+      sub: "неоплаченные счета",
       color: "bg-primary/10",
       textColor: "text-primary",
+      href: "/screens/admin/finance",
     },
     {
-      label: "Необработанные",
-      value: String(stats.unprocessedCount),
-      sub: "pending / scheduled",
+      label: "Пациентов",
+      value: analytics ? String(analytics.totalPatients) : "—",
+      sub: analytics ? `+${analytics.newPatientsMonth} новых · ${analytics.atRiskCount} at risk` : "аналитика",
       color: "bg-slate-100 dark:bg-slate-800",
       textColor: "text-[#0F172A] dark:text-white",
+      href: "/screens/admin/analytics",
     },
     {
-      label: "Записей сегодня",
-      value: String(stats.appointmentsToday),
-      sub: `врачей активно: ${stats.activeDoctors} из ${stats.totalDoctors || "—"}`,
+      label: "KPI врачей",
+      value: analytics?.topDoctorName.split(" ")[0] ?? "→",
+      sub: analytics
+        ? `${formatRub(analytics.topDoctorRevenueMonth)} ₽ · ${analytics.avgCompletionRate}% завершений`
+        : "аналитика и экспорт",
       color: "bg-primary-light",
       textColor: "text-primary",
+      href: "/screens/admin/analytics",
+    },
+    {
+      label: "CRM",
+      value: "→",
+      sub: "сегменты и возврат в Telegram",
+      color: "bg-primary/10",
+      textColor: "text-primary",
+      href: "/screens/admin/crm",
     },
   ];
 }
@@ -71,21 +86,26 @@ function buildStatCards(stats: DashboardStats) {
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [chart, setChart] = useState<DashboardChartPoint[]>([]);
   const [today, setToday] = useState<DashboardAppointmentRow[]>([]);
   const [dashLoading, setDashLoading] = useState(true);
   const [dashError, setDashError] = useState("");
 
-  const statCards = useMemo(() => (stats ? buildStatCards(stats) : []), [stats]);
+  const statCards = useMemo(
+    () => (stats ? buildStatCards(stats, analytics) : []),
+    [stats, analytics],
+  );
   const chartData = useMemo(() => chart, [chart]);
 
   const loadDashboard = useCallback(async () => {
     setDashLoading(true);
-    const res = await getDashboardStats();
+    const [res, analyticsRes] = await Promise.all([getDashboardStats(), fetchAnalyticsOverview()]);
     setStats(res.stats);
     setChart(res.chart);
     setToday(res.today);
-    setDashError(res.error ?? "");
+    setAnalytics(analyticsRes.overview);
+    setDashError(res.error ?? analyticsRes.error ?? "");
     setDashLoading(false);
   }, []);
 
@@ -123,6 +143,22 @@ export default function AdminDashboardPage() {
         </div>
 
         <Link
+          href={ROUTES.adminAnalytics}
+          className="interactive-press-sm mt-4 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary-light/60 px-4 py-3 dark:border-primary/30 dark:bg-primary/10"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-primary">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M4 19V5M4 19H20M4 19L8 15M20 19V9M20 9H8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold text-[#0F172A] dark:text-white">KPI и аналитика</span>
+            <span className="block text-[12px] text-secondary">Врачи · пациенты · экспорт CSV</span>
+          </span>
+          <span className="text-primary text-[13px] font-semibold shrink-0">Открыть</span>
+        </Link>
+
+        <Link
           href={ROUTES.adminLogs}
           className="interactive-press-sm mt-4 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary-light/60 px-4 py-3 dark:border-primary/30 dark:bg-primary/10"
         >
@@ -132,6 +168,34 @@ export default function AdminDashboardPage() {
           <span className="min-w-0 flex-1">
             <span className="block text-[14px] font-semibold text-[#0F172A] dark:text-white">Логи системы</span>
             <span className="block text-[12px] text-secondary">Supabase · фильтр по уровню · экспорт JSON</span>
+          </span>
+          <span className="text-primary text-[13px] font-semibold shrink-0">Открыть</span>
+        </Link>
+
+        <Link
+          href={ROUTES.adminSettings}
+          className="interactive-press-sm mt-3 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary-light/60 px-4 py-3 dark:border-primary/30 dark:bg-primary/10"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-primary">
+            <Settings className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold text-[#0F172A] dark:text-white">Настройки клиники</span>
+            <span className="block text-[12px] text-secondary">Брендинг · контакты · цвет</span>
+          </span>
+          <span className="text-primary text-[13px] font-semibold shrink-0">Открыть</span>
+        </Link>
+
+        <Link
+          href={ROUTES.adminAudit}
+          className="interactive-press-sm mt-3 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary-light/60 px-4 py-3 dark:border-primary/30 dark:bg-primary/10"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-primary">
+            <ShieldCheck className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold text-[#0F172A] dark:text-white">Audit Trail</span>
+            <span className="block text-[12px] text-secondary">Мед. данные · кто изменил · diff</span>
           </span>
           <span className="text-primary text-[13px] font-semibold shrink-0">Открыть</span>
         </Link>
@@ -149,16 +213,31 @@ export default function AdminDashboardPage() {
                 className="rounded-2xl p-4 h-[88px] bg-slate-100 dark:bg-slate-800 animate-pulse border border-slate-200/80 dark:border-slate-700/50"
               />
             ))
-          : statCards.map((s) => (
-              <div
-                key={s.label}
-                className={`rounded-2xl p-4 shadow-[0_4px_14px_rgba(15,23,42,0.07)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-700/50 ${s.color}`}
-              >
-                <p className={`text-[22px] font-bold ${s.textColor} leading-none tabular-nums`}>{s.value}</p>
-                <p className="text-[12px] font-semibold text-[#0F172A] dark:text-white mt-1 leading-tight">{s.label}</p>
-                <p className="text-[11px] text-secondary mt-0.5">{s.sub}</p>
-              </div>
-            ))}
+          : statCards.map((s) => {
+              const inner = (
+                <>
+                  <p className={`text-[22px] font-bold ${s.textColor} leading-none tabular-nums`}>{s.value}</p>
+                  <p className="text-[12px] font-semibold text-[#0F172A] dark:text-white mt-1 leading-tight">{s.label}</p>
+                  <p className="text-[11px] text-secondary mt-0.5">{s.sub}</p>
+                </>
+              );
+              return "href" in s && s.href ? (
+                <Link
+                  key={s.label}
+                  href={s.href}
+                  className={`interactive-press-sm rounded-2xl p-4 shadow-[0_4px_14px_rgba(15,23,42,0.07)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-700/50 ${s.color}`}
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div
+                  key={s.label}
+                  className={`rounded-2xl p-4 shadow-[0_4px_14px_rgba(15,23,42,0.07)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] border border-slate-200/80 dark:border-slate-700/50 ${s.color}`}
+                >
+                  {inner}
+                </div>
+              );
+            })}
       </div>
 
       <div className="px-5 mb-4 space-y-3">

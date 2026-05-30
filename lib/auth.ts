@@ -1,4 +1,5 @@
 import type { ToothStatus } from "@/types";
+import { dentalApiFetch } from "@/lib/api/fetchApi";
 import { supabase } from "@/lib/supabaseClient";
 import { getTelegramUserId } from "@/lib/telegramWebApp";
 import {
@@ -250,19 +251,16 @@ export async function fetchClientByPhoneForAuth(cleanPhone: string): Promise<{
 
 /** Подтянуть клиентов и сотрудников в память (нужно перед UI, завязанным на getDentalClients). */
 export async function refreshDentalCaches(): Promise<void> {
-  const [clientsRes, empRes] = await Promise.all([
-    supabase.from("dental_clients").select("*").order("created_at", { ascending: true }),
-    supabase.from("dental_employees").select("*").order("name", { ascending: true }),
-  ]);
-  if (!clientsRes.error && clientsRes.data) {
-    clientsCache = clientsRes.data.map((r) =>
-      mapClientRow(r as Parameters<typeof mapClientRow>[0])
-    );
-  }
-  if (!empRes.error && empRes.data) {
-    employeesCache = empRes.data.map((r) =>
-      mapEmployeeRow(r as Parameters<typeof mapEmployeeRow>[0])
-    );
+  try {
+    const result = await dentalApiFetch<{
+      dental_clients: Parameters<typeof mapClientRow>[0][];
+      dental_employees: Parameters<typeof mapEmployeeRow>[0][];
+    }>("/api/cache/dental", { method: "POST" });
+
+    clientsCache = (result.dental_clients ?? []).map((r) => mapClientRow(r));
+    employeesCache = (result.dental_employees ?? []).map((r) => mapEmployeeRow(r));
+  } catch (e) {
+    console.warn("[auth] refreshDentalCaches via API:", e);
   }
 }
 
@@ -362,13 +360,11 @@ export async function createUser(
 }
 
 export async function updateClientFormulaTeethByClientId(clientId: string, teeth: ToothStatus[]): Promise<void> {
-  /** Явно сериализуем в JSON для jsonb (без ссылок/циклов). */
   const jsonPayload = JSON.parse(JSON.stringify(teeth)) as ToothStatus[];
-  const { error } = await supabase
-    .from("dental_clients")
-    .update({ formula_teeth: jsonPayload })
-    .eq("id", clientId);
-  if (error) throw error;
+  await dentalApiFetch(`/api/clients/${encodeURIComponent(clientId)}`, {
+    method: "PATCH",
+    body: { formulaTeeth: jsonPayload },
+  });
   const idx = clientsCache.findIndex((c) => c.id === clientId);
   if (idx !== -1) {
     const next = [...clientsCache];
@@ -448,20 +444,33 @@ export async function fetchDentalClientById(patientKey: string): Promise<{
     idForQuery = resolved.id;
   }
 
-  const { data, error } = await supabase
-    .from("dental_clients")
-    .select("*")
-    .eq("id", idForQuery)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return { client: null, internalNotesSchemaMissing: false };
+  try {
+    const { row } = await dentalApiFetch<{ row: Record<string, unknown> }>(
+      `/api/clients/${encodeURIComponent(idForQuery)}`,
+      { method: "GET" },
+    );
+    if (!row) return { client: null, internalNotesSchemaMissing: false };
+    const schemaMissing = !Object.prototype.hasOwnProperty.call(row, "internal_notes");
+    return {
+      client: mapClientRow(row as Parameters<typeof mapClientRow>[0]),
+      internalNotesSchemaMissing: schemaMissing,
+    };
+  } catch {
+    const { data, error } = await supabase
+      .from("dental_clients")
+      .select("*")
+      .eq("id", idForQuery)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { client: null, internalNotesSchemaMissing: false };
 
-  const raw = data as Record<string, unknown>;
-  const schemaMissing = !Object.prototype.hasOwnProperty.call(raw, "internal_notes");
-  return {
-    client: mapClientRow(data as Parameters<typeof mapClientRow>[0]),
-    internalNotesSchemaMissing: schemaMissing,
-  };
+    const raw = data as Record<string, unknown>;
+    const schemaMissing = !Object.prototype.hasOwnProperty.call(raw, "internal_notes");
+    return {
+      client: mapClientRow(data as Parameters<typeof mapClientRow>[0]),
+      internalNotesSchemaMissing: schemaMissing,
+    };
+  }
 }
 
 export async function fetchClientInternalNotes(patientKey: string): Promise<ClientInternalNotesFetch> {
@@ -484,11 +493,10 @@ export async function fetchClientInternalNotes(patientKey: string): Promise<Clie
 
 export async function updateClientInternalNotes(patientKey: string, internalNotes: string): Promise<void> {
   const client = await requireDentalClientByPatientKey(patientKey);
-  const { error } = await supabase
-    .from("dental_clients")
-    .update({ internal_notes: internalNotes })
-    .eq("id", client.id);
-  if (error) throw error;
+  await dentalApiFetch(`/api/clients/${encodeURIComponent(client.id)}`, {
+    method: "PATCH",
+    body: { internalNotes },
+  });
   const idx = clientsCache.findIndex((c) => c.id === client.id);
   if (idx !== -1) {
     const next = [...clientsCache];
@@ -549,21 +557,17 @@ export async function updateClientPersonalProfile(payload: {
   const firstName = payload.firstName.trim();
   const lastName = payload.lastName.trim();
   const email = payload.email.trim();
-  const phone = normalizePhone(payload.phoneDigits);
-  const name = `${firstName} ${lastName}`.trim();
 
-  const { error } = await supabase
-    .from("dental_clients")
-    .update({
-      first_name: firstName || null,
-      last_name: lastName || null,
-      email: email || null,
-      phone,
-      name: name || null,
-    })
-    .eq("id", payload.clientId);
-
-  if (error) throw error;
+  await dentalApiFetch("/api/clients/profile", {
+    method: "PATCH",
+    body: {
+      clientId: payload.clientId,
+      firstName,
+      lastName,
+      email,
+      phoneDigits: payload.phoneDigits,
+    },
+  });
 
   await refreshDentalCaches();
 
@@ -589,23 +593,13 @@ export async function syncTelegramIdToSupabaseIfNeeded(): Promise<void> {
 
   const session = getDentalSession();
   if (!session?.id) return;
+  if (session.role !== "client" && session.role !== "doctor" && session.role !== "admin") return;
 
-  const table =
-    session.role === "client" ? "dental_clients"
-    : session.role === "doctor" || session.role === "admin" ? "dental_employees"
-    : null;
-  if (!table) return;
-
-  const patch = { telegram_id: tgId };
-  const { error } = await supabase
-    .from(table)
-    .update(patch)
-    .eq("id", session.id)
-    .is("telegram_id", null);
-
-  if (error) {
+  try {
+    await dentalApiFetch("/api/auth/telegram-id", { method: "POST", body: { telegramId: tgId } });
+  } catch (error) {
     if (isTelegramIdSchemaMissingError(error)) return;
-    console.warn("[auth] syncTelegramIdToSupabaseIfNeeded:", error.message ?? error);
+    console.warn("[auth] syncTelegramIdToSupabaseIfNeeded:", error instanceof Error ? error.message : error);
     return;
   }
 

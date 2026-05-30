@@ -2,7 +2,7 @@
  * planUtils — единый источник истины для экрана "План лечения" и виджета на главной.
  *
  * Логика:
- *  1. Статичные элементы плана (от врача, без appointmentId) — из treatmentPlan localStorage.
+ *  1. Статичные элементы плана (от врача, без appointmentId) — из Supabase `treatment_plan_items`.
  *  2. Элементы из записей пациента — деривируются из записей Supabase (appointments), синхронизируемых через refreshAppointmentsCache.
  *  Итоговый список = merge(static, fromAppointments).
  *
@@ -48,7 +48,7 @@ export function aptToPlanItem(apt: Appointment): TreatmentPlanItem {
  * Sorted within each category by date (ascending).
  */
 export function buildMergedPlanItems(): TreatmentPlanItem[] {
-  const staticItems = getStaticPlanItems(); // from treatment_plan localStorage
+  const staticItems = getStaticPlanItems(); // from Supabase treatment_plan_items
   const appointments = getAppointments();
 
   const fromAppointments: TreatmentPlanItem[] = appointments

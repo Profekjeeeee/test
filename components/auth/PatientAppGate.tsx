@@ -20,10 +20,13 @@ import { log } from "@/lib/logger";
 import {
   PUBLIC_ROUTE_PREFIXES,
   PATIENT_ROUTE_PREFIXES,
+  SHARED_ROUTE_PREFIXES,
   ADMIN_ROUTE_PREFIX,
+  PLATFORM_ROUTE_PREFIX,
   DOCTOR_ROUTE_PREFIX,
   ROUTES,
 } from "@/lib/routes";
+import { fetchPlatformMe } from "@/lib/platform/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 function isPublicPath(pathname: string): boolean {
@@ -48,6 +51,7 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
 
   /** undefined — гидратация клиента не завершена; не считаем пользователя разлогиненным до чтения localStorage */
   const [hydratedSession, setHydratedSession] = useState<DentalSession | null | undefined>(undefined);
+  const [platformAdminOk, setPlatformAdminOk] = useState<boolean | null>(null);
   const hydrationLogDone = useRef(false);
 
   /** Мгновенно поднимаем сессию из LS (до сетевых запросов), затем синхронизируем Supabase по телефону. */
@@ -126,6 +130,10 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
     }
   }, [pathname]);
 
+  useEffect(() => {
+    setPlatformAdminOk(null);
+  }, [pathname, hydratedSession?.id]);
+
   /** Лог один раз после первого чтения сессии с клиента */
   useEffect(() => {
     if (hydratedSession === undefined || hydrationLogDone.current) return;
@@ -157,6 +165,21 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
 
     const session = hydratedSession;
 
+    if (pathname.startsWith(PLATFORM_ROUTE_PREFIX)) {
+      if (!session) {
+        router.replace(ROUTES.auth);
+        return;
+      }
+      if (platformAdminOk === null) {
+        void fetchPlatformMe().then((r) => setPlatformAdminOk(r.isPlatformAdmin));
+        return;
+      }
+      if (!platformAdminOk) {
+        router.replace(ROUTES.auth);
+      }
+      return;
+    }
+
     if (pathname.startsWith(ADMIN_ROUTE_PREFIX)) {
       if (session?.role !== "admin") {
         router.replace(ROUTES.auth);
@@ -169,12 +192,22 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
       return;
     }
 
+    if (matchesAnyPrefix(pathname, SHARED_ROUTE_PREFIXES)) {
+      if (!session || (session.role !== "client" && session.role !== "doctor" && session.role !== "admin")) {
+        router.replace(ROUTES.auth);
+      }
+      return;
+    }
+
     if (matchesAnyPrefix(pathname, PATIENT_ROUTE_PREFIXES)) {
       if (!session || session.role !== "client") router.replace(ROUTES.auth);
     }
-  }, [pathname, router, hydratedSession, authStatus, pinPhase, pinUnlocked]);
+  }, [pathname, router, hydratedSession, authStatus, pinPhase, pinUnlocked, platformAdminOk]);
 
-  if (hydratedSession === undefined && !isPublicPath(pathname)) {
+  if (
+    hydratedSession === undefined && !isPublicPath(pathname)
+    || (pathname.startsWith(PLATFORM_ROUTE_PREFIX) && platformAdminOk === null && hydratedSession !== undefined && hydratedSession !== null)
+  ) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-surface dark:bg-app-canvas text-secondary text-[13px]" aria-busy="true">
         Загрузка кабинета…

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "demo:docs": "echo See docs/DEMO_STAND.md — run seed_demo_commercial.sql in Supabase SQL Editor"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

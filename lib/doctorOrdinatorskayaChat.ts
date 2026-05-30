@@ -1,3 +1,4 @@
+import { dentalApiFetch } from "@/lib/api/fetchApi";
 import { supabase } from "@/lib/supabaseClient";
 import { sanitizeFormulaTeethForSupabase } from "@/lib/patientTeeth";
 import type { ToothStatus } from "@/types";
@@ -96,6 +97,16 @@ function pickGeneralDoctorRoomRow(row: unknown): { id: string; name: string } | 
  * Если записи ещё нет (пустая БД, первая сессия Mini App) — создаём строку автоматически.
  */
 export async function ensureGeneralDoctorRoom(): Promise<{ id: string; name: string } | null> {
+  try {
+    const result = await dentalApiFetch<{ id: string; name: string }>(
+      "/api/doctor/rooms?action=general",
+      { method: "GET" },
+    );
+    if (result?.id) return { id: result.id, name: result.name || GENERAL_ROOM_FALLBACK_NAME };
+  } catch (e) {
+    console.warn("[doctorOrdinatorskayaChat] API general room fallback:", e);
+  }
+
   const selectGeneral = async () => {
     const { data, error } = await supabase
       .from("doctor_rooms")
@@ -132,6 +143,16 @@ export async function ensureGeneralDoctorRoom(): Promise<{ id: string; name: str
 
 /** Все личные комнаты текущего врача: peerId → roomId. */
 export async function fetchMyDirectRoomPeerMap(selfId: string): Promise<Record<string, string>> {
+  try {
+    const { map } = await dentalApiFetch<{ map: Record<string, string> }>(
+      `/api/doctor/rooms?action=dm-map&selfId=${encodeURIComponent(selfId)}`,
+      { method: "GET" },
+    );
+    return map ?? {};
+  } catch (e) {
+    console.warn("[doctorOrdinatorskayaChat] API dm map fallback:", e);
+  }
+
   const { data, error } = await supabase
     .from("doctor_rooms")
     .select("id, peer_low, peer_high")
@@ -171,6 +192,16 @@ export async function findOrCreatePrivateDoctorRoom(
     return { roomId: null, error: "Некорректный собеседник" };
   }
   const { low, high } = orderedPair(selfId, peerId);
+
+  try {
+    const { roomId } = await dentalApiFetch<{ roomId: string }>("/api/doctor/rooms", {
+      method: "POST",
+      body: { action: "private-room", peerId },
+    });
+    if (roomId) return { roomId, error: null };
+  } catch (e) {
+    console.warn("[doctorOrdinatorskayaChat] API private room fallback:", e);
+  }
 
   const { data: existing, error: selErr } = await supabase
     .from("doctor_rooms")
@@ -228,6 +259,16 @@ export async function fetchDoctorRoomMessages(
   roomId: string,
   limit: number
 ): Promise<DoctorOrdinatorskayaMessage[]> {
+  try {
+    const { rows } = await dentalApiFetch<{ rows: DoctorMessageRow[] }>(
+      `/api/doctor/rooms?action=messages&roomId=${encodeURIComponent(roomId)}&limit=${limit}`,
+      { method: "GET" },
+    );
+    return (rows ?? []).map(rowToMessage);
+  } catch (e) {
+    console.warn("[doctorOrdinatorskayaChat] API messages fallback:", e);
+  }
+
   const { data, error } = await supabase
     .from("doctor_messages")
     .select("id, room_id, sender_id, sender_name, body, created_at, updated_at, metadata")
@@ -300,6 +341,23 @@ export async function sendDoctorRoomMessage(payload: {
   };
   if (payload.metadata != null) {
     insertPayload.metadata = payload.metadata;
+  }
+
+  try {
+    const { row } = await dentalApiFetch<{ row: DoctorMessageRow }>("/api/doctor/rooms", {
+      method: "POST",
+      body: {
+        action: "message",
+        roomId: payload.roomId,
+        senderId: payload.senderId,
+        senderName: insertPayload.sender_name,
+        body,
+        metadata: payload.metadata ?? undefined,
+      },
+    });
+    return { message: rowToMessage(row), error: null };
+  } catch (e) {
+    console.warn("[doctorOrdinatorskayaChat] API send fallback:", e);
   }
 
   const { data, error } = await supabase

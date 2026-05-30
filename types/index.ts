@@ -133,6 +133,25 @@ export interface Bill {
   canPayOnline: boolean;
 }
 
+// ─── Payments ────────────────────────────────────────────────────────────────
+
+export type PaymentMethod = "online" | "cash" | "card_terminal" | "transfer";
+export type PaymentStatus = "pending" | "processing" | "succeeded" | "failed" | "refunded";
+export type PaymentProvider = "mock" | "yookassa" | "tinkoff" | "sberbank";
+
+export interface Payment {
+  id: string;
+  billId: string;
+  patientId: string;
+  amount: number;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  provider: PaymentProvider;
+  externalId?: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
 // ─── Patient / Profile ───────────────────────────────────────────────────────
 
 export interface Patient {

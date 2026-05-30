@@ -1,4 +1,6 @@
-import { getCurrentUserId } from "@/lib/auth";
+import { getCurrentUserId, getDentalSession } from "@/lib/auth";
+import { resolveClientIdForAppointment } from "@/lib/appointments";
+import { supabase } from "@/lib/supabaseClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +23,27 @@ export interface TreatmentPlanStats {
   paidAmount: number;
   totalAmount: number;
   progressPercent: number;
+}
+
+interface TreatmentPlanItemRow {
+  id: string;
+  patient_id: string;
+  doctor_id: string | null;
+  appointment_id: string | null;
+  title: string;
+  description: string;
+  category: string;
+  price: number | string;
+  priority: number;
+  status: string;
+  planned_date: string | null;
+  completed_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CachedTreatmentPlanItem extends TreatmentPlanItem {
+  patientId: string;
 }
 
 // ─── Category stage ordering ──────────────────────────────────────────────────
@@ -52,6 +75,35 @@ export function getItemStatus(isoDate: string): TreatmentItemStatus {
   return "pending";
 }
 
+function dbStatusFromItemStatus(status: TreatmentItemStatus): string {
+  if (status === "completed") return "completed";
+  if (status === "in-progress") return "in_progress";
+  return "pending";
+}
+
+function rowToCachedItem(row: TreatmentPlanItemRow): CachedTreatmentPlanItem {
+  const date =
+    row.planned_date ??
+    row.completed_date ??
+    row.created_at.split("T")[0];
+
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    appointmentId: row.appointment_id ?? undefined,
+    category: row.category || "Прочее",
+    title: row.title,
+    price: Number(row.price),
+    date,
+  };
+}
+
+function stripPatientId(item: CachedTreatmentPlanItem): TreatmentPlanItem {
+  const { patientId: _pid, ...rest } = item;
+  void _pid;
+  return rest;
+}
+
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export function computeStats(items: TreatmentPlanItem[]): TreatmentPlanStats {
@@ -81,65 +133,199 @@ export function computeStats(items: TreatmentPlanItem[]): TreatmentPlanStats {
   return { completed, inProgress, pending, total, paidAmount, totalAmount, progressPercent };
 }
 
-// ─── Storage ──────────────────────────────────────────────────────────────────
+// ─── Storage (Supabase) ───────────────────────────────────────────────────────
 
-const BASE_KEY = "treatment_plan";
-const BASE_VERSION_KEY = "treatment_plan_version";
-const STORAGE_VERSION = "v3"; // bumped for user-scoped migration
+const LEGACY_BASE_KEY = "treatment_plan";
+const LEGACY_VERSION_KEY = "treatment_plan_version";
+const MIGRATION_FLAG = "treatment_plan_migrated_to_supabase_v1";
 
-function storageKey(): string {
+function getClientSubjectIdForFilters(): string | null {
   const uid = getCurrentUserId();
-  return uid ? `${BASE_KEY}_${uid}` : BASE_KEY;
+  if (uid) return uid;
+  const session = getDentalSession();
+  if (session?.role === "client" && session.id) return session.id;
+  return null;
 }
 
-function versionKey(): string {
-  const uid = getCurrentUserId();
-  return uid ? `${BASE_VERSION_KEY}_${uid}` : BASE_VERSION_KEY;
+function legacyStorageKey(uid?: string | null): string {
+  const id = uid ?? getCurrentUserId();
+  return id ? `${LEGACY_BASE_KEY}_${id}` : LEGACY_BASE_KEY;
 }
 
-export function initTreatmentPlan(): void {
+function migrationFlagKey(uid: string): string {
+  return `${MIGRATION_FLAG}_${uid}`;
+}
+
+function dispatchTreatmentPlanUpdated(): void {
   if (typeof window === "undefined") return;
-
-  const version = localStorage.getItem(versionKey());
-
-  if (version !== STORAGE_VERSION) {
-    // New user or migration: start with empty plan
-    localStorage.setItem(storageKey(), JSON.stringify([]));
-    localStorage.setItem(versionKey(), STORAGE_VERSION);
-    return;
-  }
-
-  if (!localStorage.getItem(storageKey())) {
-    localStorage.setItem(storageKey(), JSON.stringify([]));
-  }
-}
-
-export function getStaticPlanItems(): TreatmentPlanItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(storageKey());
-    if (!stored) return [];
-    const parsed = JSON.parse(stored) as TreatmentPlanItem[];
-    return parsed.filter((item) => !item.appointmentId);
-  } catch {
-    return [];
-  }
-}
-
-export function saveStaticPlanItems(items: TreatmentPlanItem[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(storageKey(), JSON.stringify(items));
   window.dispatchEvent(new Event("treatmentPlanUpdated"));
 }
 
-/** Все позиции плана лечения пользователя (по patientId в localStorage). */
-export function getTreatmentPlanItemsForUser(userId: string): TreatmentPlanItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`${BASE_KEY}_${userId}`);
-    if (!raw) return [];
-    return JSON.parse(raw) as TreatmentPlanItem[];
-  } catch {
-    return [];
+let treatmentPlanCache: CachedTreatmentPlanItem[] | null = null;
+
+export async function refreshTreatmentPlanCache(): Promise<void> {
+  const { data, error } = await supabase
+    .from("treatment_plan_items")
+    .select("*")
+    .is("appointment_id", null)
+    .order("planned_date", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("[treatmentPlan]", error);
+    return;
   }
+
+  treatmentPlanCache = ((data ?? []) as TreatmentPlanItemRow[]).map(rowToCachedItem);
+  dispatchTreatmentPlanUpdated();
+}
+
+async function resolvePatientIdForWrite(): Promise<string | null> {
+  const uid = getCurrentUserId();
+  if (uid) return uid;
+  return resolveClientIdForAppointment();
+}
+
+async function migrateTreatmentPlanFromLocalStorage(): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  const patientId = await resolvePatientIdForWrite();
+  if (!patientId) return;
+
+  const flagKey = migrationFlagKey(patientId);
+  if (localStorage.getItem(flagKey)) return;
+
+  const raw = localStorage.getItem(legacyStorageKey(patientId));
+  if (!raw) {
+    localStorage.removeItem(legacyStorageKey(null));
+    localStorage.removeItem(`${LEGACY_VERSION_KEY}_${patientId}`);
+    localStorage.setItem(flagKey, "1");
+    return;
+  }
+
+  let legacyItems: TreatmentPlanItem[] = [];
+  try {
+    legacyItems = JSON.parse(raw) as TreatmentPlanItem[];
+  } catch {
+    localStorage.setItem(flagKey, "1");
+    return;
+  }
+
+  for (const item of legacyItems.filter((i) => !i.appointmentId)) {
+    const phase = getItemStatus(item.date);
+    const { error } = await supabase.from("treatment_plan_items").insert([
+      {
+        patient_id: patientId,
+        title: item.title,
+        description: item.title,
+        category: item.category,
+        price: item.price,
+        priority: getCategoryStageNum(item.category),
+        status: dbStatusFromItemStatus(phase),
+        planned_date: item.date,
+        completed_date: phase === "completed" ? item.date : null,
+      },
+    ]);
+
+    if (error) {
+      console.error("[treatmentPlan] migrate", error);
+    }
+  }
+
+  localStorage.removeItem(legacyStorageKey(patientId));
+  localStorage.removeItem(legacyStorageKey(null));
+  localStorage.removeItem(`${LEGACY_VERSION_KEY}_${patientId}`);
+  localStorage.removeItem(LEGACY_VERSION_KEY);
+  localStorage.setItem(flagKey, "1");
+}
+
+export async function initTreatmentPlan(): Promise<void> {
+  await migrateTreatmentPlanFromLocalStorage();
+  await refreshTreatmentPlanCache();
+}
+
+export function getStaticPlanItems(): TreatmentPlanItem[] {
+  const subjectId = getClientSubjectIdForFilters();
+  if (!subjectId || !treatmentPlanCache) return [];
+
+  return treatmentPlanCache
+    .filter((item) => item.patientId === subjectId && !item.appointmentId)
+    .map(stripPatientId);
+}
+
+/** Загрузить позиции плана для пациента (кабинет врача). Обновляет кэш для этого patientId. */
+export async function fetchTreatmentPlanItemsForPatient(
+  patientId: string
+): Promise<TreatmentPlanItem[]> {
+  const { data, error } = await supabase
+    .from("treatment_plan_items")
+    .select("*")
+    .eq("patient_id", patientId)
+    .is("appointment_id", null)
+    .order("planned_date", { ascending: true });
+
+  if (error) {
+    console.error("[treatmentPlan] fetchForPatient", error);
+    return getTreatmentPlanItemsForUser(patientId);
+  }
+
+  const fetched = ((data ?? []) as TreatmentPlanItemRow[]).map(rowToCachedItem);
+  const rest = (treatmentPlanCache ?? []).filter((i) => i.patientId !== patientId);
+  treatmentPlanCache = [...rest, ...fetched];
+
+  return fetched.map(stripPatientId);
+}
+
+/** Позиции плана пациента из кэша (после initTreatmentPlan или fetchTreatmentPlanItemsForPatient). */
+export function getTreatmentPlanItemsForUser(userId: string): TreatmentPlanItem[] {
+  if (!treatmentPlanCache) return [];
+
+  return treatmentPlanCache
+    .filter((item) => item.patientId === userId && !item.appointmentId)
+    .map(stripPatientId);
+}
+
+export async function saveStaticPlanItems(items: TreatmentPlanItem[]): Promise<void> {
+  const patientId = await resolvePatientIdForWrite();
+  if (!patientId) return;
+
+  const existing = getStaticPlanItems();
+  const existingIds = new Set(existing.map((i) => i.id));
+  const nextIds = new Set(items.map((i) => i.id));
+
+  for (const id of existingIds) {
+    if (!nextIds.has(id)) {
+      const { error } = await supabase.from("treatment_plan_items").delete().eq("id", id);
+      if (error) console.error("[treatmentPlan] delete", error);
+    }
+  }
+
+  for (const item of items) {
+    const phase = getItemStatus(item.date);
+    const payload = {
+      patient_id: patientId,
+      title: item.title,
+      description: item.title,
+      category: item.category,
+      price: item.price,
+      priority: getCategoryStageNum(item.category),
+      status: dbStatusFromItemStatus(phase),
+      planned_date: item.date,
+      completed_date: phase === "completed" ? item.date : null,
+      appointment_id: null,
+    };
+
+    if (existingIds.has(item.id)) {
+      const { error } = await supabase
+        .from("treatment_plan_items")
+        .update(payload)
+        .eq("id", item.id);
+      if (error) console.error("[treatmentPlan] update", error);
+    } else {
+      const { error } = await supabase.from("treatment_plan_items").insert([payload]);
+      if (error) console.error("[treatmentPlan] insert", error);
+    }
+  }
+
+  await refreshTreatmentPlanCache();
 }

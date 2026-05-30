@@ -131,12 +131,45 @@ function Field({ label, value, onChange, error, type = "text", inputMode, placeh
 
 const CLINIC_LINKS = [
   {
+    href: "/cabinet",
+    label: "Мой кабинет",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <rect x="2" y="3" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2 7H16M6 3V7M12 3V7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M6 10H10M6 12.5H8.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     href: ROUTES.patientSupportChat,
     label: "Поддержка / чат",
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
         <path d="M4 13V15L7 13H13C13.5523 13 14 12.5523 14 12V6C14 5.44772 13.5523 5 13 5H5C4.44772 5 4 5.44772 4 6V13Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
         <path d="M6 8H12M6 10H10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    href: "/documents",
+    label: "Мои документы",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <path d="M4 3H11L14 6V15H4V3Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+        <path d="M11 3V6H14" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+        <path d="M7 9H11M7 12H10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    href: "/treatment-history",
+    label: "История лечения",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-primary">
+        <rect x="3" y="2" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M6 6H12M6 9H10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M9 12V14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       </svg>
     ),
   },

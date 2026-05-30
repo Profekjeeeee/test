@@ -95,8 +95,8 @@ const TABS: {
   },
   {
     id: "more",
-    label: "Ещё",
-    href: "/profile",
+    label: "Кабинет",
+    href: "/cabinet",
     icon: ({ active }) => (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" aria-hidden>
         <circle
@@ -123,7 +123,19 @@ export default function BottomBar() {
   const pathname = usePathname();
   const upcomingCount = useUpcomingCount();
 
-  const isActive = (href: string) => pathname.startsWith(href);
+  const isActive = (href: string, tabId?: BottomTabId) => {
+    if (tabId === "more") {
+      return (
+        pathname.startsWith("/cabinet") ||
+        pathname.startsWith("/profile") ||
+        pathname.startsWith("/treatment-history") ||
+        pathname.startsWith("/documents") ||
+        pathname.startsWith("/prevention") ||
+        pathname.startsWith("/treatment-plan")
+      );
+    }
+    return pathname.startsWith(href);
+  };
 
   return (
     <nav
@@ -135,7 +147,7 @@ export default function BottomBar() {
       >
         <ul className="flex min-h-[3.25rem] flex-1 items-center justify-around">
           {TABS.map((tab) => {
-            const active = isActive(tab.href);
+            const active = isActive(tab.href, tab.id);
             const Icon = tab.icon;
             const showBadge = tab.id === "appointments" && upcomingCount > 0;
             return (

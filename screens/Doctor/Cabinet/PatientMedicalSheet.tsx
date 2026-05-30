@@ -16,8 +16,39 @@ import {
   type DentalEmployeeRecord,
 } from "@/lib/auth";
 import { findOrCreatePrivateDoctorRoom, sendConsiliumCaseMessage } from "@/lib/doctorOrdinatorskayaChat";
-import { getAllClinicAppointments, type ClinicAppointment } from "@/lib/appointments";
-import { getTreatmentPlanItemsForUser, getItemStatus } from "@/lib/treatmentPlan";
+import { getAllClinicAppointments, initAppointments, type ClinicAppointment } from "@/lib/appointments";
+import {
+  fetchTreatmentPlanItemsForPatient,
+  getItemStatus,
+  type TreatmentPlanItem,
+} from "@/lib/treatmentPlan";
+import {
+  fetchPatientVisitsForPatient,
+  createPatientVisit,
+  parseToothNumbersInput,
+  formatVisitDate,
+  formatVisitPrice,
+  formatToothNumbers,
+  type PatientVisit,
+} from "@/lib/patientVisits";
+import {
+  fetchMedicalRecordsForPatient,
+  createMedicalRecord,
+  RECORD_TYPE_LABELS,
+  type MedicalRecord,
+  type MedicalRecordType,
+} from "@/lib/medicalRecords";
+import {
+  fetchPatientFilesForPatient,
+  uploadPatientFile,
+  deletePatientFile,
+  updatePatientFileVisibility,
+  validatePatientFile,
+  formatFileDate,
+  formatFileSize,
+  FILE_CATEGORY_LABELS,
+  type PatientFile,
+} from "@/lib/patientFiles";
 import {
   sortAppointmentsHistoryDesc,
   appointmentStatusLabelRu,
@@ -25,6 +56,8 @@ import {
 import { getPatientTeethState, persistPatientTeeth, sanitizeFormulaTeethForSupabase } from "@/lib/patientTeeth";
 import type { ToothCondition, ToothStatus } from "@/types";
 import PatientToothFormula from "@/components/dental/PatientToothFormula";
+import DoctorAiToolbar from "@/components/ai/DoctorAiToolbar";
+import type { ExamDraftResult } from "@/lib/aiAssistant";
 import { useToast } from "@/hooks/useToast";
 import { Toast } from "@/components/ui/Toast";
 
@@ -88,6 +121,34 @@ export default function PatientMedicalSheet({
   const [internalNotesSavedFlash, setInternalNotesSavedFlash] = useState(false);
   const [consiliumOpen, setConsiliumOpen] = useState(false);
   const [consiliumBusy, setConsiliumBusy] = useState(false);
+  const [planItems, setPlanItems] = useState<TreatmentPlanItem[]>([]);
+  const [patientVisits, setPatientVisits] = useState<PatientVisit[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [patientFiles, setPatientFiles] = useState<PatientFile[]>([]);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileDeletingId, setFileDeletingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [visitFormOpen, setVisitFormOpen] = useState(false);
+  const [recordFormOpen, setRecordFormOpen] = useState(false);
+  const [visitSaving, setVisitSaving] = useState(false);
+  const [recordSaving, setRecordSaving] = useState(false);
+  const [visitForm, setVisitForm] = useState({
+    visitDate: new Date().toISOString().split("T")[0],
+    procedureTitle: "",
+    procedureDescription: "",
+    toothNumbers: "",
+    diagnosis: "",
+    clinicalNotes: "",
+    materials: "",
+    price: "",
+    visibleToPatient: true,
+  });
+  const [recordForm, setRecordForm] = useState({
+    recordType: "allergy" as MedicalRecordType,
+    title: "",
+    description: "",
+    visibleToPatient: true,
+  });
   const internalNotesPersistedRef = useRef<string | undefined>(undefined);
   const internalNotesEditedRef = useRef(false);
   const internalNotesNeedsMigrationRef = useRef(false);
@@ -252,15 +313,146 @@ export default function PatientMedicalSheet({
     return history[0] ?? null;
   }, [contextAppointment, patientId, history]);
 
-  const planItems = useMemo(() => {
+  useEffect(() => {
+    let cancelled = false;
     const key = canonicalPatientId;
-    const primary = getTreatmentPlanItemsForUser(key);
     const sync = resolveDentalClientFromCacheSync(patientId);
-    if (!sync || sync.id === patientId.trim()) return primary;
-    const secondary = getTreatmentPlanItemsForUser(sync.id);
-    const ids = new Set(primary.map((i) => i.id));
-    return [...primary, ...secondary.filter((i) => !ids.has(i.id))];
+
+    void (async () => {
+      const primary = await fetchTreatmentPlanItemsForPatient(key);
+      if (cancelled) return;
+
+      if (!sync || sync.id === patientId.trim()) {
+        setPlanItems(primary);
+        return;
+      }
+
+      const secondary = await fetchTreatmentPlanItemsForPatient(sync.id);
+      if (cancelled) return;
+
+      const ids = new Set(primary.map((i) => i.id));
+      setPlanItems([...primary, ...secondary.filter((i) => !ids.has(i.id))]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [patientId, canonicalPatientId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const key = canonicalPatientId;
+
+    void (async () => {
+      const [visits, records, files] = await Promise.all([
+        fetchPatientVisitsForPatient(key, true),
+        fetchMedicalRecordsForPatient(key, true),
+        fetchPatientFilesForPatient(key, true),
+      ]);
+      if (cancelled) return;
+      setPatientVisits(visits);
+      setMedicalRecords(records);
+      setPatientFiles(files);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canonicalPatientId]);
+
+  useEffect(() => {
+    if (!visitFormOpen) return;
+    const apt = headerAppointment;
+    if (!apt) return;
+    const y = apt.year;
+    const monthIdx = [
+      "января", "февраля", "марта", "апреля", "мая", "июня",
+      "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    ].indexOf(apt.month.toLowerCase());
+    if (monthIdx >= 0) {
+      const iso = `${y}-${String(monthIdx + 1).padStart(2, "0")}-${String(apt.day).padStart(2, "0")}`;
+      setVisitForm((f) => ({ ...f, visitDate: iso }));
+    }
+  }, [visitFormOpen, headerAppointment]);
+
+  const submitVisitForm = async () => {
+    const title = visitForm.procedureTitle.trim();
+    if (!title) {
+      showToast("Укажите название процедуры", "error");
+      return;
+    }
+    setVisitSaving(true);
+    try {
+      const created = await createPatientVisit({
+        patientId: canonicalPatientId,
+        visitDate: visitForm.visitDate,
+        procedureTitle: title,
+        procedureDescription: visitForm.procedureDescription,
+        toothNumbers: parseToothNumbersInput(visitForm.toothNumbers),
+        diagnosis: visitForm.diagnosis,
+        clinicalNotes: visitForm.clinicalNotes,
+        materials: visitForm.materials,
+        price: visitForm.price ? Number(visitForm.price) : null,
+        appointmentId: headerAppointment?.id,
+        visibleToPatient: visitForm.visibleToPatient,
+      });
+      if (!created) {
+        showToast("Не удалось сохранить запись", "error");
+        return;
+      }
+      const refreshed = await fetchPatientVisitsForPatient(canonicalPatientId, true);
+      setPatientVisits(refreshed);
+      setVisitFormOpen(false);
+      setVisitForm({
+        visitDate: new Date().toISOString().split("T")[0],
+        procedureTitle: "",
+        procedureDescription: "",
+        toothNumbers: "",
+        diagnosis: "",
+        clinicalNotes: "",
+        materials: "",
+        price: "",
+        visibleToPatient: true,
+      });
+      showToast("Запись о лечении добавлена");
+    } finally {
+      setVisitSaving(false);
+    }
+  };
+
+  const submitRecordForm = async () => {
+    const title = recordForm.title.trim();
+    if (!title) {
+      showToast("Укажите название", "error");
+      return;
+    }
+    setRecordSaving(true);
+    try {
+      const created = await createMedicalRecord({
+        patientId: canonicalPatientId,
+        recordType: recordForm.recordType,
+        title,
+        description: recordForm.description,
+        visibleToPatient: recordForm.visibleToPatient,
+      });
+      if (!created) {
+        showToast("Не удалось сохранить мед. запись", "error");
+        return;
+      }
+      const refreshed = await fetchMedicalRecordsForPatient(canonicalPatientId, true);
+      setMedicalRecords(refreshed);
+      setRecordFormOpen(false);
+      setRecordForm({
+        recordType: "allergy",
+        title: "",
+        description: "",
+        visibleToPatient: true,
+      });
+      showToast("Мед. запись добавлена");
+    } finally {
+      setRecordSaving(false);
+    }
+  };
 
   const patientTitle = displayClient
     ? `${displayClient.lastName} ${displayClient.firstName}`.trim()
@@ -440,6 +632,32 @@ export default function PatientMedicalSheet({
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-4 space-y-6 max-w-[480px] mx-auto w-full">
+        {canonicalPatientId ? (
+          <DoctorAiToolbar
+            patientId={canonicalPatientId}
+            examBriefNotes={
+              visitFormOpen
+                ? [visitForm.procedureTitle, visitForm.diagnosis, visitForm.procedureDescription]
+                    .filter(Boolean)
+                    .join(". ") || internalNotes
+                : internalNotes
+            }
+            examToothNumbers={visitFormOpen ? visitForm.toothNumbers : undefined}
+            onApplyExamDraft={(draft: ExamDraftResult) => {
+              setVisitForm((f) => ({
+                ...f,
+                procedureTitle: draft.procedureTitle || f.procedureTitle,
+                procedureDescription: draft.procedureDescription || f.procedureDescription,
+                diagnosis: draft.diagnosis || f.diagnosis,
+                clinicalNotes: draft.clinicalNotes || f.clinicalNotes,
+                materials: draft.materials || f.materials,
+              }));
+              setVisitFormOpen(true);
+              showToast("Черновик применён к форме", "success");
+            }}
+          />
+        ) : null}
+
         <section className="rounded-2xl border border-primary/25 bg-[#F0F7FD] dark:bg-primary/15 dark:border-primary/35 p-4 shadow-[0_4px_14px_rgba(36,139,207,0.08)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.28)]">
           <div className="flex items-start justify-between gap-2 mb-3">
             <div>
@@ -525,6 +743,247 @@ export default function PatientMedicalSheet({
           {internalNotesError && (
             <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-2">{internalNotesError}</p>
           )}
+        </section>
+
+        <section className="rounded-2xl border border-primary/25 bg-[#F0F7FD] dark:bg-primary/15 dark:border-primary/35 p-4 shadow-[0_4px_14px_rgba(36,139,207,0.08)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.28)]">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <h3 className="text-[13px] font-bold uppercase tracking-widest text-primary">
+              Мед. данные пациента
+            </h3>
+            <button
+              type="button"
+              onClick={() => setRecordFormOpen(true)}
+              className="interactive-press-sm shrink-0 text-[12px] font-semibold text-primary px-2 py-1 rounded-lg border border-primary/30 bg-white/80 dark:bg-slate-900"
+            >
+              + Добавить
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {medicalRecords.length === 0 ? (
+              <p className="text-[12px] text-secondary py-2">Аллергии и противопоказания не указаны.</p>
+            ) : (
+              medicalRecords.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-xl border border-primary/15 bg-white/90 dark:bg-slate-900/80 px-3 py-2.5"
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                    {RECORD_TYPE_LABELS[r.recordType]}
+                    {!r.visibleToPatient && (
+                      <span className="ml-2 text-secondary normal-case tracking-normal font-semibold">
+                        · только персонал
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white mt-0.5">{r.title}</p>
+                  {r.description && (
+                    <p className="text-[12px] text-secondary mt-0.5 leading-snug">{r.description}</p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-[0_4px_14px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.28)]">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="text-[13px] font-bold uppercase tracking-widest text-secondary">
+              Файлы и снимки
+            </h3>
+            <button
+              type="button"
+              disabled={fileUploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="interactive-press-sm shrink-0 text-[12px] font-semibold text-primary px-2.5 py-1 rounded-lg border border-primary/30 bg-primary-light/60 dark:bg-primary/10 disabled:opacity-50"
+            >
+              {fileUploading ? "Загрузка…" : "+ Файл"}
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              const err = validatePatientFile(file);
+              if (err) {
+                showToast(err, "error");
+                return;
+              }
+              setFileUploading(true);
+              void uploadPatientFile({
+                patientId: canonicalPatientId,
+                file,
+                fileCategory: file.type.startsWith("image/") ? "xray" : "document",
+              })
+                .then(async (created) => {
+                  if (!created) {
+                    showToast("Не удалось загрузить файл", "error");
+                    return;
+                  }
+                  const refreshed = await fetchPatientFilesForPatient(canonicalPatientId, true);
+                  setPatientFiles(refreshed);
+                  showToast("Файл загружен", "success");
+                })
+                .finally(() => setFileUploading(false));
+            }}
+          />
+          <p className="text-[11px] text-secondary mb-3">JPG, PNG, PDF — до 10 МБ</p>
+          <div className="flex flex-col gap-2">
+            {patientFiles.length === 0 ? (
+              <p className="text-[12px] text-secondary py-2">Снимки и документы не прикреплены.</p>
+            ) : (
+              patientFiles.map((f) => (
+                <div
+                  key={f.id}
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2.5 flex gap-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                      {FILE_CATEGORY_LABELS[f.fileCategory]}
+                      {!f.visibleToPatient && (
+                        <span className="ml-2 text-secondary normal-case tracking-normal font-semibold">
+                          · скрыто от пациента
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-[13px] font-semibold text-[#0F172A] dark:text-white truncate">
+                      {f.fileName}
+                    </p>
+                    <p className="text-[11px] text-secondary mt-0.5">
+                      {formatFileDate(f.createdAt)} · {formatFileSize(f.fileSize)}
+                    </p>
+                    {f.signedUrl && (
+                      <a
+                        href={f.signedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-semibold text-primary mt-1 inline-block"
+                      >
+                        Открыть →
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button
+                      type="button"
+                      className="text-[10px] font-semibold text-primary px-1"
+                      onClick={() => {
+                        void updatePatientFileVisibility(f.id, !f.visibleToPatient).then(
+                          async (ok) => {
+                            if (!ok) {
+                              showToast("Не удалось обновить видимость", "error");
+                              return;
+                            }
+                            const refreshed = await fetchPatientFilesForPatient(
+                              canonicalPatientId,
+                              true
+                            );
+                            setPatientFiles(refreshed);
+                          }
+                        );
+                      }}
+                    >
+                      {f.visibleToPatient ? "Скрыть" : "Показать"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={fileDeletingId === f.id}
+                      className="text-[10px] font-semibold text-[#EF4444] px-1 disabled:opacity-50"
+                      onClick={() => {
+                        setFileDeletingId(f.id);
+                        void deletePatientFile(f.id)
+                          .then(async (ok) => {
+                            if (!ok) {
+                              showToast("Не удалось удалить", "error");
+                              return;
+                            }
+                            const refreshed = await fetchPatientFilesForPatient(
+                              canonicalPatientId,
+                              true
+                            );
+                            setPatientFiles(refreshed);
+                            showToast("Файл удалён", "success");
+                          })
+                          .finally(() => setFileDeletingId(null));
+                      }}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="text-[13px] font-bold uppercase tracking-widest text-secondary">
+              История лечения
+            </h3>
+            <button
+              type="button"
+              onClick={() => setVisitFormOpen(true)}
+              className="interactive-press-sm shrink-0 text-[12px] font-semibold text-primary px-2.5 py-1 rounded-lg border border-primary/30 bg-primary-light/60 dark:bg-primary/10"
+            >
+              + Запись
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {patientVisits.length === 0 ? (
+              <p className="text-[13px] text-secondary py-4 text-center border border-dashed border-[#E2E8F0] dark:border-slate-700 rounded-2xl">
+                Записей о проведённом лечении пока нет.
+              </p>
+            ) : (
+              patientVisits.map((v) => (
+                <div
+                  key={v.id}
+                  className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 shadow-[0_4px_14px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.28)]"
+                >
+                  <div className="flex justify-between gap-2">
+                    <span className="text-[14px] font-semibold text-[#0F172A] dark:text-white">
+                      {formatVisitDate(v.visitDate)}
+                    </span>
+                    <span className="text-[13px] font-bold text-primary shrink-0 tabular-nums">
+                      {formatVisitPrice(v.price)}
+                    </span>
+                  </div>
+                  <p className="text-[14px] font-semibold text-[#0F172A] dark:text-white mt-1">{v.procedureTitle}</p>
+                  {v.doctorName && (
+                    <p className="text-[12px] text-secondary mt-0.5">{v.doctorName}</p>
+                  )}
+                  {v.diagnosis && (
+                    <p className="text-[12px] text-secondary mt-1">
+                      <span className="font-semibold">Диагноз:</span> {v.diagnosis}
+                    </p>
+                  )}
+                  {v.procedureDescription && (
+                    <p className="text-[12px] text-secondary mt-0.5">{v.procedureDescription}</p>
+                  )}
+                  {v.toothNumbers.length > 0 && (
+                    <p className="text-[11px] font-medium text-primary mt-1">
+                      {formatToothNumbers(v.toothNumbers)}
+                    </p>
+                  )}
+                  {v.materials && (
+                    <p className="text-[11px] text-secondary mt-0.5">Материалы: {v.materials}</p>
+                  )}
+                  {v.clinicalNotes && (
+                    <p className="text-[11px] text-secondary/90 mt-1.5 italic border-t border-slate-100 dark:border-slate-800 pt-1.5">
+                      {v.clinicalNotes}
+                    </p>
+                  )}
+                  {!v.visibleToPatient && (
+                    <p className="text-[10px] font-semibold text-secondary mt-1">Скрыто от пациента</p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </section>
 
         <section>
@@ -665,6 +1124,257 @@ export default function PatientMedicalSheet({
                 className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-600 text-[14px] font-semibold text-secondary interactive-press-sm"
               >
                 Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visitFormOpen && (
+        <div className="fixed inset-0 z-[115] flex flex-col justify-end sm:justify-center sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40 backdrop-blur-[2px] border-0 cursor-default"
+            aria-label="Закрыть"
+            onClick={() => !visitSaving && setVisitFormOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-[1] w-full max-w-[440px] mx-auto rounded-t-[22px] sm:rounded-[22px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-[0_-12px_40px_rgba(15,23,42,0.16)] max-h-[min(90dvh,640px)] flex flex-col"
+          >
+            <div className="px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary">История лечения</p>
+              <div className="flex items-start justify-between gap-2 mt-1">
+                <h3 className="text-[17px] font-bold text-[#0F172A] dark:text-white">Новая запись о лечении</h3>
+                {canonicalPatientId && (
+                  <button
+                    type="button"
+                    disabled={visitSaving}
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const { callAiAssistant } = await import("@/lib/aiAssistant");
+                          const res = await callAiAssistant({
+                            action: "exam_draft",
+                            patientId: canonicalPatientId,
+                            briefNotes: [
+                              visitForm.procedureTitle,
+                              visitForm.diagnosis,
+                              visitForm.procedureDescription,
+                            ]
+                              .filter(Boolean)
+                              .join(". "),
+                            toothNumbers: visitForm.toothNumbers,
+                          });
+                          if (res.examDraft) {
+                            setVisitForm((f) => ({
+                              ...f,
+                              procedureTitle: res.examDraft!.procedureTitle || f.procedureTitle,
+                              procedureDescription: res.examDraft!.procedureDescription || f.procedureDescription,
+                              diagnosis: res.examDraft!.diagnosis || f.diagnosis,
+                              clinicalNotes: res.examDraft!.clinicalNotes || f.clinicalNotes,
+                              materials: res.examDraft!.materials || f.materials,
+                            }));
+                            showToast("AI-сгенерирован черновик", "success");
+                          }
+                        } catch (e) {
+                          showToast(e instanceof Error ? e.message : "Ошибка AI", "error");
+                        }
+                      })();
+                    }}
+                    className="interactive-press-sm shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-[11px] font-semibold text-primary disabled:opacity-50"
+                  >
+                    ✦ AI
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3 space-y-3">
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Дата</span>
+                <input
+                  type="date"
+                  value={visitForm.visitDate}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, visitDate: e.target.value }))}
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Процедура *</span>
+                <input
+                  value={visitForm.procedureTitle}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, procedureTitle: e.target.value }))}
+                  placeholder="Пломбирование, гигиена…"
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Зубы (через запятую)</span>
+                <input
+                  value={visitForm.toothNumbers}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, toothNumbers: e.target.value }))}
+                  placeholder="16, 17"
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Диагноз</span>
+                <input
+                  value={visitForm.diagnosis}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, diagnosis: e.target.value }))}
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Описание</span>
+                <textarea
+                  value={visitForm.procedureDescription}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, procedureDescription: e.target.value }))}
+                  rows={2}
+                  className="mt-1 w-full rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 py-2 text-[13px] outline-none focus:border-primary resize-y"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Материалы</span>
+                <input
+                  value={visitForm.materials}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, materials: e.target.value }))}
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Стоимость, ₽</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={visitForm.price}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, price: e.target.value }))}
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Клин. заметки (только персонал)</span>
+                <textarea
+                  value={visitForm.clinicalNotes}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, clinicalNotes: e.target.value }))}
+                  rows={2}
+                  className="mt-1 w-full rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 py-2 text-[13px] outline-none focus:border-primary resize-y"
+                />
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visitForm.visibleToPatient}
+                  onChange={(e) => setVisitForm((f) => ({ ...f, visibleToPatient: e.target.checked }))}
+                  className="rounded border-primary/40 text-primary"
+                />
+                <span className="text-[13px] text-[#0F172A] dark:text-slate-200">Видно пациенту в приложении</span>
+              </label>
+            </div>
+            <div className="shrink-0 px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex gap-2 pb-[max(12px,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                disabled={visitSaving}
+                onClick={() => setVisitFormOpen(false)}
+                className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-600 text-[14px] font-semibold text-secondary interactive-press-sm"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={visitSaving}
+                onClick={() => void submitVisitForm()}
+                className="flex-1 h-11 rounded-xl bg-primary text-white text-[14px] font-semibold interactive-press-sm disabled:opacity-50"
+              >
+                {visitSaving ? "Сохранение…" : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recordFormOpen && (
+        <div className="fixed inset-0 z-[115] flex flex-col justify-end sm:justify-center sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40 backdrop-blur-[2px] border-0 cursor-default"
+            aria-label="Закрыть"
+            onClick={() => !recordSaving && setRecordFormOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-[1] w-full max-w-[440px] mx-auto rounded-t-[22px] sm:rounded-[22px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-[0_-12px_40px_rgba(15,23,42,0.16)] max-h-[min(85dvh,520px)] flex flex-col"
+          >
+            <div className="px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Мед. карта</p>
+              <h3 className="text-[17px] font-bold text-[#0F172A] dark:text-white mt-1">Новая мед. запись</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3 space-y-3">
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Тип</span>
+                <select
+                  value={recordForm.recordType}
+                  onChange={(e) =>
+                    setRecordForm((f) => ({
+                      ...f,
+                      recordType: e.target.value as MedicalRecordType,
+                    }))
+                  }
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                >
+                  {(Object.keys(RECORD_TYPE_LABELS) as MedicalRecordType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {RECORD_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Название *</span>
+                <input
+                  value={recordForm.title}
+                  onChange={(e) => setRecordForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="Лидокаин, бронхиальная астма…"
+                  className="mt-1 w-full h-11 rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 text-[14px] outline-none focus:border-primary"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-secondary uppercase">Описание</span>
+                <textarea
+                  value={recordForm.description}
+                  onChange={(e) => setRecordForm((f) => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  className="mt-1 w-full rounded-xl border border-primary/25 bg-white dark:bg-slate-900 px-3 py-2 text-[13px] outline-none focus:border-primary resize-y"
+                />
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={recordForm.visibleToPatient}
+                  onChange={(e) => setRecordForm((f) => ({ ...f, visibleToPatient: e.target.checked }))}
+                  className="rounded border-primary/40 text-primary"
+                />
+                <span className="text-[13px] text-[#0F172A] dark:text-slate-200">Видно пациенту</span>
+              </label>
+            </div>
+            <div className="shrink-0 px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex gap-2 pb-[max(12px,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                disabled={recordSaving}
+                onClick={() => setRecordFormOpen(false)}
+                className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-600 text-[14px] font-semibold text-secondary interactive-press-sm"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={recordSaving}
+                onClick={() => void submitRecordForm()}
+                className="flex-1 h-11 rounded-xl bg-primary text-white text-[14px] font-semibold interactive-press-sm disabled:opacity-50"
+              >
+                {recordSaving ? "Сохранение…" : "Сохранить"}
               </button>
             </div>
           </div>

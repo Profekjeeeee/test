@@ -1398,3 +1398,442 @@ SELECT 'doctors' AS table_name, count(*) AS rows FROM public.doctors
 UNION ALL
 SELECT 'services', count(*) FROM public.services;
 
+-- Шаг 1 ROADMAP: bills + treatment_plan_items (см. supabase/migrations/002_bills_treatment_plan.sql)
+
+CREATE OR REPLACE FUNCTION public.subject_client_pk()
+RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT c.id::text
+  FROM public.dental_clients c
+  WHERE auth.uid() IS NOT NULL
+    AND (c.auth_user_id = auth.uid() OR c.id = auth.uid())
+  ORDER BY CASE WHEN c.auth_user_id IS NOT NULL THEN 0 ELSE 1 END
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_staff_user()
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.dental_employees e
+    WHERE auth.uid() IS NOT NULL AND e.auth_user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_admin_user()
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.dental_employees e
+    WHERE auth.uid() IS NOT NULL AND e.auth_user_id = auth.uid() AND e.role = 'admin'
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.subject_client_pk() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_staff_user() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_admin_user() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.subject_client_pk() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_staff_user() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin_user() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.doctor_can_access_patient(p_patient_id text)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.appointments a
+    INNER JOIN public.dental_employees e
+      ON e.id::text IS NOT DISTINCT FROM a.doctor_id::text
+    WHERE e.auth_user_id = auth.uid()
+      AND e.role = 'doctor'
+      AND a.client_id::text IS NOT DISTINCT FROM p_patient_id
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.doctor_can_access_patient(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.doctor_can_access_patient(text) TO authenticated;
+
+CREATE TABLE IF NOT EXISTS public.bills (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL REFERENCES public.dental_clients (id) ON DELETE CASCADE,
+  appointment_id bigint REFERENCES public.appointments (id) ON DELETE SET NULL,
+  amount numeric NOT NULL DEFAULT 0 CHECK (amount >= 0),
+  paid_amount numeric NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'paid', 'partial', 'overdue')),
+  description text NOT NULL DEFAULT '',
+  bill_number text NOT NULL DEFAULT '',
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  paid_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bills_patient ON public.bills (patient_id);
+CREATE INDEX IF NOT EXISTS idx_bills_appointment ON public.bills (appointment_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_bills_appointment_pending
+  ON public.bills (appointment_id)
+  WHERE appointment_id IS NOT NULL AND status IN ('pending', 'overdue');
+
+CREATE TABLE IF NOT EXISTS public.treatment_plan_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL REFERENCES public.dental_clients (id) ON DELETE CASCADE,
+  doctor_id uuid REFERENCES public.dental_employees (id) ON DELETE SET NULL,
+  appointment_id bigint REFERENCES public.appointments (id) ON DELETE SET NULL,
+  title text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  category text NOT NULL DEFAULT '',
+  price numeric NOT NULL DEFAULT 0 CHECK (price >= 0),
+  priority integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+  planned_date date,
+  completed_date date,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_treatment_plan_patient ON public.treatment_plan_items (patient_id);
+
+CREATE OR REPLACE FUNCTION public.set_updated_at_timestamp()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END;
+$$;
+
+DROP TRIGGER IF EXISTS bills_set_updated_at ON public.bills;
+CREATE TRIGGER bills_set_updated_at BEFORE UPDATE ON public.bills
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_timestamp();
+
+DROP TRIGGER IF EXISTS treatment_plan_items_set_updated_at ON public.treatment_plan_items;
+CREATE TRIGGER treatment_plan_items_set_updated_at BEFORE UPDATE ON public.treatment_plan_items
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_timestamp();
+
+ALTER TABLE public.bills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.treatment_plan_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS bills_select_authenticated ON public.bills;
+DROP POLICY IF EXISTS bills_insert_authenticated ON public.bills;
+DROP POLICY IF EXISTS bills_update_authenticated ON public.bills;
+DROP POLICY IF EXISTS bills_delete_authenticated ON public.bills;
+DROP POLICY IF EXISTS treatment_plan_items_select_authenticated ON public.treatment_plan_items;
+DROP POLICY IF EXISTS treatment_plan_items_insert_authenticated ON public.treatment_plan_items;
+DROP POLICY IF EXISTS treatment_plan_items_update_authenticated ON public.treatment_plan_items;
+DROP POLICY IF EXISTS treatment_plan_items_delete_authenticated ON public.treatment_plan_items;
+
+CREATE POLICY bills_select_authenticated ON public.bills FOR SELECT TO authenticated
+  USING (
+    public.is_admin_user()
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+    OR public.doctor_can_access_patient(patient_id::text)
+  );
+
+CREATE POLICY bills_insert_authenticated ON public.bills FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_admin_user() OR public.is_staff_user()
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+  );
+
+CREATE POLICY bills_update_authenticated ON public.bills FOR UPDATE TO authenticated
+  USING (
+    public.is_admin_user()
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+    OR public.doctor_can_access_patient(patient_id::text)
+  )
+  WITH CHECK (
+    public.is_admin_user()
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+    OR public.doctor_can_access_patient(patient_id::text)
+  );
+
+CREATE POLICY bills_delete_authenticated ON public.bills FOR DELETE TO authenticated
+  USING (
+    public.is_admin_user()
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+    OR public.doctor_can_access_patient(patient_id::text)
+  );
+
+CREATE POLICY treatment_plan_items_select_authenticated ON public.treatment_plan_items FOR SELECT TO authenticated
+  USING (
+    public.is_admin_user()
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+    OR public.doctor_can_access_patient(patient_id::text)
+  );
+
+CREATE POLICY treatment_plan_items_insert_authenticated ON public.treatment_plan_items FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text)
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+  );
+
+CREATE POLICY treatment_plan_items_update_authenticated ON public.treatment_plan_items FOR UPDATE TO authenticated
+  USING (
+    public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text)
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+  )
+  WITH CHECK (
+    public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text)
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+  );
+
+CREATE POLICY treatment_plan_items_delete_authenticated ON public.treatment_plan_items FOR DELETE TO authenticated
+  USING (
+    public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text)
+    OR (public.subject_client_pk() IS NOT NULL AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk())
+  );
+
+-- ═══ 003_medical_records_patient_visits.sql ═════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.medical_records (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL REFERENCES public.dental_clients (id) ON DELETE CASCADE,
+  record_type text NOT NULL DEFAULT 'general'
+    CHECK (record_type IN ('allergy', 'chronic', 'medication', 'contraindication', 'general')),
+  title text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  severity text CHECK (severity IS NULL OR severity IN ('low', 'medium', 'high')),
+  is_active boolean NOT NULL DEFAULT true,
+  visible_to_patient boolean NOT NULL DEFAULT true,
+  created_by uuid REFERENCES public.dental_employees (id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_medical_records_patient ON public.medical_records (patient_id);
+CREATE INDEX IF NOT EXISTS idx_medical_records_type ON public.medical_records (record_type);
+
+CREATE TABLE IF NOT EXISTS public.patient_visits (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL REFERENCES public.dental_clients (id) ON DELETE CASCADE,
+  doctor_id uuid REFERENCES public.dental_employees (id) ON DELETE SET NULL,
+  appointment_id bigint REFERENCES public.appointments (id) ON DELETE SET NULL,
+  visit_date date NOT NULL,
+  procedure_title text NOT NULL,
+  procedure_description text NOT NULL DEFAULT '',
+  tooth_numbers integer[] NOT NULL DEFAULT '{}',
+  diagnosis text NOT NULL DEFAULT '',
+  clinical_notes text NOT NULL DEFAULT '',
+  materials text NOT NULL DEFAULT '',
+  price numeric CHECK (price IS NULL OR price >= 0),
+  visible_to_patient boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_patient_visits_patient ON public.patient_visits (patient_id);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_doctor ON public.patient_visits (doctor_id);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_appointment ON public.patient_visits (appointment_id);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_date ON public.patient_visits (visit_date DESC);
+
+DROP TRIGGER IF EXISTS medical_records_set_updated_at ON public.medical_records;
+CREATE TRIGGER medical_records_set_updated_at
+  BEFORE UPDATE ON public.medical_records
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at_timestamp();
+
+DROP TRIGGER IF EXISTS patient_visits_set_updated_at ON public.patient_visits;
+CREATE TRIGGER patient_visits_set_updated_at
+  BEFORE UPDATE ON public.patient_visits
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at_timestamp();
+
+ALTER TABLE public.medical_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS medical_records_select_authenticated ON public.medical_records;
+DROP POLICY IF EXISTS medical_records_insert_authenticated ON public.medical_records;
+DROP POLICY IF EXISTS medical_records_update_authenticated ON public.medical_records;
+DROP POLICY IF EXISTS medical_records_delete_authenticated ON public.medical_records;
+
+CREATE POLICY medical_records_select_authenticated ON public.medical_records FOR SELECT TO authenticated
+  USING (
+    public.is_admin_user()
+    OR public.doctor_can_access_patient(patient_id::text)
+    OR (
+      public.subject_client_pk() IS NOT NULL
+      AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk()
+      AND visible_to_patient = true
+      AND is_active = true
+    )
+  );
+
+CREATE POLICY medical_records_insert_authenticated ON public.medical_records FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin_user() OR public.is_staff_user());
+
+CREATE POLICY medical_records_update_authenticated ON public.medical_records FOR UPDATE TO authenticated
+  USING (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text))
+  WITH CHECK (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text));
+
+CREATE POLICY medical_records_delete_authenticated ON public.medical_records FOR DELETE TO authenticated
+  USING (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text));
+
+ALTER TABLE public.patient_visits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS patient_visits_select_authenticated ON public.patient_visits;
+DROP POLICY IF EXISTS patient_visits_insert_authenticated ON public.patient_visits;
+DROP POLICY IF EXISTS patient_visits_update_authenticated ON public.patient_visits;
+DROP POLICY IF EXISTS patient_visits_delete_authenticated ON public.patient_visits;
+
+CREATE POLICY patient_visits_select_authenticated ON public.patient_visits FOR SELECT TO authenticated
+  USING (
+    public.is_admin_user()
+    OR public.doctor_can_access_patient(patient_id::text)
+    OR (
+      public.subject_client_pk() IS NOT NULL
+      AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk()
+      AND visible_to_patient = true
+    )
+  );
+
+CREATE POLICY patient_visits_insert_authenticated ON public.patient_visits FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text));
+
+CREATE POLICY patient_visits_update_authenticated ON public.patient_visits FOR UPDATE TO authenticated
+  USING (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text))
+  WITH CHECK (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text));
+
+CREATE POLICY patient_visits_delete_authenticated ON public.patient_visits FOR DELETE TO authenticated
+  USING (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text));
+
+-- ═══ 004_patient_files_storage.sql ═══════════════════════════════════════════
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'patient-files',
+  'patient-files',
+  false,
+  10485760,
+  ARRAY['image/jpeg', 'image/png', 'application/pdf']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+CREATE TABLE IF NOT EXISTS public.patient_files (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL REFERENCES public.dental_clients (id) ON DELETE CASCADE,
+  storage_path text NOT NULL,
+  file_name text NOT NULL,
+  mime_type text NOT NULL
+    CHECK (mime_type IN ('image/jpeg', 'image/png', 'application/pdf')),
+  file_category text NOT NULL DEFAULT 'document'
+    CHECK (file_category IN ('xray', 'photo', 'document', 'scan', 'other')),
+  file_size bigint NOT NULL DEFAULT 0 CHECK (file_size >= 0),
+  visit_id uuid REFERENCES public.patient_visits (id) ON DELETE SET NULL,
+  appointment_id bigint REFERENCES public.appointments (id) ON DELETE SET NULL,
+  description text NOT NULL DEFAULT '',
+  visible_to_patient boolean NOT NULL DEFAULT true,
+  uploaded_by uuid REFERENCES public.dental_employees (id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ux_patient_files_storage_path UNIQUE (storage_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_patient_files_patient ON public.patient_files (patient_id);
+CREATE INDEX IF NOT EXISTS idx_patient_files_visit ON public.patient_files (visit_id);
+CREATE INDEX IF NOT EXISTS idx_patient_files_category ON public.patient_files (file_category);
+
+DROP TRIGGER IF EXISTS patient_files_set_updated_at ON public.patient_files;
+CREATE TRIGGER patient_files_set_updated_at
+  BEFORE UPDATE ON public.patient_files
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at_timestamp();
+
+ALTER TABLE public.patient_files ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS patient_files_select_authenticated ON public.patient_files;
+DROP POLICY IF EXISTS patient_files_insert_authenticated ON public.patient_files;
+DROP POLICY IF EXISTS patient_files_update_authenticated ON public.patient_files;
+DROP POLICY IF EXISTS patient_files_delete_authenticated ON public.patient_files;
+
+CREATE POLICY patient_files_select_authenticated ON public.patient_files FOR SELECT TO authenticated
+  USING (
+    public.is_admin_user()
+    OR public.doctor_can_access_patient(patient_id::text)
+    OR (
+      public.subject_client_pk() IS NOT NULL
+      AND patient_id::text IS NOT DISTINCT FROM public.subject_client_pk()
+      AND visible_to_patient = true
+    )
+  );
+
+CREATE POLICY patient_files_insert_authenticated ON public.patient_files FOR INSERT TO authenticated
+  WITH CHECK (
+    public.is_admin_user()
+    OR public.doctor_can_access_patient(patient_id::text)
+  );
+
+CREATE POLICY patient_files_update_authenticated ON public.patient_files FOR UPDATE TO authenticated
+  USING (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text))
+  WITH CHECK (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text));
+
+CREATE POLICY patient_files_delete_authenticated ON public.patient_files FOR DELETE TO authenticated
+  USING (public.is_admin_user() OR public.doctor_can_access_patient(patient_id::text));
+
+DROP POLICY IF EXISTS patient_files_storage_select ON storage.objects;
+DROP POLICY IF EXISTS patient_files_storage_insert ON storage.objects;
+DROP POLICY IF EXISTS patient_files_storage_update ON storage.objects;
+DROP POLICY IF EXISTS patient_files_storage_delete ON storage.objects;
+
+CREATE POLICY patient_files_storage_select ON storage.objects FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'patient-files'
+    AND (
+      public.is_admin_user()
+      OR public.doctor_can_access_patient((storage.foldername(name))[1])
+      OR (
+        public.subject_client_pk() IS NOT DISTINCT FROM (storage.foldername(name))[1]
+        AND EXISTS (
+          SELECT 1 FROM public.patient_files pf
+          WHERE pf.storage_path = name AND pf.visible_to_patient = true
+        )
+      )
+    )
+  );
+
+CREATE POLICY patient_files_storage_insert ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'patient-files'
+    AND (public.is_admin_user() OR public.doctor_can_access_patient((storage.foldername(name))[1]))
+  );
+
+CREATE POLICY patient_files_storage_update ON storage.objects FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'patient-files'
+    AND (public.is_admin_user() OR public.doctor_can_access_patient((storage.foldername(name))[1]))
+  )
+  WITH CHECK (
+    bucket_id = 'patient-files'
+    AND (public.is_admin_user() OR public.doctor_can_access_patient((storage.foldername(name))[1]))
+  );
+
+CREATE POLICY patient_files_storage_delete ON storage.objects FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'patient-files'
+    AND (public.is_admin_user() OR public.doctor_can_access_patient((storage.foldername(name))[1]))
+  );
+
+-- ─── Шаг 4 ROADMAP: автоматизация уведомлений ───────────────────────────────
+
+ALTER TABLE public.appointments
+  ADD COLUMN IF NOT EXISTS reminder_24h_sent_at timestamptz,
+  ADD COLUMN IF NOT EXISTS reminder_2h_sent_at timestamptz,
+  ADD COLUMN IF NOT EXISTS confirmed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS confirmation_tg_message_id bigint;
+
+COMMENT ON COLUMN public.appointments.reminder_24h_sent_at IS
+  'Когда отправлено Telegram-напоминание за ~24 ч до приёма.';
+COMMENT ON COLUMN public.appointments.reminder_2h_sent_at IS
+  'Когда отправлено Telegram-напоминание за ~2 ч до приёма.';
+COMMENT ON COLUMN public.appointments.confirmed_at IS
+  'Пациент подтвердил запись через inline-кнопку в Telegram.';
+COMMENT ON COLUMN public.appointments.confirmation_tg_message_id IS
+  'message_id сообщения с кнопками подтверждения (для editMessageText).';
+
+CREATE INDEX IF NOT EXISTS idx_appointments_reminders_pending
+  ON public.appointments (appointment_date, appointment_time)
+  WHERE status IN ('pending', 'scheduled', 'rescheduled')
+    AND (reminder_24h_sent_at IS NULL OR reminder_2h_sent_at IS NULL);
+
