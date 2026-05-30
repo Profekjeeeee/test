@@ -51,25 +51,28 @@
     gap: 1rem;
     width: 100%;
     flex-shrink: 0;
-    /* Сдвиг кнопок приложения влево — не перекрывать системные ⋮ и ✕ Telegram Mini App */
-    padding-right: 5rem;
+    /* Сдвиг кнопок приложения влево — не перекрывать системные ⋮ и ✕ Telegram Mini App (~80px) */
+    padding-right: 100px;
   }
 
   .layout-doctor-cabinet .layout-sidebar-nav {
-    flex: 0 0 auto;
+    flex: none;
     align-self: flex-start;
     width: 100%;
+    gap: 3px;
   }
 
   .layout-doctor-cabinet .layout-sidebar-nav-item {
-    flex: 0 0 auto;
-    flex-grow: 0;
-    height: 2.5rem;
-    max-height: 2.5rem;
-    min-height: 2.5rem;
-    padding-top: 0;
-    padding-bottom: 0;
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: 36px;
+    max-height: 36px;
+    min-height: 36px;
+    padding: 6px 12px;
+    border-radius: 8px;
     box-sizing: border-box;
+    line-height: 1.25;
   }
 
   .layout-doctor-cabinet .layout-doctor-shell {
@@ -88,6 +91,8 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    align-items: stretch;
+    justify-content: flex-start;
     width: 220px;
     min-width: 220px;
   }
