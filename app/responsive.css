@@ -1,0 +1,127 @@
+/* ==========================================================================
+   Doctor Cabinet — responsive layout only (no color/spacing token changes)
+   Mobile default: < 768px — unchanged
+   Tablet: 768px – 1199px
+   Desktop: ≥ 1200px
+   ========================================================================== */
+
+/* --- Tablet: unlock body width, scale container -------------------------------- */
+@media (min-width: 768px) and (max-width: 1199px) {
+  body:has(.layout-doctor-cabinet) {
+    max-width: none;
+  }
+
+  .layout-doctor-cabinet .layout-container {
+    max-width: 600px;
+    font-size: 115%;
+  }
+
+  .layout-doctor-cabinet .layout-schedule-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    column-gap: 1.5rem;
+  }
+
+  .layout-doctor-cabinet .layout-dayplan-selected {
+    margin-top: 0;
+  }
+
+  .layout-doctor-cabinet .layout-dayplan-selected > .layout-dayplan-heading {
+    margin-top: 0;
+  }
+}
+
+/* --- Desktop: three-column dashboard ------------------------------------------- */
+@media (min-width: 1200px) {
+  body:has(.layout-doctor-cabinet) {
+    max-width: none;
+  }
+
+  .layout-doctor-cabinet {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  .layout-doctor-cabinet .layout-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .layout-doctor-cabinet .layout-doctor-shell {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    align-items: stretch;
+    column-gap: 1.5rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .layout-doctor-cabinet .layout-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .layout-doctor-cabinet .layout-container {
+    max-width: none;
+    flex: 1;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-top: 1.5rem;
+  }
+
+  .layout-doctor-cabinet .layout-right-panel {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .layout-doctor-cabinet .layout-mobile-header {
+    display: none;
+  }
+
+  .layout-doctor-cabinet .layout-tab-bar {
+    display: none;
+  }
+
+  .layout-doctor-cabinet .layout-dayplan-selected {
+    display: none;
+  }
+
+  .layout-doctor-cabinet .layout-dayplan-today {
+    display: block;
+  }
+
+  .layout-doctor-cabinet .layout-schedule-area {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .layout-doctor-cabinet .layout-chats-view {
+    max-width: none;
+  }
+}
+
+/* --- Hide desktop-only blocks below 1200px ------------------------------------- */
+@media (max-width: 1199px) {
+  .layout-doctor-cabinet .layout-top-bar,
+  .layout-doctor-cabinet .layout-sidebar,
+  .layout-doctor-cabinet .layout-right-panel,
+  .layout-doctor-cabinet .layout-dayplan-today {
+    display: none;
+  }
+}

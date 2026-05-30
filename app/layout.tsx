@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Script from "next/script";
 import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
+import "./responsive.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TelegramWebAppProvider } from "@/components/TelegramWebAppProvider";
 import PatientAppGate from "@/components/auth/PatientAppGate";
