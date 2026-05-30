@@ -47,7 +47,7 @@ import {
   type StaffDialogPreview,
 } from "@/lib/supportChat";
 
-type DoctorCabinetTab = "calendar" | "chats";
+type DoctorCabinetTab = "calendar" | "chats" | "settings";
 
 type DesktopNavId = "schedule" | "chats" | "patients" | "cards" | "settings";
 
@@ -242,6 +242,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
         setDoctorChatsScope("patients");
         break;
       case "settings":
+        setCabinetTab("settings");
         break;
     }
   }, []);
@@ -257,7 +258,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
         case "cards":
           return cabinetTab === "chats" && doctorChatsScope === "patients";
         case "settings":
-          return false;
+          return cabinetTab === "settings";
       }
     },
     [cabinetTab, doctorChatsScope]
@@ -368,7 +369,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
   ];
 
   const renderHeaderActions = () => (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="layout-top-bar-actions flex items-center gap-2 shrink-0">
       <ThemeToggleButton />
       <button
         type="button"
@@ -531,7 +532,7 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
                 key={item.id}
                 type="button"
                 onClick={() => handleDesktopNav(item.id)}
-                className={`w-full h-10 rounded-xl text-[14px] font-semibold transition-colors text-left px-3 ${
+                className={`layout-sidebar-nav-item w-full rounded-xl text-[14px] font-semibold transition-colors text-left px-3 shrink-0 ${
                   isDesktopNavActive(item.id)
                     ? "bg-primary text-white shadow-[0_4px_12px_rgba(36,139,207,0.35)]"
                     : "text-secondary dark:text-slate-400 bg-transparent"
@@ -595,7 +596,38 @@ function DoctorCabinetInner({ anchor }: { anchor: Date }) {
           </button>
         </div>
 
-        {cabinetTab === "calendar" ? (
+        {cabinetTab === "settings" ? (
+          <div className="layout-settings-view pb-8">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-secondary mb-1">Аккаунт</p>
+            <h2 className="text-[20px] font-bold text-[#0F172A] dark:text-white mb-5">Настройки</h2>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4 shadow-[0_4px_16px_rgba(15,23,42,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.32)]">
+              <p className="text-[12px] text-secondary">ФИО</p>
+              <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white mt-1">
+                {session?.fullName ?? "Врач"}
+              </p>
+              {session?.specialization ? (
+                <>
+                  <p className="text-[12px] text-secondary mt-4">Специализация</p>
+                  <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white mt-1">
+                    {session.specialization}
+                  </p>
+                </>
+              ) : null}
+              {session?.phone ? (
+                <>
+                  <p className="text-[12px] text-secondary mt-4">Телефон</p>
+                  <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white mt-1 tabular-nums">
+                    {session.phone}
+                  </p>
+                </>
+              ) : null}
+              <p className="text-[12px] text-secondary mt-4">Клиника</p>
+              <p className="text-[15px] font-semibold text-[#0F172A] dark:text-white mt-1">
+                {clinicSettings.displayName}
+              </p>
+            </div>
+          </div>
+        ) : cabinetTab === "calendar" ? (
           <div className="layout-schedule-area">
             <div className="layout-calendar-col">
               <DoctorMonthCalendar

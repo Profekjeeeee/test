@@ -51,6 +51,25 @@
     gap: 1rem;
     width: 100%;
     flex-shrink: 0;
+    /* Сдвиг кнопок приложения влево — не перекрывать системные ⋮ и ✕ Telegram Mini App */
+    padding-right: 5rem;
+  }
+
+  .layout-doctor-cabinet .layout-sidebar-nav {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    width: 100%;
+  }
+
+  .layout-doctor-cabinet .layout-sidebar-nav-item {
+    flex: 0 0 auto;
+    flex-grow: 0;
+    height: 2.5rem;
+    max-height: 2.5rem;
+    min-height: 2.5rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    box-sizing: border-box;
   }
 
   .layout-doctor-cabinet .layout-doctor-shell {
