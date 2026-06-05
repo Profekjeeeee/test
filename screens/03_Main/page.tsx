@@ -14,6 +14,7 @@ import { DENTAL_SESSION_CHANGED_EVENT } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
 import { usePatientUnreadCount } from "@/hooks/usePatientUnreadCount";
+import { prefetchPatientCabinet } from "@/lib/patientCabinet";
 
 const DAILY_TIPS = [
   "Использование ирригатора снижает риск воспаления дёсен на 40%.",
@@ -56,6 +57,7 @@ export default function MainPage() {
       setPlanStats(getMergedPlanStats());
       setPendingAmount(getTotalPending(getBills()));
     });
+    prefetchPatientCabinet();
 
     const syncHelloName = (): void => {
       const profile = getProfile();

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
@@ -7,10 +8,11 @@ import { Card } from "@/components/ui/Card";
 import BottomBar from "@/components/layout/BottomBar";
 import { getProfile } from "@/lib/userProfile";
 import {
-  loadPatientCabinetSummary,
+  loadPatientCabinetCore,
   formatPaymentLabel,
   type PatientCabinetSummary,
 } from "@/lib/patientCabinet";
+import { getPatientPayments } from "@/lib/payments";
 import {
   formatVisitDate,
   formatVisitPrice,
@@ -18,7 +20,11 @@ import {
 import { formatBillDate } from "@/lib/bills";
 import { formatFileDate } from "@/lib/patientFiles";
 import { formatRuNumericLongDateStable } from "@/lib/doctorSchedule";
-import PatientAiAssistant from "@/components/ai/PatientAiAssistant";
+
+const PatientAiAssistant = dynamic(
+  () => import("@/components/ai/PatientAiAssistant"),
+  { ssr: false, loading: () => null },
+);
 
 function SectionLink({
   href,
@@ -71,16 +77,41 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
+function SectionSkeleton({ count = 2 }: { count?: number }) {
+  return (
+    <div className="flex flex-col gap-3">
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          className="h-20 rounded-2xl bg-slate-200/60 dark:bg-slate-800/60 animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function PatientCabinetPage() {
   const [loading, setLoading] = useState(true);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [summary, setSummary] = useState<PatientCabinetSummary | null>(null);
 
   const refresh = useCallback(async () => {
-    const data = await loadPatientCabinetSummary();
+    setPaymentsLoading(true);
+    const data = await loadPatientCabinetCore();
     setSummary(data);
     setLoading(false);
+    const payments = await getPatientPayments();
+    setSummary((prev) =>
+      prev
+        ? {
+            ...prev,
+            finances: { ...prev.finances, recentPayments: payments.slice(0, 5) },
+          }
+        : prev,
+    );
+    setPaymentsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -134,11 +165,7 @@ export default function PatientCabinetPage() {
         </div>
 
         {loading || !summary ? (
-          <div className="flex flex-col gap-3 py-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 rounded-2xl bg-slate-200/60 dark:bg-slate-800/60 animate-pulse" />
-            ))}
-          </div>
+          <SectionSkeleton count={3} />
         ) : (
           <>
             <PatientAiAssistant />
@@ -394,29 +421,34 @@ export default function PatientCabinetPage() {
             </div>
 
             {/* Recent payments */}
-            {finances && finances.recentPayments.length > 0 && (
-              <section>
-                <h2 className="text-[12px] font-bold uppercase tracking-widest text-secondary mb-2 px-0.5">
-                  Последние оплаты
-                </h2>
-                <Card padding="sm" className="border border-slate-200/80 dark:border-slate-800">
-                  <div className="flex flex-col gap-2">
-                    {finances.recentPayments.map((p, i) => (
-                      <div
-                        key={p.id}
-                        className={`flex justify-between gap-2 ${i > 0 ? "pt-2 border-t border-slate-100 dark:border-slate-700" : ""}`}
-                      >
-                        <p className="text-[13px] font-medium text-[#0F172A] dark:text-white">
-                          {formatPaymentLabel(p)}
-                        </p>
-                        <p className="text-[12px] text-secondary shrink-0">
-                          {p.completedAt ? formatBillDate(p.completedAt) : formatBillDate(p.createdAt)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </section>
+            {paymentsLoading ? (
+              <SectionSkeleton count={1} />
+            ) : (
+              finances &&
+              finances.recentPayments.length > 0 && (
+                <section>
+                  <h2 className="text-[12px] font-bold uppercase tracking-widest text-secondary mb-2 px-0.5">
+                    Последние оплаты
+                  </h2>
+                  <Card padding="sm" className="border border-slate-200/80 dark:border-slate-800">
+                    <div className="flex flex-col gap-2">
+                      {finances.recentPayments.map((p, i) => (
+                        <div
+                          key={p.id}
+                          className={`flex justify-between gap-2 ${i > 0 ? "pt-2 border-t border-slate-100 dark:border-slate-700" : ""}`}
+                        >
+                          <p className="text-[13px] font-medium text-[#0F172A] dark:text-white">
+                            {formatPaymentLabel(p)}
+                          </p>
+                          <p className="text-[12px] text-secondary shrink-0">
+                            {p.completedAt ? formatBillDate(p.completedAt) : formatBillDate(p.createdAt)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </section>
+              )
             )}
 
             {/* Recent files preview */}

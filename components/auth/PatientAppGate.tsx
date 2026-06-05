@@ -28,6 +28,7 @@ import {
 } from "@/lib/routes";
 import { fetchPlatformMe } from "@/lib/platform/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { prefetchPatientCabinet } from "@/lib/patientCabinet";
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_ROUTE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -83,6 +84,7 @@ export default function PatientAppGate({ children }: { children: React.ReactNode
       const finalSession = session ?? getDentalSession();
 
       if (!cancelled) setHydratedSession(finalSession ?? null);
+      if (finalSession?.role === "client") prefetchPatientCabinet();
     })();
 
     const onStorage = (e: StorageEvent) => {

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PatientAiContext } from "@/lib/server/ai/patientContext";
 import { contextToPromptBlock } from "@/lib/server/ai/patientContext";
-import type { ChatMessage } from "@/lib/server/ai/openaiClient";
+import type { ChatMessage } from "@/lib/server/ai/geminiClient";
 
 const DENTAL_SYSTEM =
   "Ты — AI-ассистент стоматологической клиники. Отвечай на русском языке. " +

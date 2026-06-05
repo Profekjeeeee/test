@@ -58,6 +58,15 @@ export async function initPatientCabinet(): Promise<void> {
   await initPromise;
 }
 
+/** Фоновый прогрев кэша — вызывать на главной / при наведении на вкладку. */
+export function prefetchPatientCabinet(): void {
+  void initPatientCabinet();
+}
+
+export function isPatientCabinetReady(): boolean {
+  return initPromise !== null;
+}
+
 export function resetPatientCabinetCache(): void {
   initPromise = null;
 }
@@ -69,12 +78,12 @@ export function getPatientCabinetSummary(): PatientCabinetSummary {
   const bills = getBills();
 
   const xrays = files.filter(
-    (f) => f.fileCategory === "xray" || f.fileCategory === "photo"
+    (f) => f.fileCategory === "xray" || f.fileCategory === "photo",
   ).length;
   const docs = files.length - xrays;
 
   const pendingBills = bills.filter(
-    (b) => b.status === "pending" || b.status === "overdue" || b.status === "partial"
+    (b) => b.status === "pending" || b.status === "overdue" || b.status === "partial",
   );
 
   return {
@@ -95,11 +104,18 @@ export function getPatientCabinetSummary(): PatientCabinetSummary {
   };
 }
 
-/** Полная загрузка с историей платежей (async). */
-export async function loadPatientCabinetSummary(): Promise<PatientCabinetSummary> {
+/** Основные данные кабинета — без блокировки на платежах. */
+export async function loadPatientCabinetCore(): Promise<PatientCabinetSummary> {
   await initPatientCabinet();
-  const summary = getPatientCabinetSummary();
-  const payments = await getPatientPayments();
+  return getPatientCabinetSummary();
+}
+
+/** Полная загрузка с историей платежей. */
+export async function loadPatientCabinetSummary(): Promise<PatientCabinetSummary> {
+  const [summary, payments] = await Promise.all([
+    loadPatientCabinetCore(),
+    getPatientPayments(),
+  ]);
   summary.finances.recentPayments = payments.slice(0, 5);
   return summary;
 }

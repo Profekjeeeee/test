@@ -67,6 +67,5 @@ export function getMergedPlanStats(): TreatmentPlanStats {
 // ─── Init both stores ─────────────────────────────────────────────────────────
 
 export async function initPlanSources(): Promise<void> {
-  await initAppointments();
-  initTreatmentPlan();
+  await Promise.all([initAppointments(), initTreatmentPlan()]);
 }

@@ -6,6 +6,7 @@ import type { BottomTabId } from "@/types";
 import { ROUTES } from "@/lib/routes";
 import { useUpcomingCount } from "@/hooks/useUpcomingCount";
 import { FormulaToothIcon } from "@/components/icons/FormulaToothIcon";
+import { prefetchPatientCabinet } from "@/lib/patientCabinet";
 
 type IconProps = { active: boolean };
 
@@ -155,6 +156,9 @@ export default function BottomBar() {
                 <Link
                   href={tab.href}
                   className="interactive-press-sm flex w-full max-w-[4.5rem] flex-col items-center justify-center gap-0.5 py-1"
+                  onMouseEnter={tab.id === "more" ? prefetchPatientCabinet : undefined}
+                  onFocus={tab.id === "more" ? prefetchPatientCabinet : undefined}
+                  onTouchStart={tab.id === "more" ? prefetchPatientCabinet : undefined}
                 >
                   <span
                     className={`relative flex items-center justify-center rounded-full px-2 py-1 transition-colors ${

@@ -84,10 +84,12 @@ function dispatchBillsUpdated(): void {
 }
 
 export async function refreshBillsCache(): Promise<void> {
-  const { data, error } = await supabase
-    .from("bills")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const subjectId = getClientSubjectIdForFilters();
+  let query = supabase.from("bills").select("*");
+  if (subjectId) {
+    query = query.eq("patient_id", subjectId);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
     console.error("[bills]", error);

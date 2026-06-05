@@ -1,7 +1,7 @@
 import "server-only";
 
 import { apiError } from "@/lib/server/api/apiError";
-import { chatCompletion, chatCompletionJson } from "@/lib/server/ai/openaiClient";
+import { chatCompletion, chatCompletionJson } from "@/lib/server/ai/geminiClient";
 import { buildPatientAiContext } from "@/lib/server/ai/patientContext";
 import {
   examDraftMessages,

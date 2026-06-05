@@ -164,10 +164,15 @@ function dispatchTreatmentPlanUpdated(): void {
 let treatmentPlanCache: CachedTreatmentPlanItem[] | null = null;
 
 export async function refreshTreatmentPlanCache(): Promise<void> {
-  const { data, error } = await supabase
+  const subjectId = getClientSubjectIdForFilters();
+  let query = supabase
     .from("treatment_plan_items")
     .select("*")
-    .is("appointment_id", null)
+    .is("appointment_id", null);
+  if (subjectId) {
+    query = query.eq("patient_id", subjectId);
+  }
+  const { data, error } = await query
     .order("planned_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 

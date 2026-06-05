@@ -84,10 +84,15 @@ function dispatchMedicalRecordsUpdated(): void {
 let medicalRecordsCache: MedicalRecord[] | null = null;
 
 export async function refreshMedicalRecordsCache(): Promise<void> {
-  const { data, error } = await supabase
-    .from("medical_records")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const subjectId = getClientSubjectId();
+  let query = supabase.from("medical_records").select("*");
+  if (subjectId) {
+    query = query
+      .eq("patient_id", subjectId)
+      .eq("visible_to_patient", true)
+      .eq("is_active", true);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
     console.error("[medicalRecords]", error);

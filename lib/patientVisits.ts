@@ -101,9 +101,12 @@ export function formatToothNumbers(nums: number[]): string {
 }
 
 export async function refreshPatientVisitsCache(): Promise<void> {
-  const { data, error } = await supabase
-    .from("patient_visits")
-    .select("*")
+  const subjectId = getClientSubjectId();
+  let query = supabase.from("patient_visits").select("*");
+  if (subjectId) {
+    query = query.eq("patient_id", subjectId).eq("visible_to_patient", true);
+  }
+  const { data, error } = await query
     .order("visit_date", { ascending: false })
     .order("created_at", { ascending: false });
 

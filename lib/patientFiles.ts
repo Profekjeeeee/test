@@ -158,11 +158,20 @@ async function attachSignedUrls(files: PatientFile[]): Promise<PatientFile[]> {
 
 let patientFilesCache: PatientFile[] | null = null;
 
-export async function refreshPatientFilesCache(): Promise<void> {
-  const { data, error } = await supabase
-    .from("patient_files")
-    .select("*")
-    .order("created_at", { ascending: false });
+export interface RefreshPatientFilesOptions {
+  /** Подписанные URL нужны только на экране документов — дорогая операция. */
+  withSignedUrls?: boolean;
+}
+
+export async function refreshPatientFilesCache(
+  options?: RefreshPatientFilesOptions,
+): Promise<void> {
+  const subjectId = getClientSubjectId();
+  let query = supabase.from("patient_files").select("*");
+  if (subjectId) {
+    query = query.eq("patient_id", subjectId).eq("visible_to_patient", true);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
     console.error("[patientFiles]", error);
@@ -170,12 +179,19 @@ export async function refreshPatientFilesCache(): Promise<void> {
   }
 
   const rows = ((data ?? []) as PatientFileRow[]).map(rowToFile);
-  patientFilesCache = await attachSignedUrls(rows);
+  patientFilesCache =
+    options?.withSignedUrls === true ? await attachSignedUrls(rows) : rows;
   dispatchPatientFilesUpdated();
 }
 
+/** Быстрый кэш метаданных без signed URL — для кабинета и списков. */
 export async function initPatientFiles(): Promise<void> {
-  await refreshPatientFilesCache();
+  await refreshPatientFilesCache({ withSignedUrls: false });
+}
+
+/** Полный кэш с signed URL — для экрана документов. */
+export async function initPatientFilesForViewer(): Promise<void> {
+  await refreshPatientFilesCache({ withSignedUrls: true });
 }
 
 export function getPatientFiles(): PatientFile[] {

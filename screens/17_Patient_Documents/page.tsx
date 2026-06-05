@@ -5,7 +5,7 @@ import Header from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import BottomBar from "@/components/layout/BottomBar";
 import {
-  initPatientFiles,
+  initPatientFilesForViewer,
   getPatientFiles,
   formatFileDate,
   formatFileSize,
@@ -93,7 +93,7 @@ export default function PatientDocumentsPage() {
   const sync = () => setFiles(getPatientFiles());
 
   useEffect(() => {
-    void initPatientFiles().then(() => {
+    void initPatientFilesForViewer().then(() => {
       sync();
       setLoading(false);
     });
