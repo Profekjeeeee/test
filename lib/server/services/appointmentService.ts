@@ -48,13 +48,36 @@ export async function listAppointments(ctx: DentalServiceContext) {
   return { rows: data ?? [] };
 }
 
+/** PostgREST/Postgres-код «колонка не найдена» (схема ещё без миграции 013). */
+function isMissingColumnError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  const code = e?.code ?? "";
+  const msg = (e?.message ?? "").toLowerCase();
+  return (
+    code === "PGRST204" ||
+    code === "42703" ||
+    msg.includes("could not find") ||
+    (msg.includes("column") && msg.includes("does not exist"))
+  );
+}
+
+function buildPatientName(clientRow: Record<string, unknown>): string {
+  const name = String(clientRow.name ?? "").trim();
+  if (name) return name;
+  const first = String(clientRow.first_name ?? "").trim();
+  const last = String(clientRow.last_name ?? "").trim();
+  const full = `${first} ${last}`.trim();
+  if (full) return full;
+  return String(clientRow.phone ?? "").trim();
+}
+
 export async function insertAppointment(
   ctx: DentalServiceContext,
   payload: Record<string, unknown>,
 ) {
   const act = requireActor(ctx.actor);
   if (act.role !== "client") apiError(403, "Запись на приём — только аккаунт пациента.");
-  await loadClient(ctx.adm, act, ctx.gate);
+  const clientRow = await loadClient(ctx.adm, act, ctx.gate);
 
   const monthNum = typeof payload.monthNum === "number" ? payload.monthNum : Number(payload.monthNum);
   const day = typeof payload.day === "number" ? payload.day : Number(payload.day);
@@ -66,6 +89,13 @@ export async function insertAppointment(
     payload.visitMode === "video" ? "video" : "in_person";
   const serviceTitle =
     typeof payload.service === "string" ? payload.service.trim() : "";
+  const priceRaw = payload.price;
+  const priceNum =
+    typeof priceRaw === "number" && Number.isFinite(priceRaw)
+      ? priceRaw
+      : typeof priceRaw === "string" && priceRaw.trim() !== "" && Number.isFinite(Number(priceRaw))
+        ? Number(priceRaw)
+        : null;
   const clientPhoneExplicit = typeof payload.clientPhone === "string" ? payload.clientPhone : null;
 
   const clientId = await gatewayResolvePatientClientId({
@@ -78,22 +108,52 @@ export async function insertAppointment(
   });
 
   const doctorNameTrim = doctorNameRaw.trim();
+  const patientName = buildPatientName(clientRow);
 
-  const { data, error } = await ctx.adm
+  // Лучшее усилие: связать с прайсом для аналитики, если название совпадает.
+  let serviceId: string | null = null;
+  if (serviceTitle) {
+    const { data: svc } = await ctx.adm
+      .from("services")
+      .select("id")
+      .eq("name", serviceTitle)
+      .maybeSingle();
+    serviceId = (svc as { id?: string } | null)?.id ?? null;
+  }
+
+  // Колонки, гарантированно существующие в каноничной схеме (001/005/010/011).
+  const baseRow: Record<string, unknown> = {
+    client_id: clientId,
+    doctor_name: doctorNameTrim || "Врач",
+    appointment_date: isoDateLocal(year, monthNum, day),
+    appointment_time: timeSlot,
+    status,
+    visit_mode: visitMode,
+    ...(patientName ? { patient_name: patientName } : {}),
+    ...(serviceId ? { service_id: serviceId } : {}),
+  };
+
+  // Поля из миграции 013 (service/price). Если миграция ещё не применена —
+  // повторяем вставку без них, чтобы запись всё равно создалась.
+  const richRow: Record<string, unknown> = {
+    ...baseRow,
+    ...(serviceTitle ? { service: serviceTitle } : {}),
+    ...(priceNum != null ? { price: priceNum } : {}),
+  };
+
+  let { data, error } = await ctx.adm
     .from("appointments")
-    .insert([
-      {
-        client_id: clientId,
-        doctor_name: doctorNameTrim || "Врач",
-        appointment_date: isoDateLocal(year, monthNum, day),
-        appointment_time: timeSlot,
-        status,
-        visit_mode: visitMode,
-        ...(serviceTitle ? { service: serviceTitle } : {}),
-      } as Record<string, unknown>,
-    ] as never)
+    .insert([richRow] as never)
     .select("*")
     .single();
+
+  if (error && isMissingColumnError(error)) {
+    ({ data, error } = await ctx.adm
+      .from("appointments")
+      .insert([baseRow] as never)
+      .select("*")
+      .single());
+  }
 
   if (error) throw error;
   return { row: data };

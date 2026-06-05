@@ -19,6 +19,7 @@ interface AppointmentDbRow {
   doctor_name: string | null;
   patient_name: string | null;
   service_id: string | null;
+  service: string | null;
   services: AppointmentServiceRow | AppointmentServiceRow[] | null;
 }
 
@@ -80,18 +81,34 @@ export async function fetchDashboardStats(): Promise<{
 }> {
   const { start, end, today } = monthBounds();
 
-  const [apptRes, doctorsRes] = await Promise.all([
+  const selectAppointments = (cols: string) =>
     supabase
       .from("appointments")
-      .select(
-        "id, created_at, appointment_date, appointment_time, status, doctor_name, patient_name, service_id, services(name, price)"
-      )
+      .select(cols)
       .gte("appointment_date", start)
       .lte("appointment_date", end)
       .order("appointment_date", { ascending: true })
-      .order("appointment_time", { ascending: true }),
+      .order("appointment_time", { ascending: true });
+
+  const COLS_FULL =
+    "id, created_at, appointment_date, appointment_time, status, doctor_name, patient_name, service_id, service, services(name, price)";
+  const COLS_LEGACY =
+    "id, created_at, appointment_date, appointment_time, status, doctor_name, patient_name, service_id, services(name, price)";
+
+  let [apptRes, doctorsRes] = await Promise.all([
+    selectAppointments(COLS_FULL),
     supabase.from("doctors").select("id, is_active"),
   ]);
+
+  // Колонка service появляется в миграции 013 — если её ещё нет, повторяем без неё.
+  if (
+    apptRes.error &&
+    (apptRes.error.code === "42703" ||
+      apptRes.error.code === "PGRST204" ||
+      /service/i.test(apptRes.error.message ?? ""))
+  ) {
+    apptRes = await selectAppointments(COLS_LEGACY);
+  }
 
   if (apptRes.error) {
     return {
@@ -111,7 +128,7 @@ export async function fetchDashboardStats(): Promise<{
     };
   }
 
-  const rows = (apptRes.data ?? []) as AppointmentDbRow[];
+  const rows = (apptRes.data ?? []) as unknown as AppointmentDbRow[];
   const doctors = doctorsRes.data ?? [];
 
   const monthStartTs = new Date(start).getTime();
@@ -189,7 +206,7 @@ export async function fetchDashboardStats(): Promise<{
         time: r.appointment_time,
         patient: displayPatient(r),
         doctor: r.doctor_name?.trim() || "Врач",
-        procedure: service?.name?.trim() || "Приём",
+        procedure: service?.name?.trim() || r.service?.trim() || "Приём",
         status: scheduleUiStatus(r.status, r.appointment_date, r.appointment_time),
       };
     });

@@ -224,6 +224,7 @@ export type NewAppointmentInput = {
   status?: AppointmentStatus;
   visitMode?: VisitMode;
   service?: string;
+  price?: number;
 };
 
 /**
@@ -343,6 +344,7 @@ export async function addAppointment(apt: NewAppointmentInput): Promise<Appointm
         clientPhone: apt.clientPhone ?? undefined,
         visitMode: apt.visitMode ?? "in_person",
         service: apt.service,
+        price: apt.price,
       },
     });
     await refreshAppointmentsCache();
@@ -359,6 +361,7 @@ export async function addAppointment(apt: NewAppointmentInput): Promise<Appointm
           status,
           visit_mode: apt.visitMode ?? "in_person",
           ...(apt.service ? { service: apt.service } : {}),
+          ...(apt.price != null ? { price: apt.price } : {}),
         },
       ])
       .select("*")

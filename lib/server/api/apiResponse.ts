@@ -35,8 +35,21 @@ export function handleApiError(e: unknown): NextResponse<ApiErrorResponse> {
   if (e instanceof PlatformApiAuthError) {
     return jsonError(e.message, e.status);
   }
-  const msg = e instanceof Error ? e.message : "Internal error";
-  return jsonError(msg, 500);
+  if (e instanceof Error) {
+    return jsonError(e.message, 500);
+  }
+  // Supabase/PostgREST возвращает обычный объект ({ message, details, hint, code }),
+  // а не Error — раскрываем его, чтобы причина не пряталась за «Internal error».
+  if (e && typeof e === "object") {
+    const obj = e as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts = [obj.message, obj.details, obj.hint]
+      .filter((p): p is string => typeof p === "string" && p.trim() !== "");
+    if (parts.length > 0) {
+      const code = typeof obj.code === "string" ? obj.code : undefined;
+      return jsonError(parts.join(" — "), 500, code);
+    }
+  }
+  return jsonError("Internal error", 500);
 }
 
 /** Обёртка для route handler: единый try/catch и формат ответа. */

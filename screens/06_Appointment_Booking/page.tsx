@@ -638,6 +638,7 @@ function BookingContent() {
           doctorName: selectedDoctor?.name ?? "Врач не выбран",
           clientPhone,
           visitMode,
+          price,
           service:
             visitMode === "video"
               ? "Предварительная консультация (онлайн)"
