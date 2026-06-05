@@ -7,8 +7,6 @@ import {
 import { buildDefaultTeeth, getTeethSnapshotForUser, saveTeethSnapshotForUser } from "@/lib/teeth";
 import type { ToothCondition, ToothJaw, ToothSide, ToothStatus } from "@/types";
 
-const FULL_FORMULA = 32;
-
 const ALLOWED_CONDITIONS: ToothCondition[] = [
   "healthy",
   "treated",
@@ -64,22 +62,41 @@ export function sanitizeFormulaTeethForSupabase(teeth: ToothStatus[]): ToothStat
   });
 }
 
+/** Слияние снимка из БД с полной FDI-сеткой (32 зуба). */
+export function mergeFormulaWithDefaults(fromDb: ToothStatus[]): ToothStatus[] {
+  const sanitized = sanitizeFormulaTeethForSupabase(fromDb);
+  if (!sanitized.length) return buildDefaultTeeth();
+  const byNum = Object.fromEntries(sanitized.map((t) => [t.number, t]));
+  return buildDefaultTeeth().map((d) => byNum[d.number] ?? d);
+}
+
 /** Актуальное состояние формулы: приоритет dental_clients.formula_teeth → dental_formula_<id> → дефолт. */
 export function getPatientTeethState(patientKey: string): ToothStatus[] {
   const trimmed = patientKey.trim();
   const sync = resolveDentalClientFromCacheSync(trimmed);
   const client =
     sync ?? getDentalClients().find((c) => c.id === trimmed);
-  if (client?.formulaTeeth && client.formulaTeeth.length >= FULL_FORMULA) {
-    return sanitizeFormulaTeethForSupabase(client.formulaTeeth);
+  if (client?.formulaTeeth && client.formulaTeeth.length > 0) {
+    return mergeFormulaWithDefaults(client.formulaTeeth);
   }
   let snap = getTeethSnapshotForUser(trimmed);
-  if (snap.length >= FULL_FORMULA) return sanitizeFormulaTeethForSupabase(snap);
+  if (snap.length > 0) return mergeFormulaWithDefaults(snap);
   if (sync) {
     snap = getTeethSnapshotForUser(sync.id);
-    if (snap.length >= FULL_FORMULA) return sanitizeFormulaTeethForSupabase(snap);
+    if (snap.length > 0) return mergeFormulaWithDefaults(snap);
   }
   return buildDefaultTeeth();
+}
+
+/** Загрузка формулы текущего пациента из Supabase (для ЛК клиента). */
+export async function loadClientFormulaTeeth(): Promise<ToothStatus[]> {
+  const { refreshDentalCaches, getCurrentUserId } = await import("@/lib/auth");
+  await refreshDentalCaches();
+  const uid = getCurrentUserId();
+  if (!uid) return buildDefaultTeeth();
+  const teeth = getPatientTeethState(uid);
+  saveTeethSnapshotForUser(uid, teeth);
+  return teeth;
 }
 
 /** Пишет в Supabase (dental_clients.formula_teeth) и синхронизирует ключ dental_formula_<patientId> для ЛК пациента. */

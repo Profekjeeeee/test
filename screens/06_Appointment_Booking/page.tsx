@@ -17,7 +17,8 @@ import {
   type Appointment,
 } from "@/lib/appointments";
 import { postAppointmentNotifyAsync } from "@/lib/appointmentNotify";
-import { addBillForAppointment } from "@/lib/bills";
+import { refreshBillsCache } from "@/lib/bills";
+import { formatErrorMessage } from "@/lib/formatErrorMessage";
 import { ROUTES } from "@/lib/routes";
 import { useClientNow } from "@/hooks/useClientNow";
 import { formatRuMonthYearTitleFromDate } from "@/lib/doctorSchedule";
@@ -645,9 +646,8 @@ function BookingContent() {
               : serviceTitle,
         });
 
-        await addBillForAppointment(newApt.id, serviceTitle, price);
-
         postAppointmentNotifyAsync("booking_created", newApt.id);
+        void refreshBillsCache();
 
         setSelectedCategory(null);
         setSelectedDoctorId(null);
@@ -662,8 +662,7 @@ function BookingContent() {
         subtitle: formatSuccessSubtitle(daySnap, monthNum, timeSnap),
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      showToast("Ошибка записи: " + message, "error");
+      showToast("Ошибка записи: " + formatErrorMessage(err), "error");
     } finally {
       setLoading(false);
     }

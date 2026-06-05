@@ -1,6 +1,7 @@
 import { dentalApiFetch } from "@/lib/api/fetchApi";
 import { buildTimeSlotsFromConfig } from "@/lib/clinic/bookingSlots";
 import { DEFAULT_CLINIC_SETTINGS } from "@/lib/clinic/defaults";
+import { formatErrorMessage } from "@/lib/formatErrorMessage";
 import { supabase } from "@/lib/supabaseClient";
 import {
   DENTAL_USER_SESSION_STORAGE_KEY,
@@ -367,7 +368,9 @@ export async function addAppointment(apt: NewAppointmentInput): Promise<Appointm
       .select("*")
       .single();
 
-    if (error) throw apiErr instanceof Error ? apiErr : error;
+    if (error) {
+      throw apiErr instanceof Error ? apiErr : new Error(formatErrorMessage(error));
+    }
     await refreshAppointmentsCache();
     return rowToAppointment(data as AppointmentRow);
   }

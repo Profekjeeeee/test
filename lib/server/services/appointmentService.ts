@@ -11,6 +11,7 @@ import {
   type DentalServiceContext,
 } from "@/lib/server/services/shared/accessControl";
 import { gatewayResolvePatientClientId } from "@/lib/server/services/patientResolverService";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function listAppointments(ctx: DentalServiceContext) {
   const { adm, gate, actor } = ctx;
@@ -69,6 +70,74 @@ function buildPatientName(clientRow: Record<string, unknown>): string {
   const full = `${first} ${last}`.trim();
   if (full) return full;
   return String(clientRow.phone ?? "").trim();
+}
+
+/** Счёт к записи — только service role; у клиента RLS на INSERT в bills закрыт (010). */
+async function createPendingBillForAppointment(
+  adm: SupabaseClient,
+  params: {
+    appointmentId: string | number;
+    patientId: string;
+    serviceName: string;
+    price: number;
+    clinicId?: string | null;
+  },
+): Promise<void> {
+  if (!params.serviceName || params.price <= 0) return;
+
+  const aptIdRaw = params.appointmentId;
+  const aptId =
+    typeof aptIdRaw === "number"
+      ? aptIdRaw
+      : Number.isFinite(Number(aptIdRaw))
+        ? Number(aptIdRaw)
+        : aptIdRaw;
+
+  const { data: existing } = await adm
+    .from("bills")
+    .select("id")
+    .eq("appointment_id", aptId)
+    .in("status", ["pending", "overdue"])
+    .maybeSingle();
+  if (existing?.id) return;
+
+  const now = new Date();
+  const dueDate = new Date(now);
+  dueDate.setDate(dueDate.getDate() + 14);
+  const year = now.getFullYear();
+  const aptSuffix = String(aptId).replace(/\D/g, "").slice(-4).padStart(4, "0");
+  const billNumber = `№ ${year}-${aptSuffix}`;
+  const dateIso = now.toISOString().split("T")[0];
+
+  const row: Record<string, unknown> = {
+    patient_id: params.patientId,
+    appointment_id: aptId,
+    amount: params.price,
+    paid_amount: 0,
+    status: "pending",
+    description: params.serviceName,
+    bill_number: billNumber,
+    due_date: dueDate.toISOString().split("T")[0],
+    metadata: {
+      items: [
+        {
+          id: `item-apt-${aptId}`,
+          service: params.serviceName,
+          quantity: 1,
+          unitPrice: params.price,
+          total: params.price,
+          date: dateIso,
+        },
+      ],
+      can_pay_online: true,
+    },
+    ...(params.clinicId ? { clinic_id: params.clinicId } : {}),
+  };
+
+  const { error } = await adm.from("bills").insert([row] as never);
+  if (error) {
+    console.error("[appointments] create bill:", error);
+  }
 }
 
 export async function insertAppointment(
@@ -156,6 +225,21 @@ export async function insertAppointment(
   }
 
   if (error) throw error;
+
+  const inserted = data as Record<string, unknown>;
+  const clinicId =
+    typeof clientRow.clinic_id === "string" ? clientRow.clinic_id : null;
+
+  if (priceNum != null && priceNum > 0 && serviceTitle && inserted?.id != null) {
+    await createPendingBillForAppointment(ctx.adm, {
+      appointmentId: inserted.id as string | number,
+      patientId: clientId,
+      serviceName: serviceTitle,
+      price: priceNum,
+      clinicId,
+    });
+  }
+
   return { row: data };
 }
 

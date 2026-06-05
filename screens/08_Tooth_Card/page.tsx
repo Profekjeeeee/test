@@ -6,7 +6,7 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import BottomBar from "@/components/layout/BottomBar";
-import { initTeeth, getTooth } from "@/lib/teeth";
+import { loadClientFormulaTeeth } from "@/lib/patientTeeth";
 import type { ToothCondition, ToothStatus } from "@/types";
 
 // ─── Static condition metadata ─────────────────────────────────────────────────
@@ -255,20 +255,38 @@ export default function ToothCardPage() {
   const [tooth, setTooth] = useState<ToothStatus | null>(null);
 
   useEffect(() => {
-    initTeeth();
-    const found = getTooth(toothNum);
-    if (found) {
-      setTooth(found);
-    } else {
-      // Fallback: show healthy state for unknown tooth
-      setTooth({
-        number: toothNum,
-        condition: "healthy",
-        jaw: toothNum < 30 ? "upper" : "lower",
-        side: toothNum % 10 < 5 ? "right" : "left",
-        hasNote: false,
-      });
-    }
+    let cancelled = false;
+
+    const load = async () => {
+      const all = await loadClientFormulaTeeth();
+      if (cancelled) return;
+      const found = all.find((t) => t.number === toothNum);
+      if (found) {
+        setTooth(found);
+      } else {
+        setTooth({
+          number: toothNum,
+          condition: "healthy",
+          jaw: toothNum < 30 ? "upper" : "lower",
+          side: toothNum % 10 < 5 ? "right" : "left",
+          hasNote: false,
+        });
+      }
+    };
+
+    void load();
+
+    const onRefresh = () => {
+      void load();
+    };
+    window.addEventListener("dentalClientsUpdated", onRefresh);
+    window.addEventListener("teethUpdated", onRefresh);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("dentalClientsUpdated", onRefresh);
+      window.removeEventListener("teethUpdated", onRefresh);
+    };
   }, [toothNum]);
 
   if (!tooth) {

@@ -2,6 +2,7 @@ import type { Bill, BillItem } from "@/types";
 import { getCurrentUserId, getDentalSession } from "@/lib/auth";
 import { resolveClientIdForAppointment } from "@/lib/appointments";
 import { createOnlinePayment } from "@/lib/payments";
+import { formatErrorMessage } from "@/lib/formatErrorMessage";
 import { supabase } from "@/lib/supabaseClient";
 
 export type { Bill };
@@ -228,7 +229,7 @@ export async function addBillForAppointment(
     .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
   await refreshBillsCache();
   return rowToBill(data as BillRow);
 }

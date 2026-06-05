@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
 import BottomBar from "@/components/layout/BottomBar";
-import { initTeeth, getTeeth } from "@/lib/teeth";
+import { loadClientFormulaTeeth } from "@/lib/patientTeeth";
 import type { ToothCondition, ToothStatus } from "@/types";
 import { ROUTES } from "@/lib/routes";
 import { useDarkMode } from "@/hooks/useDarkMode";
@@ -148,8 +148,26 @@ export default function DentalFormulaPage() {
   const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
-    initTeeth();
-    setTeeth(getTeeth());
+    let cancelled = false;
+
+    const load = async () => {
+      const loaded = await loadClientFormulaTeeth();
+      if (!cancelled) setTeeth(loaded);
+    };
+
+    void load();
+
+    const onRefresh = () => {
+      void load();
+    };
+    window.addEventListener("dentalClientsUpdated", onRefresh);
+    window.addEventListener("teethUpdated", onRefresh);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("dentalClientsUpdated", onRefresh);
+      window.removeEventListener("teethUpdated", onRefresh);
+    };
   }, []);
 
   const handleToothClick = (num: number) => {
